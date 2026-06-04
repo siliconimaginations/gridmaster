@@ -224,15 +224,17 @@ When Claude (AI assistant) works on this codebase:
 - Claude does not silently change the scope of a task. If implementation reveals the design needs to change, Claude raises it in the PR description or chat before making the change.
 - Claude treats this document as a hard constraint, not a suggestion.
 
-### Review workflow (single GitHub account)
+### GitHub identity
 
-Since Claude uses the `siliconimaginations` token to open PRs, GitHub records those PRs as authored by `siliconimaginations` — which prevents formal self-review requests. The review discipline is maintained as follows:
+Claude operates as **[`nagasawa94`](https://github.com/nagasawa94)** on GitHub — a dedicated bot account with Write access to this repo. All branches pushed and PRs opened by Claude will show `nagasawa94` as the author, keeping Claude's contributions clearly distinct from Rick's (`siliconimaginations`).
 
-| PR type | Who reviews | How |
-|---------|-------------|-----|
-| Claude opens a PR | `siliconimaginations` (Rick) | Reviews diff on GitHub, merges when satisfied |
-| Rick opens a PR | Claude | Reviews in chat; posts inline comments via GitHub API if changes are needed |
-| Critical PRs (engine, protocol, CI) | Both | Claude calls out explicitly in PR description; Rick must review before merge |
+### Review workflow
+
+| PR type | Author | Reviewer | How |
+|---------|--------|----------|-----|
+| Claude opens a PR | `nagasawa94` | `siliconimaginations` (Rick) | Rick reviews diff on GitHub and merges when satisfied |
+| Rick opens a PR | `siliconimaginations` | `nagasawa94` (Claude) | Claude reviews in chat and posts inline comments via GitHub API |
+| Critical PRs (engine, protocol, CI) | either | both | Claude flags in PR description; Rick must explicitly approve before merge |
 
 **Merging without reviewing the diff is a process violation regardless of CI status.**
 
