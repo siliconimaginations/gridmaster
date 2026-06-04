@@ -10,7 +10,6 @@ import org.springframework.test.web.servlet.get
 @SpringBootTest
 @AutoConfigureMockMvc
 class HealthControllerTest {
-
     @Autowired
     lateinit var mvc: MockMvc
 
