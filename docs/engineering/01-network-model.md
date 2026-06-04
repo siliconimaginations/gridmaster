@@ -1,7 +1,7 @@
 # Network Model
 
 **Stage**: 1
-**Status**: Draft — awaiting review
+**Status**: Draft — v2, addressing review comments
 **Branch**: `stage/1/network-model-design`
 
 ---
@@ -24,8 +24,8 @@ GridMaster domain model.
 ## Scope
 
 **In scope**
-- Domain entities: `GridNetwork`, `Bus`, `Branch` (lines and transformers),
-  `Generator`, `Load`
+- Domain entities: `GridNetwork`, `Bus`, `Line`, `TwoWindingsTransformer`,
+  `ThreeWindingsTransformer`, `Generator`, `Load`, `ShuntCompensator`
 - Mapping layer: converting a PowSyBl `Network` object into GridMaster entities
   and back
 - `NetworkRepository`: persistence of network snapshots (per game session)
@@ -54,6 +54,8 @@ GridMaster domain model.
 | `BusbarSection` | Physical bus in a busbar-topology voltage level |
 | `Line` | AC transmission line between two voltage levels |
 | `TwoWindingsTransformer` | Transformer between two voltage levels in the same substation |
+| `ThreeWindingsTransformer` | Three-winding transformer connecting three voltage levels |
+| `ShuntCompensator` | Shunt element providing reactive power compensation (capacitor or reactor bank) |
 | `Generator` | Active/reactive power source |
 | `Load` | Active/reactive power sink |
 
@@ -68,54 +70,74 @@ data class GridNetwork(
     val id: String,
     val name: String,
     val buses: List<Bus>,
-    val branches: List<Branch>,
+    val lines: List<Line>,
+    val twoWindingsTransformers: List<TwoWindingsTransformer>,
+    val threeWindingsTransformers: List<ThreeWindingsTransformer>,
     val generators: List<Generator>,
     val loads: List<Load>,
+    val shuntCompensators: List<ShuntCompensator>,
+    val regions: List<Region>,          // annotation layer; network stays fully connected
     val snapshotAt: Instant,
+)
+
+/** Logical region — an annotation on a set of buses, not a physical split. */
+data class Region(
+    val id: String,
+    val name: String,
+    val busIds: Set<String>,
 )
 
 data class Bus(
     val id: String,
     val name: String,
     val nominalVoltageKv: Double,
-    val voltageMagnitudePu: Double?,   // null before first power flow
+    val voltageMagnitudePu: Double?,    // null before first power flow
     val voltageAngleDeg: Double?,
+    val regionId: String?,              // which Region this bus belongs to, if any
 )
 
-sealed class Branch {
-    abstract val id: String
-    abstract val name: String
-    abstract val fromBusId: String
-    abstract val toBusId: String
-    abstract val ratingMva: Double
-    abstract val activePowerFromMw: Double?   // null before first power flow
-    abstract val activePowerToMw: Double?
+data class Line(
+    val id: String,
+    val name: String,
+    val fromBusId: String,
+    val toBusId: String,
+    val ratingA: Double,                // thermal current rating (Amperes)
+    val currentFromA: Double?,          // null before first power flow
+    val currentToA: Double?,
+    val resistanceOhm: Double,
+    val reactanceOhm: Double,
+    val shuntCapacitanceSiemens: Double, // line charging susceptance
+)
 
-    data class Line(
-        override val id: String,
-        override val name: String,
-        override val fromBusId: String,
-        override val toBusId: String,
-        override val ratingMva: Double,
-        override val activePowerFromMw: Double?,
-        override val activePowerToMw: Double?,
-        val resistanceOhm: Double,
-        val reactanceOhm: Double,
-    ) : Branch()
+data class TwoWindingsTransformer(
+    val id: String,
+    val name: String,
+    val fromBusId: String,              // HV side
+    val toBusId: String,                // LV side
+    val ratingMva: Double,
+    val currentFromA: Double?,          // null before first power flow
+    val currentToA: Double?,
+    val resistanceOhm: Double,
+    val reactanceOhm: Double,
+    // Shunt resistance/reactance (magnetising branch) noted but excluded for now
+    val ratioTapPosition: Int,
+    val nominalVoltageHvKv: Double,
+    val nominalVoltageLvKv: Double,
+)
 
-    data class Transformer(
-        override val id: String,
-        override val name: String,
-        override val fromBusId: String,
-        override val toBusId: String,
-        override val ratingMva: Double,
-        override val activePowerFromMw: Double?,
-        override val activePowerToMw: Double?,
-        val ratioTapPosition: Int,
-        val nominalVoltageHvKv: Double,
-        val nominalVoltageLvKv: Double,
-    ) : Branch()
-}
+data class ThreeWindingsTransformer(
+    val id: String,
+    val name: String,
+    val bus1Id: String,                 // HV winding
+    val bus2Id: String,                 // MV winding
+    val bus3Id: String,                 // LV winding
+    val ratingMva1: Double,
+    val ratingMva2: Double,
+    val ratingMva3: Double,
+    val current1A: Double?,             // null before first power flow
+    val current2A: Double?,
+    val current3A: Double?,
+)
 
 data class Generator(
     val id: String,
@@ -125,6 +147,7 @@ data class Generator(
     val maxActivePowerMw: Double,
     val targetActivePowerMw: Double,
     val targetReactivePowerMvar: Double,
+    val targetVoltagePu: Double,        // voltage setpoint at the terminal bus
     val connected: Boolean,
     val fuelType: FuelType,
     val marginalCostPerMwh: Double,
@@ -140,6 +163,16 @@ data class Load(
     val reactivePowerMvar: Double,
     val connected: Boolean,
 )
+
+data class ShuntCompensator(
+    val id: String,
+    val name: String,
+    val busId: String,
+    val susceptanceSiemensPerSection: Double,
+    val maximumSectionCount: Int,
+    val currentSectionCount: Int,
+    val connected: Boolean,
+)
 ```
 
 ### Mapping layer
@@ -151,14 +184,14 @@ reflects the latest computed state.
 ```kotlin
 interface IidmNetworkMapper {
     fun toGridNetwork(network: Network): GridNetwork
-    fun applyCommand(network: Network, command: NetworkCommand): Network
+    fun applyMutation(network: Network, mutation: NetworkMutation): Network
 }
 ```
 
-`NetworkCommand` is a sealed class representing player or event actions that
-mutate the network (e.g. `SetGeneratorOutput`, `TripBranch`, `ConnectLoad`).
-Commands are applied to the IIDM `Network` directly; the updated `Network` is
-then solved and snapshotted.
+`NetworkMutation` is a sealed class representing player or event actions that
+mutate the network (e.g. `SetGeneratorOutput`, `TripLine`, `ConnectLoad`,
+`SetTapPosition`). Mutations are applied to the IIDM `Network` directly;
+the updated `Network` is then solved and snapshotted.
 
 ### NetworkRepository
 
@@ -189,7 +222,7 @@ responsibility. The public boundary is:
 | `IidmNetworkMapper` | Modules 02, 03, 04 (power flow, contingency, dispatch) |
 | `NetworkRepository` | Module 06 (game session) |
 | `GridNetwork` and sub-types | All modules; WebSocket state stream; frontend |
-| `NetworkCommand` | Module 09 (command handler) |
+| `NetworkMutation` | Module 09 (command handler) |
 
 ---
 
@@ -200,34 +233,48 @@ responsibility. The public boundary is:
    boundaries would couple the game engine to PowSyBl internals. Immutable
    snapshots are safe to share, serialise, and diff between ticks.
    *Alternative considered*: expose IIDM objects directly with defensive
-   copies. Rejected — coupling risk outweighs the copy cost, which is
-   negligible for ≤1000 buses.
+   copies. Rejected — coupling risk outweighs the copy cost at ≤1000 buses.
 
-2. **`Branch` as a sealed class rather than separate `Line` / `Transformer`
-   top-level types.**
-   Both share identical operational properties (flow, rating, connectivity)
-   used by the renderer and alert system. The sealed class lets callers treat
-   them uniformly while preserving type-specific fields. *Alternative*:
-   separate flat classes. Rejected — renderer and alert code would duplicate
-   the common-case handling.
+2. **`Line`, `TwoWindingsTransformer`, and `ThreeWindingsTransformer` as
+   separate flat classes rather than a sealed hierarchy.**
+   Each type has a meaningfully different structure — especially
+   `ThreeWindingsTransformer` with three terminal buses and three sets of
+   ratings/currents. A shared sealed supertype would require either an
+   awkward common interface or nullable fields. Separate classes keep each
+   type self-contained and easy to render and operate on independently.
 
-3. **IIDM XML as the session persistence format.**
+3. **Current (Amperes) rather than active power (MW) for branch flow.**
+   Thermal loading — the primary operational constraint on lines and
+   transformers — is determined by current, not active power. Using current
+   directly maps to how operators assess line loading percentage
+   (`currentFromA / ratingA × 100`). Active power is derivable from current
+   and voltage for display purposes.
+
+4. **Region as an annotation layer on a unified network.**
+   The grid is always a single fully-connected IIDM `Network`. Regions
+   are sets of bus IDs tagged with a region name — they carry no topological
+   meaning to the solver. This allows the Free Play map to show geographic
+   regions and track unlock status without splitting the IIDM model or
+   maintaining multiple solver instances. A bus may belong to at most one
+   region; transmission ties between regions are ordinary lines.
+
+5. **IIDM XML as the session persistence format.**
    PowSyBl provides `NetworkSerDe` for round-trip XML serialisation at no
    extra cost. It preserves all solver parameters and topology exactly.
    *Alternative*: custom JSON schema. Rejected — would require re-implementing
-   PowSyBl's serialisation logic and risk divergence.
+   PowSyBl's serialisation logic and risk divergence on edge-case equipment.
 
-4. **`FuelType` enum on `Generator`.**
+6. **`FuelType` enum and `marginalCostPerMwh` on `Generator`.**
    Fuel type drives game mechanics (merit order, policy events, environmental
-   scoring) and the renderer (icon, colour). Encoding it in the domain model
-   rather than deriving it from IIDM metadata keeps game logic clean.
-   *Alternative*: tag-based. Rejected — too loosely typed for game logic.
+   scoring) and the renderer (icon, colour). Cost drives economic dispatch.
+   Keeping both on the generator entity avoids a separate market model at
+   this scope.
 
-5. **`marginalCostPerMwh` on `Generator`.**
-   Economic dispatch in Module 04 needs cost data. Storing it on the
-   generator rather than a separate market model keeps the domain cohesive
-   for the game's scope. This can be split later if a full market model
-   is introduced.
+7. **`targetVoltagePu` on `Generator`.**
+   Generators participate in voltage regulation by holding their terminal
+   bus voltage at a setpoint. This field is essential for the power flow
+   solver (PQ vs PV bus classification) and will be exposed in the dispatch
+   UI as a voltage setpoint control.
 
 ---
 
@@ -237,7 +284,7 @@ responsibility. The public boundary is:
 |---------|----------|
 | IIDM file missing or corrupt on session load | Throw `NetworkLoadException`; game engine surfaces to player as "session cannot be restored" |
 | Mapper encounters unknown equipment type | Log warning, skip element, include in `GridNetwork.warnings` list |
-| `applyCommand` results in topologically invalid network | Return `Result.failure(InvalidCommandException)`; network unchanged |
+| `applyMutation` results in topologically invalid network | Return `Result.failure(InvalidMutationException)`; network unchanged |
 | SQLite write failure during `save` | Propagate `IOException`; game clock pauses, alert raised |
 
 ---
@@ -246,36 +293,40 @@ responsibility. The public boundary is:
 
 **Unit tests** (`@Tag("unit")`, no PowSyBl solver invoked):
 - `IidmNetworkMapperTest`: build a small IIDM `Network` in code, assert
-  `toGridNetwork` produces correct bus count, branch flows, generator fields
-- `NetworkCommandTest`: apply each `NetworkCommand` subtype to a test network,
-  assert IIDM state changes correctly
+  `toGridNetwork` produces correct bus/line/transformer counts and field values
+- `NetworkMutationTest`: apply each `NetworkMutation` subtype to a test
+  network, assert IIDM state changes correctly
 - Round-trip test: `toGridNetwork` → serialise to JSON → deserialise →
   assert equality
+- `ShuntCompensatorTest`: verify section count and susceptance mapping
 
 **Integration tests** (`@Tag("integration")`, real IIDM files):
-- Load IEEE 14-bus XIIDM file → map to `GridNetwork` → assert bus/branch counts
-- Load IEEE 39-bus XIIDM file → assert correct generator count and fuel types
+- Load IEEE 14-bus XIIDM → assert bus count = 14, line count, transformer count
+- Load IEEE 39-bus XIIDM → assert generator count and fuel type defaults
 - `NetworkRepository` save/load round-trip with SQLite
+- `ThreeWindingsTransformer` round-trip if present in test network
 
 **Edge cases to cover:**
 - Network with isolated bus (no connected branches)
 - Generator at min/max output limit
 - Disconnected branch (open switch)
 - Transformer at non-nominal tap position
+- ShuntCompensator at zero sections (fully disconnected)
+- Three-winding transformer with one winding disconnected
 
 ---
 
 ## Open Questions
 
-1. **Multi-region networks (Free Play)**: when the grid grows to 500 buses
-   across regions, should `GridNetwork` be split into sub-networks per region,
-   or remain a single flat structure? Likely deferred to Stage 5 when the
-   region unlock system is designed.
+1. **`FuelType` source in real IIDM files**: IEEE test networks carry no fuel
+   type metadata. For tutorial/test networks generators will be annotated
+   manually in the loader via a sidecar JSON metadata file. Need a convention
+   for production/Free Play networks — same sidecar approach is proposed.
 
-2. **`FuelType` source in real IIDM files**: IEEE test networks don't carry
-   fuel type metadata. For tutorial/test networks we'll annotate generators
-   manually in the loader. Need a convention for production networks — possibly
-   a sidecar JSON metadata file.
+2. **Snapshot granularity**: currently one snapshot per tick. For challenge
+   mode replay, per-mutation snapshots may be needed. Deferred to Stage 6.
 
-3. **Snapshot granularity**: currently one snapshot per tick. For challenge
-   mode replay, per-command snapshots may be needed. Defer to Stage 6.
+3. **Three-winding transformer tap control**: `ThreeWindingsTransformer` omits
+   tap position for now. Each winding can have an independent tap changer in
+   IIDM. To be added when transformer control is implemented in the dispatch
+   module (Module 04).
