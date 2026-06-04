@@ -1,7 +1,7 @@
 # Economic Dispatch and Unit Commitment
 
 **Stage**: 1
-**Status**: Draft — awaiting review
+**Status**: Draft — v2, addressing review comments
 **Branch**: `stage/1/dispatch-design`
 **Depends on**: [01-network-model.md](01-network-model.md), [02-power-flow.md](02-power-flow.md), [03-contingency-analysis.md](03-contingency-analysis.md)
 
@@ -33,7 +33,7 @@ dispatch) and 7 (unit commitment).
 **In scope**
 - `DispatchService`: economic dispatch via merit order + sensitivity-based
   congestion redispatch
-- `UnitCommitmentService`: simplified greedy UC for the 24-hour day-ahead horizon
+- `UnitCommitmentService`: MIP-based UC for the 24-hour day-ahead horizon (OR-Tools + SCIP/CBC)
 - `DispatchResult`, `UcResult`, and supporting types
 - `LoadForecast`: hourly load forecast consumed by UC
 - Reserve margin enforcement
@@ -42,9 +42,9 @@ dispatch) and 7 (unit commitment).
 
 **Out of scope**
 - Full AC OPF (PowSyBl does not ship a production OPF solver; merit order
-  + sensitivity redispatch is sufficient for the game's educational scope)
-- Mixed-integer programming for UC (a greedy algorithm covers the concepts;
-  MIP deferred unless a later stage requires it)
+  + LP redispatch covers the game's educational scope)
+- Reactive power optimisation (voltage scheduling) — deferred to Stage 5
+  (already listed below)
 - Reactive power optimisation (voltage scheduling) — deferred to Stage 5
 - Real-time AGC (Automatic Generation Control) — separate module in Stage 5
 - Market clearing / locational marginal pricing — Free Play policy layer
@@ -53,7 +53,7 @@ dispatch) and 7 (unit commitment).
 
 ## Key Concepts
 
-### Merit order dispatch
+### Merit order dispatch (default)
 
 Generators are sorted by `marginalCostPerMwh` (ascending). Load is served
 by dispatching the cheapest available capacity first, up to each generator's
@@ -71,6 +71,29 @@ For each generator in order:
 Generators at minimum loading (`minActivePowerMw`) are always dispatched
 at minimum before the merit order is applied (must-run constraint).
 
+### LP-based economic dispatch (optimised mode)
+
+As an alternative to merit order, `DispatchMode.LP` solves the dispatch
+as a linear programme via OR-Tools, which handles must-run constraints,
+ramp limits (if added later), and per-generator cost curves more robustly:
+
+```
+Decision variables:
+  p[g] ∈ [minMw[g], maxMw[g]]   dispatch MW for each committed generator
+
+Objective (minimise):
+  Σ_g marginalCost[g] * p[g]
+
+Constraints:
+  Σ_g p[g] = totalLoadMw          (power balance)
+  p[g] >= minMw[g] * committed[g] (must-run at minimum)
+  p[g] <= maxMw[g] * committed[g] (capacity limit)
+```
+
+For unconstrained dispatch, merit order and LP give identical results.
+LP mode is useful when additional constraints (ramp limits, cost curves)
+are introduced. `DispatchMode` is added to `DispatchParameters`.
+
 ### Sensitivity-based congestion redispatch
 
 After merit order dispatch, a power flow solve (Module 02) checks for
@@ -86,17 +109,34 @@ cost) drive real dispatch decisions.
 ### Unit commitment
 
 The UC problem selects which generators to have online for each hour of
-the next 24 hours. The simplified greedy algorithm:
+the next 24 hours. This is a **Mixed-Integer Programme (MIP)** solved via
+**OR-Tools** with the open-source **SCIP** (or CBC) backend — greedy
+algorithms are not guaranteed to find feasible schedules under tight
+minimum up/down time and reserve constraints.
+
+**MIP formulation** (24-hour horizon, G generators, T=24 hours):
 
 ```
-For each hour h in [0, 23]:
-    required_capacity = forecast_load[h] * (1 + reserve_margin)
-    Sort all generators by marginalCostPerMwh ↑
-    Commit generators in order until required_capacity is met
-    Apply minimum up/down time: a generator committed in hour h cannot
-    be decommitted before h + minUpTimeHours
-Compute startup/shutdown cost for transitions
+Decision variables:
+  x[g,t] ∈ {0,1}   committed in hour t
+  p[g,t] ≥ 0       dispatch MW in hour t
+  y[g,t] ∈ {0,1}   startup indicator  (y = max(0, x[t] - x[t-1]))
+  z[g,t] ∈ {0,1}   shutdown indicator (z = max(0, x[t-1] - x[t]))
+
+Objective (minimise):
+  Σ_t Σ_g [ marginalCost[g] * p[g,t] + startupCost[g] * y[g,t] ]
+
+Constraints:
+  Σ_g p[g,t] >= forecast[t] * (1 + reserveMargin)   ∀t  (load + reserve)
+  p[g,t] >= minMw[g] * x[g,t]                       ∀g,t
+  p[g,t] <= maxMw[g] * x[g,t]                       ∀g,t
+  Σ_{τ=t}^{t+minUp[g]-1} x[g,τ] >= minUp[g]*y[g,t] ∀g,t  (min up time)
+  Σ_{τ=t}^{t+minDown[g]-1}(1-x[g,τ]) >= minDown[g]*z[g,t] ∀g,t  (min down)
+  y[g,t] - z[g,t] = x[g,t] - x[g,t-1]              ∀g,t  (transition link)
 ```
+
+OR-Tools dependency: `com.google.ortools:ortools-java` added to
+`build.gradle.kts` in the implementation PR.
 
 ### Reserve margin
 
@@ -136,11 +176,17 @@ interface DispatchService {
 
 data class DispatchParameters(
     val totalLoadMw: Double,             // target active power balance
+    val mode: DispatchMode = DispatchMode.MERIT_ORDER,
     val reserveMarginFraction: Double = 0.20,
     val securityConstrained: Boolean = false,
         // if true: run contingency analysis after dispatch and redispatch
         // until N-1 secure or no further improvement possible
 )
+
+enum class DispatchMode {
+    MERIT_ORDER, // fast, transparent, educational default
+    LP,          // OR-Tools LP; identical result for simple cases, more robust with extra constraints
+}
 
 data class DispatchResult(
     val generatorTargets: List<GeneratorTarget>,
@@ -264,7 +310,7 @@ made partly to avoid committing must-run units unnecessarily).
 
 ### Minimum up/down times
 
-In the UC greedy algorithm, a committed generator cannot be decommitted
+In the UC MIP formulation, a committed generator cannot be decommitted
 before `minUpTimeHours` have passed (and vice versa for `minDownTimeHours`).
 These are modelled as fields on `Generator` added in the implementation PR
 (small addition to Module 01 domain model).
@@ -299,12 +345,15 @@ compared to pure economic merit order.
    while losing voltage information; sensitivity redispatch is more
    pedagogically transparent.
 
-2. **Greedy UC rather than MIP.**
-   Mixed-integer programming for unit commitment produces optimal schedules
-   but is computationally expensive and algorithmically opaque. A greedy
-   capacity-stacking algorithm covers the educational core (commit cheapest
-   units first to meet load + reserve, respect startup costs and minimum
-   up/down times). MIP is deferred as a future enhancement.
+2. **MIP for UC via OR-Tools (SCIP/CBC).**
+   A greedy algorithm is not guaranteed to find a feasible UC schedule when
+   minimum up/down time constraints are tight. OR-Tools with SCIP or CBC
+   solves the MIP to optimality for a 24-hour, <100 generator problem in
+   seconds — well within the game's day-ahead planning timescale.
+   The MIP formulation is also transparent enough to show the player
+   (commitment schedule table, startup costs, marginal units per hour).
+   *Alternative*: greedy. Rejected — not guaranteed feasible; educational
+   value is higher when the solution is known to be optimal.
 
 3. **Redispatch as a separate call from economic dispatch.**
    Separating `economicDispatch` from `congestionRedispatch` makes the
@@ -366,19 +415,19 @@ compared to pure economic merit order.
 
 ---
 
-## Open Questions
+## Resolved Design Points (from review)
 
-1. **Startup cost model**: generators should have a `startupCostGbp` field
-   (fixed cost per cold start) added to the Module 01 `Generator` domain
-   model alongside `minUpTimeHours` / `minDownTimeHours`. Propose adding
-   all three in a single implementation PR amendment. Agree?
+1. **Generator additions**: `startupCostGbp`, `minUpTimeHours`,
+   `minDownTimeHours` added to Module 01 `Generator` in the implementation
+   PR. Agreed.
 
-2. **Player-visible merit order table**: the `meritOrder` list in
-   `DispatchResult` is intended to drive a UI panel showing generators
-   ranked by cost with their dispatched MW. UX design (Module 11) will
-   specify the exact display. No design impact here — confirming the field
-   is needed.
+2. **Merit order table in UI**: `meritOrder` list in `DispatchResult`
+   confirmed as needed for the player-facing dispatch panel. OK.
 
-3. **Reserve margin default**: 20% is proposed. Real-world systems vary
-   (UK: ~25%, US: 15–20%). Should this be configurable per-scenario in the
-   YAML network sidecar, or a single global `application.yml` setting?
+3. **Reserve margin default**: 20% as a simple global `application.yml`
+   setting. Agreed.
+
+4. **OR-Tools for UC and LP dispatch**: MIP (SCIP/CBC via OR-Tools) for
+   unit commitment; LP mode added as an option for economic dispatch.
+   `com.google.ortools:ortools-java` added to dependencies in
+   implementation PR. Agreed.
