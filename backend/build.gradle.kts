@@ -53,11 +53,12 @@ tasks.withType<KotlinCompile> {
 }
 
 tasks.withType<Test> {
-    useJUnitPlatform()
     // Integration tests (hitting real PowSyBl solver) are tagged "integration"
     // Run them separately: ./gradlew test -Pintegration
-    if (!project.hasProperty("integration")) {
-        excludeTags("integration")
+    useJUnitPlatform {
+        if (!project.hasProperty("integration")) {
+            excludeTags("integration")
+        }
     }
 }
 
