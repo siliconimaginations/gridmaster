@@ -30,3 +30,9 @@ Thumbs.db
 .vscode/settings.json
 *.swp
 *.swo
+
+# Local tooling cache
+.tools/
+
+# Local tooling cache
+.tools/
