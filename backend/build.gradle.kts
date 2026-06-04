@@ -17,8 +17,6 @@ repositories {
     maven { url = uri("https://oss.sonatype.org/content/repositories/snapshots") }
 }
 
-val powsyblVersion = "6.5.0"
-
 dependencies {
     // Spring Boot
     implementation("org.springframework.boot:spring-boot-starter-web")
@@ -28,12 +26,13 @@ dependencies {
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
 
-    // PowSyBl — physics engine
-    implementation("com.powsybl:powsybl-iidm-impl:$powsyblVersion")
-    implementation("com.powsybl:powsybl-iidm-reducer:$powsyblVersion")
-    implementation("com.powsybl:powsybl-open-loadflow:1.9.1")
-    implementation("com.powsybl:powsybl-security-analysis-api:$powsyblVersion")
-    implementation("com.powsybl:powsybl-contingency-api:$powsyblVersion")
+    // PowSyBl — physics engine (versions managed by BOM)
+    implementation(platform("com.powsybl:powsybl-dependencies:2025.0.2"))
+    implementation("com.powsybl:powsybl-iidm-impl")
+    implementation("com.powsybl:powsybl-iidm-reducer")
+    implementation("com.powsybl:powsybl-open-loadflow")
+    implementation("com.powsybl:powsybl-security-analysis-api")
+    implementation("com.powsybl:powsybl-contingency-api")
 
     // SQLite
     runtimeOnly("org.xerial:sqlite-jdbc:3.45.2.0")
