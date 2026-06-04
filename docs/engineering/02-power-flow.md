@@ -62,10 +62,13 @@ LoadFlow.run(network, params)
 | Mode | Use | Accuracy |
 |------|-----|----------|
 | AC | Normal operation — every tick | Full AC physics (V, θ, P, Q, I) |
-| DC | Fallback on AC divergence; also used for fast contingency pre-screening | Linear approximation (P, θ only; Q and V not solved) |
+| DC | Explicit pre-screening only (e.g. contingency analysis in Module 03); never auto-triggered | Linear approximation (P, θ only; Q and V not solved) |
 
-DC results are clearly flagged in `PowerFlowResult.solveMode` so the frontend
-can indicate reduced fidelity to the player.
+**DC is not used as an automatic fallback.** When AC diverges the network is
+marked as failed (`ConvergenceStatus.NETWORK_FAILURE`). Silently falling back
+to DC would produce results inconsistent with the AC model, misleading the
+player and the alert system. DC mode remains available explicitly via
+`mode = SolveMode.DC` (e.g. for fast contingency pre-screening in Module 03).
 
 ### Violations
 
@@ -89,8 +92,7 @@ interface PowerFlowService {
 
 data class PowerFlowParameters(
     val mode: SolveMode = SolveMode.AC,
-    val dcFallback: Boolean = true,       // retry with DC if AC diverges
-    val distributedSlack: Boolean = true, // distribute active power imbalance
+    val distributedSlack: Boolean = true, // distribute active power imbalance across participating generators
     val balanceType: BalanceType = BalanceType.PROPORTIONAL_TO_GENERATION_P_MAX,
 )
 
@@ -104,18 +106,19 @@ enum class BalanceType {
 
 data class PowerFlowResult(
     val status: ConvergenceStatus,
-    val solveMode: SolveMode,         // AC or DC (if fallback was triggered)
+    val solveMode: SolveMode,         // always reflects the mode in PowerFlowParameters
     val iterationCount: Int,          // Newton-Raphson iterations (0 for DC)
     val snapshot: GridNetwork,        // updated with voltages and currents
+    val slackBusIds: List<String>,    // buses acting as slack (>1 when distributedSlack=true)
     val violations: List<NetworkViolation>,
     val solveTimeMs: Long,
 )
 
 enum class ConvergenceStatus {
-    CONVERGED,           // all connected components converged
-    PARTIAL,             // some components converged, others did not
-    DIVERGED,            // no components converged (DC fallback result if enabled)
-    FAILED,              // PowSyBl threw an exception; network state undefined
+    CONVERGED,          // all connected components converged
+    PARTIAL,            // some components converged; others islanded/failed
+    NETWORK_FAILURE,    // AC solve did not converge — grid failure event raised
+    FAILED,             // PowSyBl threw an unexpected exception; state undefined
 }
 ```
 
@@ -178,7 +181,7 @@ The PowSyBl `LoadFlow` implementation is injected as a Spring `@Service`.
 1. Apply NetworkMutations (Module 09) → mutated Network
 2. PowerFlowService.solve(network, parameters)
    a. Run AC LoadFlow via PowSyBl
-   b. If DIVERGED and dcFallback=true → run DC LoadFlow
+   b. If NETWORK_FAILURE → raise grid failure event; skip steps c–e; return stale snapshot
    c. Extract GridNetwork snapshot via IidmNetworkMapper
    d. Scan violations
    e. Return PowerFlowResult
@@ -206,14 +209,16 @@ Amperes at the leg's nominal voltage.
 
 ## Design Decisions & Rationale
 
-1. **AC first, DC fallback.**
-   AC power flow gives full fidelity (voltages, reactive power, losses). DC
-   is fast and always converges but gives only active power and angles.
-   Running AC first preserves game realism; DC fallback prevents a diverged
-   grid from crashing the game tick. The UI clearly indicates DC mode so the
-   player knows the results are approximate.
-   *Alternative*: always DC for speed. Rejected — the game's educational
-   value depends on accurate voltage behaviour.
+1. **AC only in normal operation; no automatic DC fallback.**
+   AC power flow gives full fidelity (voltages, reactive power, losses).
+   When AC diverges, the network is declared failed and the game raises a
+   grid failure event — this is physically correct (a non-converging grid
+   means a collapse is occurring). Silently switching to DC would produce
+   results inconsistent with the AC model and mislead the player.
+   DC mode remains explicitly available for Module 03 contingency
+   pre-screening, where approximate results are acceptable.
+   *Alternative considered*: DC fallback by default. Rejected — results
+   not consistent with AC model; undesirable in an educational simulation.
 
 2. **In-place mutation of the IIDM Network, then snapshot.**
    PowSyBl's `LoadFlow.run` mutates the `Network` in-place by design.
@@ -234,7 +239,14 @@ Amperes at the leg's nominal voltage.
    to allow scenario-specific tuning (e.g. tighter limits in a challenge
    scenario).
 
-5. **`solveTimeMs` in the result.**
+5. **Distributed slack with multiple slack buses.**
+   When `distributedSlack = true`, PowSyBl distributes the active power
+   imbalance across multiple generators per `balanceType`. All participating
+   buses are tracked in `slackBusIds` (from `LoadFlowResult.componentResults`).
+   This is surfaced in the UI to show the player which generators are
+   balancing the system — an important operational concept for the tutorial.
+
+6. **`solveTimeMs` in the result.**
    The game clock uses this to detect if a tick is running over budget and
    should slow the simulation speed. Exposing it from this module makes the
    monitoring point explicit rather than measured externally.
@@ -245,8 +257,7 @@ Amperes at the leg's nominal voltage.
 
 | Failure | Handling |
 |---------|----------|
-| AC diverges, `dcFallback=true` | Retry with DC; `status = CONVERGED` (or `PARTIAL`), `solveMode = DC`, violations computed from DC flows |
-| AC diverges, `dcFallback=false` | `status = DIVERGED`; snapshot contains pre-solve voltage/current values (stale) |
+| AC solve does not converge | `status = NETWORK_FAILURE`; snapshot contains last-known values (stale, clearly flagged); game engine raises a grid failure event; clock pauses for player intervention |
 | PowSyBl throws exception | Catch, log stack trace, return `status = FAILED`; game engine pauses clock and raises critical alert |
 | Voltage limits not defined for a voltage level | Skip voltage violation check for that level; log warning once |
 
@@ -279,17 +290,16 @@ Amperes at the leg's nominal voltage.
 
 ---
 
-## Open Questions
+## Resolved Design Points (from review)
 
-1. **Voltage limits source**: PowSyBl `VoltageLevel` has `lowVoltageLimit` and
-   `highVoltageLimit` fields. These are often absent in IEEE test networks.
-   Should we define default per-voltage-level limits in `application.yml`
-   (e.g. ±5% of nominal), or skip voltage violation checks when limits are
-   absent? Proposed: configurable defaults in `application.yml`, override-able
-   per network via sidecar metadata (consistent with the FuelType sidecar from
-   Module 01).
+1. **Voltage limits defaults**: configurable in `application.yml` (e.g. +/-5%
+   of nominal), override-able per network via sidecar metadata. Agreed.
 
-2. **Slack bus annotation in GridNetwork**: the slack bus identity is useful
-   for the tutorial (highlight it for the player) and for debugging. Propose
-   adding `slackBusId: String?` to `GridNetwork`. Needs to be confirmed in
-   the implementation PR since it touches Module 01's data class.
+2. **Slack bus tracking**: `slackBusIds: List<String>` added to
+   `PowerFlowResult`; `GridNetwork` will gain the same field in the
+   implementation PR (minor addition to Module 01 data class). Supports
+   distributed slack with multiple participating buses. Agreed.
+
+3. **No DC fallback**: AC non-convergence raises `NETWORK_FAILURE` rather
+   than falling back to DC. DC remains available explicitly for Module 03.
+   Agreed.
