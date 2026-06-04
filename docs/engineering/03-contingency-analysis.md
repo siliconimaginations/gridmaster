@@ -118,9 +118,11 @@ data class ContingencyAnalysisParameters(
     val contingencies: List<Contingency> = emptyList(),
         // empty = auto-build N-1 from network via buildN1Contingencies()
     val dcPreScreening: Boolean = true,
-    val postContingencyLimitReduction: Double = 1.0,
-        // factor applied to ratings for post-contingency limits
-        // e.g. 1.1 = 110% of normal rating allowed post-contingency
+    val postContingencyRatingMultiplier: Double = 1.0,
+        // multiplier applied to normal branch ratings for post-contingency checks.
+        // 1.0 = normal ratings enforced (conservative).
+        // 1.1 = 110% of normal rating allowed post-contingency (emergency rating).
+        // Must be >= 1.0; values < 1.0 (stricter than normal) are rejected.
 )
 
 // ── Contingency definition ───────────────────────────────────────────────────
@@ -146,8 +148,8 @@ data class ContingencyAnalysisResult(
     val criticalContingencies: List<String>,        // IDs of contingencies with CRITICAL violations
     val analysisTimeMs: Long,
     val completedAt: Instant,
-    val preScreened: Int,                           // contingencies filtered by DC pre-screen
-    val fullAcRun: Int,                             // contingencies evaluated with full AC
+    val preScreenedContingenciesCount: Int,         // contingencies filtered out by DC pre-screen (no AC needed)
+    val fullAcContingenciesCount: Int,              // contingencies evaluated with full AC power flow
 )
 
 data class ContingencyResult(
@@ -214,14 +216,14 @@ At most one queued run is kept (newer replaces older).
 4. Union of AC results forms the final ContingencyAnalysisResult
 ```
 
-The `preScreened` and `fullAcRun` counts in `ContingencyAnalysisResult`
-expose this split for monitoring and tutorial display ("X of Y contingencies
-required full AC analysis").
+The `preScreenedContingenciesCount` and `fullAcContingenciesCount` counts in `ContingencyAnalysisResult`
+expose this split for monitoring and tutorial display
+("X of Y contingencies required full AC analysis").
 
 ### Post-contingency limit factor
 
 Real-world practice allows higher branch loading post-contingency (e.g. 110%
-for short durations, 120% for emergency). `postContingencyLimitReduction` is
+for short durations, 120% for emergency). `postContingencyRatingMultiplier` is
 named from the perspective of the limit check: a value of `1.1` means
 violations are only flagged at 1/1.1 ≈ 91% of the post-contingency allowed
 rating, equivalent to applying a 110% emergency rating. The game exposes this
@@ -249,7 +251,7 @@ emergency rating assumptions).
    *Alternative*: DC-only. Rejected — misses voltage violations entirely;
    inconsistent with the AC-first philosophy from Module 02.
 
-3. **`postContingencyLimitReduction` parameter.**
+3. **`postContingencyRatingMultiplier` parameter.**
    Post-contingency emergency ratings are a real operational concept. Exposing
    this in the API makes it a learnable game parameter (tutorial mission 5 will
    demonstrate the difference between N-1 security with normal vs emergency
@@ -293,8 +295,8 @@ emergency rating assumptions).
 - IEEE 14-bus N-1: trip each line, assert known critical contingencies match
   published reference results (e.g. line 2–3 loss)
 - DC pre-screening validation: run with `dcPreScreening=true` vs `false`,
-  assert same violations found, compare `fullAcRun` counts
-- `postContingencyLimitReduction=1.1` test: same contingency produces no
+  assert same violations found, compare `fullAcContingenciesCount` counts
+- `postContingencyRatingMultiplier=1.1` test: same contingency produces no
   violation at 1.1 factor but ALARM at 1.0 factor
 - `NETWORK_FAILURE` contingency: trip both lines feeding a radial load bus,
   assert `PostContingencyStatus.NETWORK_FAILURE`
@@ -302,22 +304,23 @@ emergency rating assumptions).
 **Edge cases:**
 - Network with no lines (only transformers) — contingency list contains only transformers
 - Contingency that trips the only generator in an island — `NETWORK_FAILURE`
-- All contingencies pass DC pre-screen — `fullAcRun = 0`
+- All contingencies pass DC pre-screen — `fullAcContingenciesCount = 0`
 
 ---
 
-## Open Questions
+## Resolved Design Points (from review)
 
-1. **N-1 run frequency during Free Play**: default of every 6 ticks (1 hour
-   grid-time) is proposed. Should this adapt to game speed (run more frequently
-   at slow speed, less at fast speed) or remain fixed?
+1. **N-1 run frequency**: fixed at every 6 game ticks (1 hour grid-time).
+   Adaptive frequency adds complexity without clear benefit at this stage.
+   Agreed.
 
-2. **Contingency display in UI**: should the frontend show the full
-   `ContingencyAnalysisResult` table (all contingencies + status), or only
-   the critical/violated ones? The full table is the standard industry view
-   (N-1 table), which aligns with tutorial mission 5. Suggest showing all
-   with filtering, but defaulting to "violations only" view.
+2. **Contingency UI display**: show violated/critical contingencies only
+   (not the full N-1 table) to avoid cluttering the UI. UX design (Module 11)
+   will define the panel layout. Agreed.
 
-3. **N-2 scope**: deferred for now. Worth noting that some Challenge scenarios
-   may require N-2 analysis (e.g. double-circuit line outage). Will revisit
-   in Stage 6 design.
+3. **N-2 scope**: deferred — very low priority. N-2 will be revisited only
+   if a specific Challenge scenario requires it. Agreed.
+
+4. **KDoc on public API**: all public interfaces, classes, and functions in
+   the implementation will carry KDoc comments (covered by
+   `ENGINEERING_PRINCIPLES.md §8`). Noted for implementation PRs.
