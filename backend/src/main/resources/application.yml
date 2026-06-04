@@ -1,0 +1,30 @@
+spring:
+  application:
+    name: gridmaster-backend
+
+  datasource:
+    url: jdbc:sqlite:${GRIDMASTER_DB_PATH:./gridmaster.db}
+    driver-class-name: org.sqlite.JDBC
+
+  jpa:
+    database-platform: org.hibernate.community.dialect.SQLiteDialect
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+
+  profiles:
+    active: local
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
+
+gridmaster:
+  # Game clock: 1 real second = 10 grid-minutes at 1x speed
+  tick-interval-ms: 1000
+  grid-minutes-per-tick: 10

@@ -1,0 +1,20 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    volumes:
+      # Persist SQLite DB across restarts
+      - ./data:/app/data
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      GRIDMASTER_DB_PATH: /app/data/gridmaster.db
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
