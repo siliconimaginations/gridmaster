@@ -101,10 +101,16 @@ ci: add ktlint and ESLint checks to PR workflow
 - Keep PRs small enough to review in one sitting (aim for <400 lines changed; split larger work into sequential PRs).
 
 ### Branch protection on `main`
-- Direct pushes are blocked.
-- Require PR with at least 1 approval.
-- Require CI (build + lint + tests) to pass.
-- Do not merge with unresolved review comments.
+
+> **Note**: GitHub branch protection rules require GitHub Pro for private repos. This repo operates on a free private plan, so rules are not GitHub-enforced. The following constraints are **mandatory by convention** and must be followed without exception:
+
+- **Never push directly to `main`**. All changes go through a PR on a named branch.
+- **Never merge your own PR**. A second person (or Claude, for human-authored PRs) must review and approve.
+- **Never merge with a red CI**. If CI fails, fix it before merging — no exceptions, no "I'll fix it in the next PR".
+- **Never merge with unresolved review comments**. Resolve or explicitly acknowledge each comment before merging.
+- **Critical PRs** (physics engine, game engine core, WebSocket protocol, session model, CI changes) require a review from `siliconimaginations` before merge. Claude will request this review when opening such PRs.
+
+Violating these rules undermines the entire review process. Treat them as hard constraints.
 
 ---
 
@@ -217,6 +223,18 @@ When Claude (AI assistant) works on this codebase:
 - Claude flags uncertainty explicitly — if a design choice is non-obvious, it is listed under "Design Decisions & Rationale" with the tradeoff explained.
 - Claude does not silently change the scope of a task. If implementation reveals the design needs to change, Claude raises it in the PR description or chat before making the change.
 - Claude treats this document as a hard constraint, not a suggestion.
+
+### Review workflow (single GitHub account)
+
+Since Claude uses the `siliconimaginations` token to open PRs, GitHub records those PRs as authored by `siliconimaginations` — which prevents formal self-review requests. The review discipline is maintained as follows:
+
+| PR type | Who reviews | How |
+|---------|-------------|-----|
+| Claude opens a PR | `siliconimaginations` (Rick) | Reviews diff on GitHub, merges when satisfied |
+| Rick opens a PR | Claude | Reviews in chat; posts inline comments via GitHub API if changes are needed |
+| Critical PRs (engine, protocol, CI) | Both | Claude calls out explicitly in PR description; Rick must review before merge |
+
+**Merging without reviewing the diff is a process violation regardless of CI status.**
 
 ---
 
