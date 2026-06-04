@@ -137,6 +137,12 @@ data class ThreeWindingsTransformer(
     val current1A: Double?,             // null before first power flow
     val current2A: Double?,
     val current3A: Double?,
+    val resistanceOhm1: Double,         // series resistance, HV leg
+    val reactanceOhm1: Double,
+    val resistanceOhm2: Double,         // series resistance, MV leg
+    val reactanceOhm2: Double,
+    val resistanceOhm3: Double,         // series resistance, LV leg
+    val reactanceOhm3: Double,
 )
 
 data class Generator(
@@ -313,6 +319,7 @@ responsibility. The public boundary is:
 - Transformer at non-nominal tap position
 - ShuntCompensator at zero sections (fully disconnected)
 - Three-winding transformer with one winding disconnected
+- Three-winding transformer R/X round-trip (all three legs)
 
 ---
 
