@@ -143,6 +143,8 @@ class IidmNetworkMapperImpl(
                 ratioTapPosition = tapPosition,
                 nominalVoltageHvKv = maxOf(twt.ratedU1, twt.ratedU2),
                 nominalVoltageLvKv = minOf(twt.ratedU1, twt.ratedU2),
+                nominalVoltageFromKv = twt.ratedU1,
+                nominalVoltageToKv = twt.ratedU2,
             )
         }
 
@@ -179,6 +181,9 @@ class IidmNetworkMapperImpl(
                 current1A = twt3.leg1.terminal.i.orNull(),
                 current2A = twt3.leg2.terminal.i.orNull(),
                 current3A = twt3.leg3.terminal.i.orNull(),
+                nominalVoltage1Kv = twt3.leg1.ratedU,
+                nominalVoltage2Kv = twt3.leg2.ratedU,
+                nominalVoltage3Kv = twt3.leg3.ratedU,
                 resistanceOhm1 = twt3.leg1.r,
                 reactanceOhm1 = twt3.leg1.x,
                 resistanceOhm2 = twt3.leg2.r,
