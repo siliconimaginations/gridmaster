@@ -33,6 +33,7 @@ dependencies {
     implementation("com.powsybl:powsybl-open-loadflow")
     implementation("com.powsybl:powsybl-security-analysis-api")
     implementation("com.powsybl:powsybl-contingency-api")
+    implementation("com.powsybl:powsybl-iidm-serde")
 
     // SQLite
     runtimeOnly("org.xerial:sqlite-jdbc:3.45.2.0")
@@ -42,6 +43,7 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("io.mockk:mockk:1.13.10")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
+    testImplementation("com.powsybl:powsybl-iidm-test")
 }
 
 tasks.withType<KotlinCompile> {
