@@ -35,6 +35,7 @@ class SqliteNetworkRepository(
                 snapshotJson = snapshotJson,
                 updatedAt = Instant.now(),
             )
+        // TODO: consider write-behind pattern for high-frequency ticks (#22)
         withContext(Dispatchers.IO) { jpaRepository.save(entity) }
     }
 
