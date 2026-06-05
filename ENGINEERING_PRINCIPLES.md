@@ -67,6 +67,35 @@ Unresolved issues that will be decided during or after implementation.
 
 ---
 
+## 2a. UX Design Doc Standard
+
+UX documents live at `docs/ux/<nn>-<feature-name>.md` and are required before any frontend feature that introduces new UI surface.
+
+Minimum required sections:
+
+```markdown
+# UX: <Feature Name>
+
+## Purpose
+What problem this UI solves for the player. One paragraph.
+
+## [Component anatomy / Layout]
+ASCII wireframe or table describing the visual structure.
+Use the approved panel pattern for event/action panels:
+coloured header · causal flow strip · 3 metric cards · loading bar · option cards · apply button.
+
+## [Per-element or per-state content]
+Tables: what data is shown, example values, action buttons.
+
+## Open questions
+Unresolved layout or interaction questions.
+```
+
+UX docs should be **scannable, not prose** — labels, tables, and ASCII layouts only.
+Details and rationale go in `ⓘ` tooltip annotations, not inline paragraphs.
+
+---
+
 ## 3. Git Workflow
 
 ### Branch naming
