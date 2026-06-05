@@ -146,7 +146,7 @@ data class RedispatchAction(
     val decreaseGeneratorId: String,
     val shiftMw: Double,
     val targetBranchId: String,
-    val estimatedReliefPercent: Double,
+    val estimatedReliefMw: Double,
 )
 
 data class CongestionRedispatchResult(

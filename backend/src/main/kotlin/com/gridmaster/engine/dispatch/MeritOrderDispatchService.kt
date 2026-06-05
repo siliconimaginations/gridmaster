@@ -146,12 +146,12 @@ class MeritOrderDispatchService(
             }
             actions += action
             log.debug(
-                "Redispatch: branch={} inc={} dec={} shift={:.1f} MW relief={:.1f}%",
+                "Redispatch: branch={} inc={} dec={} shift={:.1f} MW relief={:.2f} MW",
                 branchId,
                 action.increaseGeneratorId,
                 action.decreaseGeneratorId,
                 action.shiftMw,
-                action.estimatedReliefPercent,
+                action.estimatedReliefMw,
             )
         }
 
@@ -213,14 +213,14 @@ class MeritOrderDispatchService(
         val incHeadroom = (inc.gen.maxActivePowerMw - (targetMap[inc.genId] ?: 0.0))
         val decHeadroom = ((targetMap[dec.genId] ?: 0.0) - dec.gen.minActivePowerMw)
         val shiftMw = min(incHeadroom, decHeadroom).coerceAtLeast(0.0)
-        val estimatedRelief = shiftMw * combinedSensitivity * 100.0
+        val estimatedReliefMw = shiftMw * combinedSensitivity
 
         return RedispatchAction(
             increaseGeneratorId = inc.genId,
             decreaseGeneratorId = dec.genId,
             shiftMw = shiftMw,
             targetBranchId = branchId,
-            estimatedReliefPercent = estimatedRelief,
+            estimatedReliefMw = estimatedReliefMw,
         )
     }
 

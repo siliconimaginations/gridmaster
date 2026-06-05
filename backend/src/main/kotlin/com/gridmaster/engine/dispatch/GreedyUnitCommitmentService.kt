@@ -7,7 +7,7 @@ import kotlin.system.measureTimeMillis
 /**
  * Greedy unit commitment for a 24-hour day-ahead window.
  *
- * Algorithm for each hour (sorted by ascending load):
+ * Algorithm for each hour (processed chronologically, hour 0..23):
  * 1. Start with all generators from the previous hour's commitment.
  * 2. Commit cheapest generators (by startup cost, then marginal cost) until
  *    total capacity ≥ load × (1 + reserveMarginFraction).
