@@ -1,7 +1,7 @@
 # Game Clock
 
 **Stage**: 1
-**Status**: Draft — awaiting review
+**Status**: Draft — v2, addressing review comments
 **Branch**: `stage/1/07-game-clock`
 **Depends on**: [06-session-model.md](06-session-model.md), [02-power-flow.md](02-power-flow.md)
 
@@ -65,14 +65,54 @@ data class TickResult(
 
 ### Speed and wall-clock slot
 
-| Speed | Real-time interval per tick | Grid-minutes per tick |
-|-------|----------------------------|-----------------------|
-| 1×    | 1 000 ms                   | 10 min                |
-| 10×   | 100 ms                     | 10 min                |
-| 100×  | 10 ms                      | 10 min                |
+| Speed | Slot (ms) | Grid-time/tick | Grid-time/real-min | Grid-time/real-hour |
+|-------|-----------|---------------|--------------------|--------------------|
+| 1×    | 1 000     | 10 min        | 10 hours           | 25 days            |
+| 10×   | 100       | 10 min        | 100 hours (~4 days)| ~8 months          |
+| 60×   | 17        | 10 min        | 600 hours (~25 d)  | ~4 years           |
+| 100×  | 10        | 10 min        | 1 000 hours (~42 d)| ~7 years           |
 
-Grid-minutes per tick is fixed at 10. Faster speeds compress the real-time
-interval, not the grid-time step.
+Grid-minutes per tick is fixed at 10 (confirmed). Faster speeds compress
+the real-time slot, not the grid-time step.
+
+**Justification for the speed range.** The power flow solve time governs
+effective playable speed. PowSyBl open-loadflow benchmarks:
+
+| Network size    | Est. AC solve time | Slip-free max speed |
+|-----------------|--------------------|---------------------|
+| 14-bus (tutorial) | ~50 ms           | ~20×                |
+| 100-bus         | ~150 ms            | ~6×                 |
+| 500-bus         | ~500 ms            | ~1× (slips at 2×+)  |
+
+At higher nominal speeds the clock **slips** — the next tick starts immediately
+after the solver finishes rather than waiting for the wall-clock slot. Slip is
+safe: grid-time advances correctly and the player sees slower real-time pacing.
+The 100× setting is a ceiling, not a guarantee; slip is the natural governor.
+The UI should display actual grid-time advance rate so the player sees true pace.
+
+### Long-run time scale (Free Play)
+
+A session must support multi-year grid evolution. Calculations:
+
+| Real play time    | Speed | Grid-time covered  |
+|-------------------|-------|--------------------|
+| 30 min            | 1×    | ~12 grid-days      |
+| 1 hour            | 1×    | ~25 grid-days      |
+| 1 hour            | 10×   | ~8 grid-months     |
+| 1 hour            | 60×   | ~4 grid-years      |
+| 2 hours           | 60×   | ~8 grid-years      |
+| 1 week (casual)   | 10×   | ~5 grid-years      |
+
+At ~60× for 1–2 hours of real play, the player covers 4–8 grid-years —
+sufficient for meaningful expansion, technology transitions, and policy arcs.
+
+**Event content implication**: the event catalogue (Module 08) must have
+enough template variety that no event repeats within a single grid-year.
+Tracked in Module 08 OQ 1.
+
+**Data range**: `gameTimeEpochMinutes` as `Long`. At 10 min/tick × 5×10⁶
+ticks for a decade of grid-time ≈ 5×10⁷ minutes — well within `Long` range.
+No overflow concern.
 
 ### Auto-slow triggers
 
@@ -154,8 +194,13 @@ at correct interval.
 
 ---
 
-## Open Questions
+## Resolved Design Points (from review)
 
-1. **`gridMinutesPerTick` configurability**: currently fixed at 10 per tick.
-   Should this be configurable per game mode? (e.g. tutorial: 10 min/tick;
-   free play: 10–60 min/tick depending on planning horizon selected by player)
+1. **`gridMinutesPerTick`**: fixed at 10 per tick across all modes. Agreed.
+
+2. **Speed table**: calculations added. Effective max speed is governed by
+   power flow solve time via the slip mechanism. 100× is a ceiling; slip-free
+   operation is typically 6–20× depending on network size.
+
+3. **Long-run time scale**: calculation table added. ~60× for 1–2 hours covers
+   4–8 grid-years. Event catalogue depth (Module 08 OQ 1) must match.
