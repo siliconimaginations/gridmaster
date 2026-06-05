@@ -5,6 +5,8 @@ import com.gridmaster.engine.model.GridNetwork
 import com.gridmaster.engine.network.NetworkRepository
 import com.powsybl.iidm.network.Network
 import com.powsybl.iidm.serde.NetworkSerDe
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.springframework.stereotype.Component
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -17,9 +19,9 @@ class SqliteNetworkRepository(
 ) : NetworkRepository {
     /**
      * Serialise [network] to XIIDM XML and [snapshot] to JSON and upsert into SQLite.
-     * Both representations are written atomically (same JPA save call).
+     * Wraps blocking JPA call in [Dispatchers.IO] to keep the game engine coroutine free.
      */
-    override fun save(
+    override suspend fun save(
         sessionId: String,
         network: Network,
         snapshot: GridNetwork,
@@ -33,25 +35,29 @@ class SqliteNetworkRepository(
                 snapshotJson = snapshotJson,
                 updatedAt = Instant.now(),
             )
-        jpaRepository.save(entity)
+        // TODO: consider write-behind pattern for high-frequency ticks (#22)
+        withContext(Dispatchers.IO) { jpaRepository.save(entity) }
     }
 
     /**
      * Load the IIDM [Network] for [sessionId] from its stored XIIDM XML.
      * Returns null if no snapshot exists for the session.
      */
-    override fun loadIidm(sessionId: String): Network? {
-        val entity = jpaRepository.findById(sessionId).orElse(null) ?: return null
+    override suspend fun loadIidm(sessionId: String): Network? {
+        val entity = findEntity(sessionId) ?: return null
         return deserializeNetwork(entity.iidmXml)
     }
 
     /**
      * Return the last stored [GridNetwork] snapshot for [sessionId], or null if none exists.
      */
-    override fun latestSnapshot(sessionId: String): GridNetwork? {
-        val entity = jpaRepository.findById(sessionId).orElse(null) ?: return null
+    override suspend fun latestSnapshot(sessionId: String): GridNetwork? {
+        val entity = findEntity(sessionId) ?: return null
         return objectMapper.readValue(entity.snapshotJson, GridNetwork::class.java)
     }
+
+    private suspend fun findEntity(sessionId: String): NetworkSnapshotEntity? =
+        withContext(Dispatchers.IO) { jpaRepository.findById(sessionId).orElse(null) }
 
     // -------------------------------------------------------------------------
     // Serialisation helpers

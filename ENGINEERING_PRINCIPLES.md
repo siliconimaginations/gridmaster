@@ -276,8 +276,25 @@ Every PR is either **non-critical** or **critical**:
 5. After merging, Claude consults `WORK_PLAN.md` and opens the next PR automatically.
 
 #### Critical PRs
-1. `nagasawa94` opens the PR and assigns `siliconimaginations` as reviewer.
-2. Claude still polls CI and Gemini and addresses issues, but does **not** merge without Rick's explicit approval.
+1. `nagasawa94` opens the PR with `**PR Classification:** CRITICAL` in the description and assigns `siliconimaginations` as reviewer.
+2. Poll CI and Gemini; address ALL Gemini issues (critical/major/minor) — same as non-critical PRs. Do not wait for Rick before fixing Gemini findings.
+3. Do **not** merge without Rick's explicit approval.
+4. **Do not sit idle while waiting.** Continue working on other WORK_PLAN tasks that are not blocked by the open critical PR. If the next task depends on unmerged code, branch off the unreviewed branch and continue; rebase/merge onto main once the blocking PR lands.
+
+#### Critical → Non-critical transition
+
+Rick signals a PR can become non-critical by adding `_NCP` to the PR description or a review comment.
+Meaning: major design decisions are settled; remaining review is routine.
+
+Claude's response:
+- **Agrees:** update the PR description to `**PR Classification:** NON_CRITICAL (_NCP)`, remove the assigned reviewer, and switch to autonomous merge flow (CI + Gemini green → merge).
+- **Disagrees** (unresolved architectural concern): keep it critical, flag the specific concern to Rick. Rick has final say, but Claude's objection is on record.
+
+#### Non-critical → Critical escalation
+
+If a major issue surfaces during a non-critical PR review:
+- **Can be deferred:** open a GitHub issue, add `// TODO: #<issue>`, finish and merge the PR as non-critical.
+- **Must be fixed in this PR:** update the description to `**PR Classification:** CRITICAL`, assign Rick as reviewer, notify in chat.
 
 #### When Rick says "keep working based on the plan"
 Claude applies the non-critical workflow and works autonomously through `WORK_PLAN.md` — open PR → CI + Gemini green → merge → next task — until a critical decision point is reached, then pauses and notifies Rick.
@@ -289,6 +306,15 @@ Claude applies the non-critical workflow and works autonomously through `WORK_PL
 | Any (Rick) | `siliconimaginations` | `nagasawa94` | Claude reviews in chat; Rick merges |
 
 **Merging without CI green and a passed Gemini review is a process violation.**
+
+#### Handling difficult issues during autonomous work
+
+When Claude encounters a genuinely hard problem (platform incompatibility, ambiguous API, unclear design trade-off):
+
+1. Open a GitHub issue describing the problem, what was tried, and what help or decision is needed.
+2. Notify Rick in chat with the issue link.
+3. Claude may work around the issue or pause — judgement call based on whether it is on the critical path.
+4. When the issue is resolved (by Claude or Rick), close the issue with a comment explaining the resolution.
 
 ---
 
