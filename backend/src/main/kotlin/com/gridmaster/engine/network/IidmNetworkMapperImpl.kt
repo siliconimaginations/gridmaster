@@ -14,6 +14,7 @@ import com.powsybl.iidm.network.Network
 import com.powsybl.iidm.network.ShuntCompensatorLinearModel
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
+import kotlin.math.sqrt
 import com.powsybl.iidm.network.TwoWindingsTransformer as IidmTwoWindingsTransformer
 
 @Component
@@ -140,8 +141,8 @@ class IidmNetworkMapperImpl(
                 resistanceOhm = twt.r,
                 reactanceOhm = twt.x,
                 ratioTapPosition = tapPosition,
-                nominalVoltageHvKv = twt.ratedU1,
-                nominalVoltageLvKv = twt.ratedU2,
+                nominalVoltageHvKv = maxOf(twt.ratedU1, twt.ratedU2),
+                nominalVoltageLvKv = minOf(twt.ratedU1, twt.ratedU2),
             )
         }
 
@@ -401,7 +402,7 @@ class IidmNetworkMapperImpl(
     private fun IidmTwoWindingsTransformer.ratedSOrNull(): Double? = runCatching { ratedS }.getOrNull()?.orNull()
 
     companion object {
-        private val SQRT3 = Math.sqrt(3.0)
+        private val SQRT3 = sqrt(3.0)
     }
 }
 
