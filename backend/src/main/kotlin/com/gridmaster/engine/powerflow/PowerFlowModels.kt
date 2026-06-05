@@ -96,13 +96,32 @@ enum class EquipmentType { LINE, TWO_WINDINGS_TRANSFORMER, THREE_WINDINGS_TRANSF
  */
 enum class ViolationSeverity { WARNING, ALARM, CRITICAL }
 
-/** Configurable thresholds for violation severity classification. */
+/**
+ * Configurable thresholds for violation severity classification.
+ *
+ * Thermal (branch current):
+ *   WARNING ≥ [warningPercent] %, ALARM ≥ [alarmPercent] %, CRITICAL ≥ [criticalPercent] %.
+ *
+ * Voltage (bus voltage in pu):
+ *   WARNING: deviation beyond [voltageMinPu]/[voltageMaxPu] up to [voltageAlarmBandPu].
+ *   ALARM:   deviation beyond warning band up to [voltageCriticalBandPu].
+ *   CRITICAL: deviation beyond critical band.
+ *
+ * Default voltage bands (from the warning edge outward):
+ *   WARNING  0.95–0.92 pu (low) / 1.05–1.08 pu (high)
+ *   ALARM    0.92–0.90 pu       / 1.08–1.10 pu
+ *   CRITICAL < 0.90 pu          / > 1.10 pu
+ */
 data class ViolationThresholds(
     val warningPercent: Double = 90.0,
     val alarmPercent: Double = 100.0,
     val criticalPercent: Double = 110.0,
     val voltageMinPu: Double = 0.95,
     val voltageMaxPu: Double = 1.05,
+    /** Deviation from the warning edge at which severity escalates to ALARM. */
+    val voltageAlarmBandPu: Double = 0.03,
+    /** Deviation from the warning edge at which severity escalates to CRITICAL. */
+    val voltageCriticalBandPu: Double = 0.05,
 ) {
     fun thermalSeverity(loadingPercent: Double): ViolationSeverity? =
         when {
@@ -112,9 +131,21 @@ data class ViolationThresholds(
             else -> null
         }
 
-    fun voltageSeverity(voltagePu: Double): ViolationSeverity? =
-        when {
-            voltagePu < voltageMinPu || voltagePu > voltageMaxPu -> ViolationSeverity.ALARM
-            else -> null
+    /**
+     * Returns the voltage violation severity based on how far [voltagePu] is outside the
+     * normal band ([voltageMinPu]..[voltageMaxPu]).  Returns null when within limits.
+     */
+    fun voltageSeverity(voltagePu: Double): ViolationSeverity? {
+        val deviation =
+            when {
+                voltagePu < voltageMinPu -> voltageMinPu - voltagePu
+                voltagePu > voltageMaxPu -> voltagePu - voltageMaxPu
+                else -> return null
+            }
+        return when {
+            deviation >= voltageCriticalBandPu -> ViolationSeverity.CRITICAL
+            deviation >= voltageAlarmBandPu -> ViolationSeverity.ALARM
+            else -> ViolationSeverity.WARNING
         }
+    }
 }

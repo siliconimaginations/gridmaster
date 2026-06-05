@@ -31,20 +31,50 @@ class ViolationScannerTest {
     }
 
     @Test
-    fun `voltage violation when bus is below minimum`() {
-        val snapshot = emptyNetwork().copy(buses = listOf(bus("B1", voltagePu = 0.90)))
+    fun `voltage violation WARNING when bus is just below minimum`() {
+        // 0.94 pu: deviation 0.01 < alarmBand(0.03) → WARNING
+        val snapshot = emptyNetwork().copy(buses = listOf(bus("B1", voltagePu = 0.94)))
         val violations = scanner.scan(snapshot).filterIsInstance<NetworkViolation.VoltageViolation>()
         assertThat(violations).hasSize(1)
         assertThat(violations.first().busId).isEqualTo("B1")
+        assertThat(violations.first().severity).isEqualTo(ViolationSeverity.WARNING)
+    }
+
+    @Test
+    fun `voltage violation ALARM when bus is moderately below minimum`() {
+        // 0.92 pu: deviation 0.03 == alarmBand → ALARM
+        val snapshot = emptyNetwork().copy(buses = listOf(bus("B1", voltagePu = 0.92)))
+        val violations = scanner.scan(snapshot).filterIsInstance<NetworkViolation.VoltageViolation>()
+        assertThat(violations).hasSize(1)
         assertThat(violations.first().severity).isEqualTo(ViolationSeverity.ALARM)
     }
 
     @Test
-    fun `voltage violation when bus is above maximum`() {
+    fun `voltage violation CRITICAL when bus is severely below minimum`() {
+        // 0.90 pu: deviation 0.05 == criticalBand → CRITICAL
+        val snapshot = emptyNetwork().copy(buses = listOf(bus("B1", voltagePu = 0.90)))
+        val violations = scanner.scan(snapshot).filterIsInstance<NetworkViolation.VoltageViolation>()
+        assertThat(violations).hasSize(1)
+        assertThat(violations.first().busId).isEqualTo("B1")
+        assertThat(violations.first().severity).isEqualTo(ViolationSeverity.CRITICAL)
+    }
+
+    @Test
+    fun `voltage violation CRITICAL when bus is severely above maximum`() {
+        // 1.10 pu: deviation 0.05 == criticalBand → CRITICAL
         val snapshot = emptyNetwork().copy(buses = listOf(bus("B1", voltagePu = 1.10)))
         val violations = scanner.scan(snapshot).filterIsInstance<NetworkViolation.VoltageViolation>()
         assertThat(violations).hasSize(1)
-        assertThat(violations.first().severity).isEqualTo(ViolationSeverity.ALARM)
+        assertThat(violations.first().severity).isEqualTo(ViolationSeverity.CRITICAL)
+    }
+
+    @Test
+    fun `voltage violation WARNING when bus is just above maximum`() {
+        // 1.06 pu: deviation 0.01 < alarmBand → WARNING
+        val snapshot = emptyNetwork().copy(buses = listOf(bus("B1", voltagePu = 1.06)))
+        val violations = scanner.scan(snapshot).filterIsInstance<NetworkViolation.VoltageViolation>()
+        assertThat(violations).hasSize(1)
+        assertThat(violations.first().severity).isEqualTo(ViolationSeverity.WARNING)
     }
 
     @Test

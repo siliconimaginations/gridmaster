@@ -56,7 +56,7 @@ class ViolationScanner(
         // Lines
         for (line in snapshot.lines) {
             val rating = line.ratingA ?: continue
-            val current = maxOfNullable(line.currentFromA, line.currentToA) ?: continue
+            val current = listOfNotNull(line.currentFromA, line.currentToA).maxOrNull() ?: continue
             thermalViolation(line.id, EquipmentType.LINE, current, rating)
                 ?.let { violations += it }
         }
@@ -66,6 +66,7 @@ class ViolationScanner(
         // side's own nominal voltage, then compare each side's measured current against its
         // own rating.  Using a single HV-side conversion for both currents is incorrect
         // because LV-side current is naturally higher for the same power flow.
+        // O(n_buses) map built once per scan — negligible for game-scale networks.
         val busNominalKv = snapshot.buses.associate { it.id to it.nominalVoltageKv }
         for (twt in snapshot.twoWindingsTransformers) {
             val ratingMva = twt.ratingMva ?: continue
@@ -136,17 +137,6 @@ class ViolationScanner(
         mva: Double,
         voltageKv: Double,
     ): Double = if (voltageKv > 0.0) mva * 1000.0 / (SQRT3 * voltageKv) else 0.0
-
-    private fun maxOfNullable(
-        a: Double?,
-        b: Double?,
-    ): Double? =
-        when {
-            a != null && b != null -> maxOf(a, b)
-            a != null -> a
-            b != null -> b
-            else -> null
-        }
 
     companion object {
         private val SQRT3 = sqrt(3.0)
