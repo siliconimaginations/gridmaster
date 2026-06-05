@@ -290,6 +290,15 @@ Claude applies the non-critical workflow and works autonomously through `WORK_PL
 
 **Merging without CI green and a passed Gemini review is a process violation.**
 
+#### Handling difficult issues during autonomous work
+
+When Claude encounters a genuinely hard problem (platform incompatibility, ambiguous API, unclear design trade-off):
+
+1. Open a GitHub issue describing the problem, what was tried, and what help or decision is needed.
+2. Notify Rick in chat with the issue link.
+3. Claude may work around the issue or pause — judgement call based on whether it is on the critical path.
+4. When the issue is resolved (by Claude or Rick), close the issue with a comment explaining the resolution.
+
 ---
 
 ## 10. Definition of Done
