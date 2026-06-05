@@ -55,6 +55,7 @@ gridmaster/
 ├── docs/
 │   ├── engineering/  # Per-module engineering design specs
 │   └── ux/           # UX design documents
+├── scripts/          # Local dev utilities (lint.sh)
 └── .github/
     └── workflows/    # CI/CD pipelines
 ```
