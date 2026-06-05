@@ -39,38 +39,43 @@ them to the IIDM network, and triggers the downstream physics pipeline.
 interface CommandHandler {
     /**
      * Validate and apply a single player command. Runs power flow after mutation.
+     * Returns a CommandResult with one CommandOutcome entry.
      * Synchronous — blocks until power flow completes.
      */
     fun handle(command: PlayerCommand, sessionId: String): CommandResult
 
     /**
      * Validate and apply a batch of player commands atomically.
-     * All commands are validated first; if any fail, the entire batch is rejected.
+     * All commands are validated first; if any fail, the entire batch is rejected
+     * and zero mutations are applied.
      * All mutations are applied in order, then a single power flow is run.
-     * More efficient than calling handle() N times when multiple changes
-     * must take effect simultaneously (e.g. dispatch results, UC schedule).
+     * Returns a CommandResult with one CommandOutcome entry per command.
      */
-    fun handleBatch(commands: List<PlayerCommand>, sessionId: String): BatchCommandResult
+    fun handleBatch(commands: List<PlayerCommand>, sessionId: String): CommandResult
 
     /**
      * Apply a list of NetworkMutations directly (from event engine or
      * dispatch service). Skips player-level validation.
+     * Returns a CommandResult with a single synthetic CommandOutcome.
      */
     fun applyMutations(mutations: List<NetworkMutation>, sessionId: String): CommandResult
 }
 
-data class BatchCommandResult(
-    val success: Boolean,
+// Unified result for both single and batch commands.
+// Single command: commandOutcomes has one entry.
+// Batch command: commandOutcomes has one entry per command in the batch.
+data class CommandResult(
+    val success: Boolean,                        // false if any command was rejected
     val snapshot: GridNetwork,
     val powerFlowResult: PowerFlowResult,
     val newAlerts: List<Alert>,
-    val commandOutcomes: List<CommandOutcome>,  // one per command in the batch
+    val commandOutcomes: List<CommandOutcome>,
 )
 
 data class CommandOutcome(
     val commandType: String,
     val success: Boolean,
-    val rejectionReason: String? = null,
+    val rejectionReason: String? = null,         // non-null if this command was rejected
 )
 
 // ── Player commands ──────────────────────────────────────────────────────────
@@ -216,7 +221,7 @@ List<PlayerCommand> received
         │
         ▼
 1. Validate ALL commands — collect rejections
-   → if any invalid: return BatchCommandResult(success=false) — no mutations applied
+   → if any invalid: return CommandResult(success=false) — no mutations applied
         │
         ▼
 2. Translate each command to NetworkMutation(s)
@@ -234,7 +239,7 @@ List<PlayerCommand> received
 6. ContingencyAnalysisService.triggerAsync() if any topology change
         │
         ▼
-7. Return BatchCommandResult with per-command outcomes + shared snapshot
+7. Return CommandResult with per-command outcomes + shared snapshot
 ```
 
 **Key benefit of batching**: N commands → 1 power flow solve instead of N.
@@ -282,7 +287,7 @@ running an intermediate power flow after each generator change.
 | Failure | Handling |
 |---------|----------|
 | Single command validation failure | `CommandResult(success=false, rejectionReason=...)` — no mutation applied |
-| Batch validation failure (any command) | `BatchCommandResult(success=false)` — zero mutations applied; all `CommandOutcome`s populated with pass/fail |
+| Batch validation failure (any command) | `CommandResult(success=false)` — zero mutations applied; `commandOutcomes` populated with per-command pass/fail |
 | `applyMutation` throws `InvalidMutationException` | Wrapped as failed `CommandResult` |
 | Power flow returns `NETWORK_FAILURE` | `CommandResult(success=true)` — mutation applied but grid failed; snapshot and alerts reflect the failure state |
 | Unexpected exception | Log; return `CommandResult(success=false, rejectionReason="Internal error")` |
@@ -304,4 +309,4 @@ assert contingency analysis triggered; `RunEconomicDispatch` → assert
 
 ## Resolved Design Points (from review)
 
-1. **Batch command support**: `handleBatch(List<PlayerCommand>)` added. Validates all commands first (all-or-nothing), applies all mutations in order, runs a single power flow. `BatchCommandResult` contains per-command outcomes and a shared snapshot. Use cases: dispatch results, UC schedules, event effects, tutorial state setup.
+1. **Batch command support**: `handleBatch(List<PlayerCommand>)` added. Validates all commands first (all-or-nothing), applies all mutations in order, runs a single power flow. `CommandResult` is the unified return type for both — single commands return a one-element `commandOutcomes` list. No separate batch result type needed. Use cases: dispatch results, UC schedules, event effects, tutorial state setup.
