@@ -61,7 +61,12 @@ class PowSyBlContingencyAnalysisService(
         // Background consumer — runs analyses serially as requests arrive.
         scope.launch {
             triggerChannel.consumeEach { request ->
-                runAnalysis(request)
+                try {
+                    runAnalysis(request)
+                } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    log.error("Contingency analysis run failed unexpectedly", e)
+                }
             }
         }
     }
@@ -97,74 +102,76 @@ class PowSyBlContingencyAnalysisService(
         network.variantManager.cloneVariant(VariantManagerConstants.INITIAL_VARIANT_ID, analysisVariantId, true)
         network.variantManager.setWorkingVariant(analysisVariantId)
 
-        // Compute snapshot once — used for contingency list building and base case check.
-        val snapshot = mapper.toGridNetwork(network)
+        try {
+            // Compute snapshot once — used for contingency list building and base case check.
+            val snapshot = mapper.toGridNetwork(network)
 
-        val contingencies = parameters.contingencies.ifEmpty { ContingencyBuilder.buildN1(snapshot) }
+            val contingencies = parameters.contingencies.ifEmpty { ContingencyBuilder.buildN1(snapshot) }
 
-        if (contingencies.isEmpty()) {
-            log.info("No contingencies to analyse")
-            return
-        }
-
-        val baseCaseSecure = checkBaseCaseSecure(snapshot)
-        var analysisTimeMs = 0L
-        val contingencyResults: List<ContingencyResult>
-        val preScreenedCount: Int
-        val fullAcCount: Int
-
-        analysisTimeMs =
-            measureTimeMillis {
-                if (parameters.dcPreScreening) {
-                    val (screened, acCandidates) = dcPreScreen(network, contingencies, parameters)
-                    preScreenedCount = screened.size
-                    fullAcCount = acCandidates.size
-                    contingencyResults =
-                        if (acCandidates.isEmpty()) {
-                            screened
-                        } else {
-                            screened + runAcSecurityAnalysis(network, acCandidates, parameters)
-                        }
-                } else {
-                    preScreenedCount = 0
-                    fullAcCount = contingencies.size
-                    contingencyResults = runAcSecurityAnalysis(network, contingencies, parameters)
-                }
+            if (contingencies.isEmpty()) {
+                log.info("No contingencies to analyse")
+                return
             }
 
-        val criticalContingencies =
-            contingencyResults
-                .filter { it.worstViolationSeverity == ViolationSeverity.CRITICAL }
-                .map { it.contingency.id }
+            val baseCaseSecure = checkBaseCaseSecure(snapshot)
+            var analysisTimeMs = 0L
+            val contingencyResults: List<ContingencyResult>
+            val preScreenedCount: Int
+            val fullAcCount: Int
 
-        val result =
-            ContingencyAnalysisResult(
-                baseCaseSecure = baseCaseSecure,
-                contingencyResults = contingencyResults,
-                criticalContingencies = criticalContingencies,
-                analysisTimeMs = analysisTimeMs,
-                completedAt = Instant.now(),
-                preScreenedContingenciesCount = preScreenedCount,
-                fullAcContingenciesCount = fullAcCount,
+            analysisTimeMs =
+                measureTimeMillis {
+                    if (parameters.dcPreScreening) {
+                        val (screened, acCandidates) = dcPreScreen(network, contingencies, parameters)
+                        preScreenedCount = screened.size
+                        fullAcCount = acCandidates.size
+                        contingencyResults =
+                            if (acCandidates.isEmpty()) {
+                                screened
+                            } else {
+                                screened + runAcSecurityAnalysis(network, acCandidates, parameters)
+                            }
+                    } else {
+                        preScreenedCount = 0
+                        fullAcCount = contingencies.size
+                        contingencyResults = runAcSecurityAnalysis(network, contingencies, parameters)
+                    }
+                }
+
+            val criticalContingencies =
+                contingencyResults
+                    .filter { it.worstViolationSeverity == ViolationSeverity.CRITICAL }
+                    .map { it.contingency.id }
+
+            val result =
+                ContingencyAnalysisResult(
+                    baseCaseSecure = baseCaseSecure,
+                    contingencyResults = contingencyResults,
+                    criticalContingencies = criticalContingencies,
+                    analysisTimeMs = analysisTimeMs,
+                    completedAt = Instant.now(),
+                    preScreenedContingenciesCount = preScreenedCount,
+                    fullAcContingenciesCount = fullAcCount,
+                )
+
+            cache.update(result)
+
+            log.info(
+                "Contingency analysis complete: {} contingencies, {} critical, {}ms " +
+                    "(DC pre-screened: {}, full AC: {})",
+                contingencies.size,
+                criticalContingencies.size,
+                analysisTimeMs,
+                preScreenedCount,
+                fullAcCount,
             )
-
-        cache.update(result)
-
-        // Clean up the analysis variant.
-        runCatching {
-            network.variantManager.setWorkingVariant(VariantManagerConstants.INITIAL_VARIANT_ID)
-            network.variantManager.removeVariant(analysisVariantId)
+        } finally {
+            // Guarantee variant cleanup even if an exception propagates out of runAnalysis.
+            runCatching {
+                network.variantManager.setWorkingVariant(VariantManagerConstants.INITIAL_VARIANT_ID)
+                network.variantManager.removeVariant(analysisVariantId)
+            }.onFailure { log.warn("Failed to clean up analysis variant {}", analysisVariantId, it) }
         }
-
-        log.info(
-            "Contingency analysis complete: {} contingencies, {} critical, {}ms " +
-                "(DC pre-screened: {}, full AC: {})",
-            contingencies.size,
-            criticalContingencies.size,
-            analysisTimeMs,
-            preScreenedCount,
-            fullAcCount,
-        )
     }
 
     // -------------------------------------------------------------------------
