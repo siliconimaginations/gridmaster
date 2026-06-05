@@ -89,18 +89,17 @@ class PowSyBlContingencyAnalysisService(
         val (network, parameters) = request
         log.info("Starting contingency analysis run")
 
-        val contingencies =
-            parameters.contingencies.ifEmpty {
-                val snapshot = mapper.toGridNetwork(network)
-                ContingencyBuilder.buildN1(snapshot)
-            }
+        // Compute snapshot once — used for contingency list building and base case check.
+        val snapshot = mapper.toGridNetwork(network)
+
+        val contingencies = parameters.contingencies.ifEmpty { ContingencyBuilder.buildN1(snapshot) }
 
         if (contingencies.isEmpty()) {
             log.info("No contingencies to analyse")
             return
         }
 
-        val baseCaseSecure = checkBaseCaseSecure(network)
+        val baseCaseSecure = checkBaseCaseSecure(snapshot)
         var analysisTimeMs = 0L
         val contingencyResults: List<ContingencyResult>
         val preScreenedCount: Int
@@ -275,9 +274,8 @@ class PowSyBlContingencyAnalysisService(
     // Helpers
     // -------------------------------------------------------------------------
 
-    private fun checkBaseCaseSecure(network: Network): Boolean =
+    private fun checkBaseCaseSecure(snapshot: GridNetwork): Boolean =
         runCatching {
-            val snapshot = mapper.toGridNetwork(network)
             val baseCaseViolations =
                 buildList {
                     snapshot.buses.forEach { bus ->
