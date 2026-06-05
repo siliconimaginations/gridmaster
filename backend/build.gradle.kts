@@ -7,6 +7,7 @@ plugins {
     id("org.springframework.boot") version "3.2.4"
     id("io.spring.dependency-management") version "1.1.4"
     id("org.jlleitschuh.gradle.ktlint") version "12.1.0"
+    jacoco
 }
 
 group = "com.gridmaster"
@@ -64,6 +65,39 @@ tasks.withType<Test> {
             excludeTags("integration")
         }
     }
+}
+
+jacoco {
+    toolVersion = "0.8.11"
+}
+
+tasks.test {
+    finalizedBy(tasks.jacocoTestReport)
+}
+
+tasks.jacocoTestReport {
+    // Always run after tests; CI reads the XML for the coverage comment.
+    dependsOn(tasks.test)
+    reports {
+        xml.required = true
+        html.required = true
+        csv.required = false
+    }
+    // Exclude generated/config classes from coverage metrics.
+    classDirectories.setFrom(
+        files(
+            classDirectories.files.map {
+                fileTree(it) {
+                    exclude(
+                        "**/Application*",
+                        "**/config/**",
+                        "**/persistence/*Entity*",
+                        "**/persistence/*JpaRepository*",
+                    )
+                }
+            },
+        ),
+    )
 }
 
 ktlint {

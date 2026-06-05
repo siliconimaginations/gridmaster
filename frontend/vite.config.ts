@@ -13,4 +13,21 @@ export default defineConfig({
       },
     },
   },
+  test: {
+    coverage: {
+      provider: 'v8',
+      // Reporters: text summary in CI logs + JSON files for the PR comment action.
+      reporter: ['text', 'json', 'json-summary'],
+      reportsDirectory: './coverage',
+      // Exclude generated/config files from metrics.
+      exclude: [
+        'node_modules/**',
+        'dist/**',
+        '**/*.config.*',
+        '**/*.d.ts',
+        'src/main.tsx',        // entry point — no logic
+        'src/vite-env.d.ts',
+      ],
+    },
+  },
 })
