@@ -18,8 +18,6 @@ class ViolationScanner(
 ) {
     private val log = LoggerFactory.getLogger(ViolationScanner::class.java)
 
-    private val log = LoggerFactory.getLogger(ViolationScanner::class.java)
-
     fun scan(snapshot: GridNetwork): List<NetworkViolation> {
         val violations = mutableListOf<NetworkViolation>()
         violations += scanVoltage(snapshot)
