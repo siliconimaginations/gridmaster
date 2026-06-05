@@ -6,6 +6,7 @@ import com.gridmaster.engine.powerflow.EquipmentType
 import com.gridmaster.engine.powerflow.PowerFlowParameters
 import com.gridmaster.engine.powerflow.PowerFlowService
 import com.gridmaster.engine.powerflow.SolveMode
+import com.gridmaster.engine.powerflow.ViolationScanner
 import com.gridmaster.engine.powerflow.ViolationSeverity
 import com.gridmaster.engine.powerflow.ViolationThresholds
 import com.powsybl.iidm.network.Network
@@ -46,6 +47,7 @@ import kotlin.system.measureTimeMillis
 class PowSyBlContingencyAnalysisService(
     private val mapper: IidmNetworkMapper,
     private val powerFlowService: PowerFlowService,
+    private val violationScanner: ViolationScanner = ViolationScanner(),
     private val cache: ContingencyAnalysisCache = ContingencyAnalysisCache(),
     private val thresholds: ViolationThresholds = ViolationThresholds(),
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob()),
@@ -272,46 +274,11 @@ class PowSyBlContingencyAnalysisService(
     // -------------------------------------------------------------------------
 
     private fun checkBaseCaseSecure(snapshot: GridNetwork): Boolean =
-        runCatching {
-            val baseCaseViolations =
-                buildList {
-                    snapshot.buses.forEach { bus ->
-                        val vPu = bus.voltageMagnitudePu ?: return@forEach
-                        if (vPu < thresholds.voltageMinPu || vPu > thresholds.voltageMaxPu) add(bus.id)
-                    }
-                    snapshot.lines.forEach { line ->
-                        val rating = line.ratingA ?: return@forEach
-                        val current = maxOfNullable(line.currentFromA, line.currentToA) ?: return@forEach
-                        if (current / rating * 100.0 >= thresholds.warningPercent) add(line.id)
-                    }
-                    snapshot.twoWindingsTransformers.forEach { twt ->
-                        val rating = twt.ratingMva ?: return@forEach
-                        val ratingFromA = mvaToAmps(rating, twt.nominalVoltageFromKv)
-                        val ratingToA = mvaToAmps(rating, twt.nominalVoltageToKv)
-                        // Check each side independently — null on one side does not fall back to the other.
-                        val fromOverloaded =
-                            twt.currentFromA?.let { it / ratingFromA * 100.0 >= thresholds.warningPercent } == true
-                        val toOverloaded =
-                            twt.currentToA?.let { it / ratingToA * 100.0 >= thresholds.warningPercent } == true
-                        if (fromOverloaded || toOverloaded) add(twt.id)
-                    }
-                    snapshot.threeWindingsTransformers.forEach { twt3 ->
-                        listOf(
-                            Triple(twt3.ratingMva1, twt3.current1A, twt3.nominalVoltage1Kv),
-                            Triple(twt3.ratingMva2, twt3.current2A, twt3.nominalVoltage2Kv),
-                            Triple(twt3.ratingMva3, twt3.current3A, twt3.nominalVoltage3Kv),
-                        ).forEach { (ratingMva, currentA, voltageKv) ->
-                            val ratingA = ratingMva?.let { mvaToAmps(it, voltageKv) } ?: return@forEach
-                            val current = currentA ?: return@forEach
-                            if (current / ratingA * 100.0 >= thresholds.warningPercent) add(twt3.id)
-                        }
-                    }
-                }
-            baseCaseViolations.isEmpty()
-        }.getOrElse { e ->
-            log.warn("Base case security check failed: {}; assuming not secure", e.message)
-            false
-        }
+        runCatching { violationScanner.scan(snapshot).isEmpty() }
+            .getOrElse { e ->
+                log.warn("Base case security check failed: {}; assuming not secure", e.message)
+                false
+            }
 
     private fun applyContingencyToNetwork(
         network: Network,
@@ -401,18 +368,8 @@ class PowSyBlContingencyAnalysisService(
             else -> null
         }
 
-    /** I = S(MVA) × 1000 / (√3 × V_kV) */
-    private fun mvaToAmps(
-        mva: Double,
-        voltageKv: Double,
-    ): Double = if (voltageKv > 0.0) mva * 1000.0 / (SQRT3 * voltageKv) else 0.0
-
     private data class RunRequest(
         val network: Network,
         val parameters: ContingencyAnalysisParameters,
     )
-
-    companion object {
-        private val SQRT3 = kotlin.math.sqrt(3.0)
-    }
 }
