@@ -290,7 +290,10 @@ class PowSyBlContingencyAnalysisService(
                     }
                 }
             baseCaseViolations.isEmpty()
-        }.getOrDefault(true)
+        }.getOrElse { e ->
+            log.warn("Base case security check failed: {}; assuming not secure", e.message)
+            false
+        }
 
     private fun applyContingencyToNetwork(
         network: Network,
@@ -324,19 +327,11 @@ class PowSyBlContingencyAnalysisService(
         lv: com.powsybl.security.LimitViolation,
         ratingMultiplier: Double,
     ): PostContingencyViolation? {
-        val equipmentType =
-            when {
-                lv.limitType == LimitViolationType.CURRENT -> EquipmentType.LINE
-                lv.limitType == LimitViolationType.LOW_VOLTAGE ||
-                    lv.limitType == LimitViolationType.HIGH_VOLTAGE -> null
-                else -> null
-            }
-
-        val violationType =
+        val (violationType, equipmentType) =
             when (lv.limitType) {
-                LimitViolationType.CURRENT -> ViolationType.THERMAL
-                LimitViolationType.LOW_VOLTAGE -> ViolationType.VOLTAGE_LOW
-                LimitViolationType.HIGH_VOLTAGE -> ViolationType.VOLTAGE_HIGH
+                LimitViolationType.CURRENT -> ViolationType.THERMAL to EquipmentType.LINE
+                LimitViolationType.LOW_VOLTAGE -> ViolationType.VOLTAGE_LOW to EquipmentType.BUS
+                LimitViolationType.HIGH_VOLTAGE -> ViolationType.VOLTAGE_HIGH to EquipmentType.BUS
                 else -> return null
             }
 
@@ -349,7 +344,7 @@ class PowSyBlContingencyAnalysisService(
 
         return PostContingencyViolation(
             equipmentId = lv.subjectId,
-            equipmentType = equipmentType ?: EquipmentType.LINE,
+            equipmentType = equipmentType,
             violationType = violationType,
             value = lv.value,
             limit = adjustedLimit,

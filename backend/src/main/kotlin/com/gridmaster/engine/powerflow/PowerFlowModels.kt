@@ -87,7 +87,7 @@ sealed class NetworkViolation {
     ) : NetworkViolation()
 }
 
-enum class EquipmentType { LINE, TWO_WINDINGS_TRANSFORMER, THREE_WINDINGS_TRANSFORMER }
+enum class EquipmentType { LINE, TWO_WINDINGS_TRANSFORMER, THREE_WINDINGS_TRANSFORMER, BUS }
 
 /**
  * Severity of a network violation.
