@@ -15,6 +15,7 @@ import com.powsybl.security.PostContingencyComputationStatus
 import com.powsybl.security.SecurityAnalysis
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
@@ -204,7 +205,7 @@ class PowSyBlContingencyAnalysisService(
                 log.warn("DC pre-screen failed for contingency ${contingency.id}: ${e.message}")
                 needsAc += contingency
             } finally {
-                withContext(Dispatchers.Default) {
+                withContext(NonCancellable) {
                     runCatching {
                         network.variantManager.setWorkingVariant(VariantManagerConstants.INITIAL_VARIANT_ID)
                         network.variantManager.removeVariant(variantId)
@@ -288,6 +289,29 @@ class PowSyBlContingencyAnalysisService(
                         val current = maxOfNullable(line.currentFromA, line.currentToA) ?: return@forEach
                         if (current / rating * 100.0 >= thresholds.warningPercent) add(line.id)
                     }
+                    snapshot.twoWindingsTransformers.forEach { twt ->
+                        val rating = twt.ratingMva ?: return@forEach
+                        val ratingFromA = mvaToAmps(rating, twt.nominalVoltageFromKv)
+                        val ratingToA = mvaToAmps(rating, twt.nominalVoltageToKv)
+                        val currentFrom = twt.currentFromA ?: return@forEach
+                        val currentTo = twt.currentToA ?: currentFrom
+                        if (currentFrom / ratingFromA * 100.0 >= thresholds.warningPercent ||
+                            currentTo / ratingToA * 100.0 >= thresholds.warningPercent
+                        ) {
+                            add(twt.id)
+                        }
+                    }
+                    snapshot.threeWindingsTransformers.forEach { twt3 ->
+                        listOf(
+                            Triple(twt3.ratingMva1, twt3.current1A, twt3.nominalVoltage1Kv),
+                            Triple(twt3.ratingMva2, twt3.current2A, twt3.nominalVoltage2Kv),
+                            Triple(twt3.ratingMva3, twt3.current3A, twt3.nominalVoltage3Kv),
+                        ).forEach { (ratingMva, currentA, voltageKv) ->
+                            val ratingA = ratingMva?.let { mvaToAmps(it, voltageKv) } ?: return@forEach
+                            val current = currentA ?: return@forEach
+                            if (current / ratingA * 100.0 >= thresholds.warningPercent) add(twt3.id)
+                        }
+                    }
                 }
             baseCaseViolations.isEmpty()
         }.getOrElse { e ->
@@ -338,9 +362,12 @@ class PowSyBlContingencyAnalysisService(
         val adjustedLimit = lv.limit * ratingMultiplier
         val loadingPercent = lv.value / adjustedLimit * 100.0
         val severity =
-            thresholds.thermalSeverity(loadingPercent)
-                ?: thresholds.voltageSeverity(lv.value / lv.limit)
-                ?: return null
+            when (violationType) {
+                ViolationType.THERMAL -> thresholds.thermalSeverity(loadingPercent)
+                ViolationType.VOLTAGE_LOW,
+                ViolationType.VOLTAGE_HIGH,
+                -> thresholds.voltageSeverity(lv.value / lv.limit)
+            } ?: return null
 
         return PostContingencyViolation(
             equipmentId = lv.subjectId,
@@ -364,8 +391,18 @@ class PowSyBlContingencyAnalysisService(
             else -> null
         }
 
+    /** I = S(MVA) × 1000 / (√3 × V_kV) */
+    private fun mvaToAmps(
+        mva: Double,
+        voltageKv: Double,
+    ): Double = if (voltageKv > 0.0) mva * 1000.0 / (SQRT3 * voltageKv) else 0.0
+
     private data class RunRequest(
         val network: Network,
         val parameters: ContingencyAnalysisParameters,
     )
+
+    companion object {
+        private val SQRT3 = kotlin.math.sqrt(3.0)
+    }
 }
