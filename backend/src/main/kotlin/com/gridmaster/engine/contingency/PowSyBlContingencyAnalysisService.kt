@@ -167,10 +167,13 @@ class PowSyBlContingencyAnalysisService(
             )
         } finally {
             // Guarantee variant cleanup even if an exception propagates out of runAnalysis.
+            // Split into two blocks so removeVariant is always attempted even if setWorkingVariant throws.
             runCatching {
                 network.variantManager.setWorkingVariant(VariantManagerConstants.INITIAL_VARIANT_ID)
+            }.onFailure { log.warn("Failed to reset working variant after analysis", it) }
+            runCatching {
                 network.variantManager.removeVariant(analysisVariantId)
-            }.onFailure { log.warn("Failed to clean up analysis variant {}", analysisVariantId, it) }
+            }.onFailure { log.warn("Failed to remove analysis variant {}", analysisVariantId, it) }
         }
     }
 
@@ -227,6 +230,8 @@ class PowSyBlContingencyAnalysisService(
                 withContext(NonCancellable) {
                     runCatching {
                         network.variantManager.setWorkingVariant(sourceVariantId)
+                    }
+                    runCatching {
                         network.variantManager.removeVariant(variantId)
                     }
                 }
