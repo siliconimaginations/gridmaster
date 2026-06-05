@@ -1,7 +1,6 @@
 package com.gridmaster.engine.network
 
 import com.gridmaster.engine.model.Bus
-import com.gridmaster.engine.model.FuelType
 import com.gridmaster.engine.model.Generator
 import com.gridmaster.engine.model.GridNetwork
 import com.gridmaster.engine.model.Line
@@ -13,22 +12,24 @@ import com.gridmaster.engine.model.ThreeWindingsTransformer
 import com.gridmaster.engine.model.TwoWindingsTransformer
 import com.powsybl.iidm.network.Network
 import com.powsybl.iidm.network.ShuntCompensatorLinearModel
-import com.powsybl.iidm.network.TwoWindingsTransformer as IidmTwoWindingsTransformer
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
+import com.powsybl.iidm.network.TwoWindingsTransformer as IidmTwoWindingsTransformer
 
 @Component
 class IidmNetworkMapperImpl(
     private val metadataProvider: GeneratorMetadataProvider = DefaultGeneratorMetadataProvider(),
 ) : IidmNetworkMapper {
-
     private val log = LoggerFactory.getLogger(IidmNetworkMapperImpl::class.java)
 
     // -------------------------------------------------------------------------
     // toGridNetwork
     // -------------------------------------------------------------------------
 
-    override fun toGridNetwork(network: Network, regions: List<Region>): GridNetwork {
+    override fun toGridNetwork(
+        network: Network,
+        regions: List<Region>,
+    ): GridNetwork {
         val warnings = mutableListOf<String>()
         val busRegionIndex = buildBusRegionIndex(regions)
 
@@ -70,24 +71,29 @@ class IidmNetworkMapperImpl(
         val buses = mutableListOf<Bus>()
         for (vl in network.voltageLevels) {
             for (bus in vl.busBreakerView.buses) {
-                val vMagnitudePu = bus.v.orNull()?.let { v ->
-                    val nominalV = vl.nominalV
-                    if (nominalV > 0.0) v / nominalV else null
-                }
-                buses += Bus(
-                    id = bus.id,
-                    name = bus.nameOrId,
-                    nominalVoltageKv = vl.nominalV,
-                    voltageMagnitudePu = vMagnitudePu,
-                    voltageAngleDeg = bus.angle.orNull(),
-                    regionId = busRegionIndex[bus.id],
-                )
+                val vMagnitudePu =
+                    bus.v.orNull()?.let { v ->
+                        val nominalV = vl.nominalV
+                        if (nominalV > 0.0) v / nominalV else null
+                    }
+                buses +=
+                    Bus(
+                        id = bus.id,
+                        name = bus.nameOrId,
+                        nominalVoltageKv = vl.nominalV,
+                        voltageMagnitudePu = vMagnitudePu,
+                        voltageAngleDeg = bus.angle.orNull(),
+                        regionId = busRegionIndex[bus.id],
+                    )
             }
         }
         return buses
     }
 
-    private fun mapLines(network: Network, warnings: MutableList<String>): List<Line> =
+    private fun mapLines(
+        network: Network,
+        warnings: MutableList<String>,
+    ): List<Line> =
         network.lines.map { line ->
             val fromBusId = line.terminal1.busBreakerView.connectableBus?.id
             val toBusId = line.terminal2.busBreakerView.connectableBus?.id
@@ -100,8 +106,9 @@ class IidmNetworkMapperImpl(
                 name = line.nameOrId,
                 fromBusId = fromBusId,
                 toBusId = toBusId,
-                ratingA = line.currentLimits1.orElse(null)?.permanentLimit
-                    ?: line.currentLimits2.orElse(null)?.permanentLimit,
+                ratingA =
+                    line.currentLimits1.orElse(null)?.permanentLimit
+                        ?: line.currentLimits2.orElse(null)?.permanentLimit,
                 currentFromA = line.terminal1.i.orNull(),
                 currentToA = line.terminal2.i.orNull(),
                 resistanceOhm = line.r,
@@ -156,15 +163,18 @@ class IidmNetworkMapperImpl(
                 bus1Id = bus1Id,
                 bus2Id = bus2Id,
                 bus3Id = bus3Id,
-                ratingMva1 = twt3.leg1.currentLimits.orElse(null)?.permanentLimit?.let { i ->
-                    ampsToPowerMva(i, twt3.leg1.ratedU)
-                },
-                ratingMva2 = twt3.leg2.currentLimits.orElse(null)?.permanentLimit?.let { i ->
-                    ampsToPowerMva(i, twt3.leg2.ratedU)
-                },
-                ratingMva3 = twt3.leg3.currentLimits.orElse(null)?.permanentLimit?.let { i ->
-                    ampsToPowerMva(i, twt3.leg3.ratedU)
-                },
+                ratingMva1 =
+                    twt3.leg1.currentLimits.orElse(null)?.permanentLimit?.let { i ->
+                        ampsToPowerMva(i, twt3.leg1.ratedU)
+                    },
+                ratingMva2 =
+                    twt3.leg2.currentLimits.orElse(null)?.permanentLimit?.let { i ->
+                        ampsToPowerMva(i, twt3.leg2.ratedU)
+                    },
+                ratingMva3 =
+                    twt3.leg3.currentLimits.orElse(null)?.permanentLimit?.let { i ->
+                        ampsToPowerMva(i, twt3.leg3.ratedU)
+                    },
                 current1A = twt3.leg1.terminal.i.orNull(),
                 current2A = twt3.leg2.terminal.i.orNull(),
                 current3A = twt3.leg3.terminal.i.orNull(),
@@ -177,7 +187,10 @@ class IidmNetworkMapperImpl(
             )
         }.filterNotNull()
 
-    private fun mapGenerators(network: Network, warnings: MutableList<String>): List<Generator> =
+    private fun mapGenerators(
+        network: Network,
+        warnings: MutableList<String>,
+    ): List<Generator> =
         network.generators.map { gen ->
             val busId = gen.terminal.busBreakerView.connectableBus?.id
             if (busId == null) {
@@ -202,7 +215,10 @@ class IidmNetworkMapperImpl(
             )
         }.filterNotNull()
 
-    private fun mapLoads(network: Network, warnings: MutableList<String>): List<Load> =
+    private fun mapLoads(
+        network: Network,
+        warnings: MutableList<String>,
+    ): List<Load> =
         network.loads.map { load ->
             val busId = load.terminal.busBreakerView.connectableBus?.id
             if (busId == null) {
@@ -229,14 +245,15 @@ class IidmNetworkMapperImpl(
                 warnings += "ShuntCompensator ${sc.id} has no connectable bus; skipping"
                 return@map null
             }
-            val bPerSection = when {
-                sc.modelType == com.powsybl.iidm.network.ShuntCompensatorModelType.LINEAR ->
-                    sc.getModel(ShuntCompensatorLinearModel::class.java).bPerSection
-                else -> {
-                    warnings += "ShuntCompensator ${sc.id} has non-linear model; susceptance per section set to 0"
-                    0.0
+            val bPerSection =
+                when {
+                    sc.modelType == com.powsybl.iidm.network.ShuntCompensatorModelType.LINEAR ->
+                        sc.getModel(ShuntCompensatorLinearModel::class.java).bPerSection
+                    else -> {
+                        warnings += "ShuntCompensator ${sc.id} has non-linear model; susceptance per section set to 0"
+                        0.0
+                    }
                 }
-            }
             ShuntCompensator(
                 id = sc.id,
                 name = sc.nameOrId,
@@ -252,12 +269,16 @@ class IidmNetworkMapperImpl(
     // applyMutation
     // -------------------------------------------------------------------------
 
-    override fun applyMutation(network: Network, mutation: NetworkMutation): Result<Network> =
+    override fun applyMutation(
+        network: Network,
+        mutation: NetworkMutation,
+    ): Result<Network> =
         runCatching {
             when (mutation) {
                 is NetworkMutation.SetGeneratorOutput -> {
-                    val gen = network.getGenerator(mutation.generatorId)
-                        ?: throw InvalidMutationException("Generator not found: ${mutation.generatorId}")
+                    val gen =
+                        network.getGenerator(mutation.generatorId)
+                            ?: throw InvalidMutationException("Generator not found: ${mutation.generatorId}")
                     require(mutation.targetPMw >= gen.minP && mutation.targetPMw <= gen.maxP) {
                         "targetPMw ${mutation.targetPMw} outside [${gen.minP}, ${gen.maxP}] for ${mutation.generatorId}"
                     }
@@ -265,43 +286,50 @@ class IidmNetworkMapperImpl(
                 }
 
                 is NetworkMutation.SetGeneratorVoltage -> {
-                    val gen = network.getGenerator(mutation.generatorId)
-                        ?: throw InvalidMutationException("Generator not found: ${mutation.generatorId}")
+                    val gen =
+                        network.getGenerator(mutation.generatorId)
+                            ?: throw InvalidMutationException("Generator not found: ${mutation.generatorId}")
                     val nominalV = gen.terminal.voltageLevel.nominalV
                     gen.targetV = mutation.targetVoltagePu * nominalV
                 }
 
                 is NetworkMutation.TripLine -> {
-                    val line = network.getLine(mutation.lineId)
-                        ?: throw InvalidMutationException("Line not found: ${mutation.lineId}")
+                    val line =
+                        network.getLine(mutation.lineId)
+                            ?: throw InvalidMutationException("Line not found: ${mutation.lineId}")
                     line.terminal1.disconnect()
                     line.terminal2.disconnect()
                 }
 
                 is NetworkMutation.ConnectLine -> {
-                    val line = network.getLine(mutation.lineId)
-                        ?: throw InvalidMutationException("Line not found: ${mutation.lineId}")
+                    val line =
+                        network.getLine(mutation.lineId)
+                            ?: throw InvalidMutationException("Line not found: ${mutation.lineId}")
                     line.terminal1.connect()
                     line.terminal2.connect()
                 }
 
                 is NetworkMutation.TripGenerator -> {
-                    val gen = network.getGenerator(mutation.generatorId)
-                        ?: throw InvalidMutationException("Generator not found: ${mutation.generatorId}")
+                    val gen =
+                        network.getGenerator(mutation.generatorId)
+                            ?: throw InvalidMutationException("Generator not found: ${mutation.generatorId}")
                     gen.terminal.disconnect()
                 }
 
                 is NetworkMutation.ConnectGenerator -> {
-                    val gen = network.getGenerator(mutation.generatorId)
-                        ?: throw InvalidMutationException("Generator not found: ${mutation.generatorId}")
+                    val gen =
+                        network.getGenerator(mutation.generatorId)
+                            ?: throw InvalidMutationException("Generator not found: ${mutation.generatorId}")
                     gen.terminal.connect()
                 }
 
                 is NetworkMutation.SetTapPosition -> {
-                    val twt = network.getTwoWindingsTransformer(mutation.transformerId)
-                        ?: throw InvalidMutationException("Transformer not found: ${mutation.transformerId}")
-                    val rtc = twt.ratioTapChanger
-                        ?: throw InvalidMutationException("Transformer ${mutation.transformerId} has no ratio tap changer")
+                    val twt =
+                        network.getTwoWindingsTransformer(mutation.transformerId)
+                            ?: throw InvalidMutationException("Transformer not found: ${mutation.transformerId}")
+                    val rtc =
+                        twt.ratioTapChanger
+                            ?: throw InvalidMutationException("Transformer ${mutation.transformerId} has no ratio tap changer")
                     require(mutation.tapPosition in rtc.lowTapPosition..rtc.highTapPosition) {
                         "tapPosition ${mutation.tapPosition} out of range [${rtc.lowTapPosition}, ${rtc.highTapPosition}]"
                     }
@@ -309,27 +337,31 @@ class IidmNetworkMapperImpl(
                 }
 
                 is NetworkMutation.SetLoadPower -> {
-                    val load = network.getLoad(mutation.loadId)
-                        ?: throw InvalidMutationException("Load not found: ${mutation.loadId}")
+                    val load =
+                        network.getLoad(mutation.loadId)
+                            ?: throw InvalidMutationException("Load not found: ${mutation.loadId}")
                     load.p0 = mutation.activePowerMw
                     mutation.reactivePowerMvar?.let { load.q0 = it }
                 }
 
                 is NetworkMutation.ConnectLoad -> {
-                    val load = network.getLoad(mutation.loadId)
-                        ?: throw InvalidMutationException("Load not found: ${mutation.loadId}")
+                    val load =
+                        network.getLoad(mutation.loadId)
+                            ?: throw InvalidMutationException("Load not found: ${mutation.loadId}")
                     load.terminal.connect()
                 }
 
                 is NetworkMutation.DisconnectLoad -> {
-                    val load = network.getLoad(mutation.loadId)
-                        ?: throw InvalidMutationException("Load not found: ${mutation.loadId}")
+                    val load =
+                        network.getLoad(mutation.loadId)
+                            ?: throw InvalidMutationException("Load not found: ${mutation.loadId}")
                     load.terminal.disconnect()
                 }
 
                 is NetworkMutation.SetShuntSections -> {
-                    val sc = network.getShuntCompensator(mutation.shuntCompensatorId)
-                        ?: throw InvalidMutationException("ShuntCompensator not found: ${mutation.shuntCompensatorId}")
+                    val sc =
+                        network.getShuntCompensator(mutation.shuntCompensatorId)
+                            ?: throw InvalidMutationException("ShuntCompensator not found: ${mutation.shuntCompensatorId}")
                     require(mutation.sectionCount in 0..sc.maximumSectionCount) {
                         "sectionCount ${mutation.sectionCount} out of range [0, ${sc.maximumSectionCount}]"
                     }
@@ -352,11 +384,12 @@ class IidmNetworkMapperImpl(
     private fun Double.orNull(): Double? = if (isNaN() || isInfinite()) null else this
 
     /** Approximate conversion: I(A) × V(kV) × √3 / 1000 = S(MVA). */
-    private fun ampsToPowerMva(currentA: Double, voltageKv: Double): Double =
-        currentA * voltageKv * SQRT3 / 1000.0
+    private fun ampsToPowerMva(
+        currentA: Double,
+        voltageKv: Double,
+    ): Double = currentA * voltageKv * SQRT3 / 1000.0
 
-    private fun IidmTwoWindingsTransformer.ratedSOrNull(): Double? =
-        runCatching { ratedS }.getOrNull()?.orNull()
+    private fun IidmTwoWindingsTransformer.ratedSOrNull(): Double? = runCatching { ratedS }.getOrNull()?.orNull()
 
     companion object {
         private val SQRT3 = Math.sqrt(3.0)

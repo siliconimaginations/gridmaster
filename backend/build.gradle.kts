@@ -44,6 +44,8 @@ dependencies {
     testImplementation("io.mockk:mockk:1.13.10")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
     testImplementation("com.powsybl:powsybl-iidm-test")
+    testRuntimeOnly("com.h2database:h2")
+    testImplementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310")
 }
 
 tasks.withType<KotlinCompile> {

@@ -33,8 +33,7 @@ class DefaultGeneratorMetadataProvider : GeneratorMetadataProvider {
 class MapGeneratorMetadataProvider(
     private val metadata: Map<String, GeneratorMetadata>,
 ) : GeneratorMetadataProvider {
-    override fun getMetadata(generatorId: String) =
-        metadata[generatorId] ?: GeneratorMetadata()
+    override fun getMetadata(generatorId: String) = metadata[generatorId] ?: GeneratorMetadata()
 }
 
 /**
@@ -42,7 +41,6 @@ class MapGeneratorMetadataProvider(
  * Also applies [NetworkMutation]s to the live IIDM network.
  */
 interface IidmNetworkMapper {
-
     /**
      * Snapshot the current state of [network] as an immutable [GridNetwork].
      * Voltage and current values are null if power flow has not yet been solved.
@@ -59,7 +57,10 @@ interface IidmNetworkMapper {
      * or [Result.failure] with an [InvalidMutationException] if the mutation is invalid.
      * The network is NOT re-solved; the caller is responsible for running power flow afterwards.
      */
-    fun applyMutation(network: Network, mutation: NetworkMutation): Result<Network>
+    fun applyMutation(
+        network: Network,
+        mutation: NetworkMutation,
+    ): Result<Network>
 }
 
 /** Thrown when a [NetworkMutation] cannot be applied (e.g. element not found, out-of-range value). */

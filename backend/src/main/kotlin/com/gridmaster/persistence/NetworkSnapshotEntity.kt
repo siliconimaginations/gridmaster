@@ -19,17 +19,13 @@ import java.time.Instant
 @Entity
 @Table(name = "network_snapshots")
 class NetworkSnapshotEntity(
-
     @Id
     val sessionId: String,
-
     /** Full XIIDM network XML. May be several hundred KB for large networks. */
     @Column(columnDefinition = "TEXT", nullable = false)
     val iidmXml: String,
-
     /** JSON representation of the last GridNetwork snapshot. */
     @Column(columnDefinition = "TEXT", nullable = false)
     val snapshotJson: String,
-
     val updatedAt: Instant,
 )

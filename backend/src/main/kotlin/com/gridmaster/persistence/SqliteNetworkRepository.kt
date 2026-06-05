@@ -15,20 +15,24 @@ class SqliteNetworkRepository(
     private val jpaRepository: NetworkSnapshotJpaRepository,
     private val objectMapper: ObjectMapper,
 ) : NetworkRepository {
-
     /**
      * Serialise [network] to XIIDM XML and [snapshot] to JSON and upsert into SQLite.
      * Both representations are written atomically (same JPA save call).
      */
-    override fun save(sessionId: String, network: Network, snapshot: GridNetwork) {
+    override fun save(
+        sessionId: String,
+        network: Network,
+        snapshot: GridNetwork,
+    ) {
         val iidmXml = serializeNetwork(network)
         val snapshotJson = objectMapper.writeValueAsString(snapshot)
-        val entity = NetworkSnapshotEntity(
-            sessionId = sessionId,
-            iidmXml = iidmXml,
-            snapshotJson = snapshotJson,
-            updatedAt = Instant.now(),
-        )
+        val entity =
+            NetworkSnapshotEntity(
+                sessionId = sessionId,
+                iidmXml = iidmXml,
+                snapshotJson = snapshotJson,
+                updatedAt = Instant.now(),
+            )
         jpaRepository.save(entity)
     }
 

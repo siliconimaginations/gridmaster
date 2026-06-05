@@ -11,9 +11,12 @@ import com.powsybl.iidm.network.Network
  * - GridNetwork JSON (Jackson) — fast-read derived view for the WebSocket push path
  */
 interface NetworkRepository {
-
     /** Persist both the live IIDM [network] and its derived [snapshot] for [sessionId]. */
-    fun save(sessionId: String, network: Network, snapshot: GridNetwork)
+    fun save(
+        sessionId: String,
+        network: Network,
+        snapshot: GridNetwork,
+    )
 
     /** Load the IIDM [Network] from stored XML, or null if the session has no saved state. */
     fun loadIidm(sessionId: String): Network?

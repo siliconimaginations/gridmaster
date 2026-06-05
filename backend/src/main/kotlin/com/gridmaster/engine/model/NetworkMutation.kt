@@ -10,7 +10,6 @@ package com.gridmaster.engine.model
  * making them auditable, testable, and replayable.
  */
 sealed class NetworkMutation {
-
     /** Set a generator's active power output setpoint in MW. */
     data class SetGeneratorOutput(
         val generatorId: String,
