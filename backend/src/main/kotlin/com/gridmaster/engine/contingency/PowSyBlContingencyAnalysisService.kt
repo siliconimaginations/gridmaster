@@ -122,7 +122,7 @@ class PowSyBlContingencyAnalysisService(
             analysisTimeMs =
                 measureTimeMillis {
                     if (parameters.dcPreScreening) {
-                        val (screened, acCandidates) = dcPreScreen(network, contingencies, parameters)
+                        val (screened, acCandidates) = dcPreScreen(network, contingencies, parameters, analysisVariantId)
                         preScreenedCount = screened.size
                         fullAcCount = acCandidates.size
                         contingencyResults =
@@ -186,6 +186,7 @@ class PowSyBlContingencyAnalysisService(
         network: Network,
         contingencies: List<Contingency>,
         parameters: ContingencyAnalysisParameters,
+        sourceVariantId: String,
     ): Pair<List<ContingencyResult>, List<Contingency>> {
         val secureResults = mutableListOf<ContingencyResult>()
         val needsAc = mutableListOf<Contingency>()
@@ -194,7 +195,7 @@ class PowSyBlContingencyAnalysisService(
             val variantId = "dc-screen-${contingency.id}"
             try {
                 network.variantManager.cloneVariant(
-                    VariantManagerConstants.INITIAL_VARIANT_ID,
+                    sourceVariantId,
                     variantId,
                     true,
                 )
@@ -225,7 +226,7 @@ class PowSyBlContingencyAnalysisService(
             } finally {
                 withContext(NonCancellable) {
                     runCatching {
-                        network.variantManager.setWorkingVariant(VariantManagerConstants.INITIAL_VARIANT_ID)
+                        network.variantManager.setWorkingVariant(sourceVariantId)
                         network.variantManager.removeVariant(variantId)
                     }
                 }
