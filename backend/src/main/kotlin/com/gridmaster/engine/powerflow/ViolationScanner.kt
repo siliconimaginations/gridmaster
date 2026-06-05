@@ -93,19 +93,21 @@ class ViolationScanner(
                 ?.let { violations += it }
         }
 
-        // Three-winding transformers — check each leg against its own per-leg MVA rating.
+        // Three-winding transformers — check each leg against its own per-leg MVA rating,
+        // then report only the most severely loaded leg (consistent with 2W transformer logic).
         // nominalVoltageXKv is populated from PowSyBl leg.ratedU in the mapper.
         for (twt3 in snapshot.threeWindingsTransformers) {
             listOf(
                 Triple(twt3.ratingMva1, twt3.current1A, twt3.nominalVoltage1Kv),
                 Triple(twt3.ratingMva2, twt3.current2A, twt3.nominalVoltage2Kv),
                 Triple(twt3.ratingMva3, twt3.current3A, twt3.nominalVoltage3Kv),
-            ).forEach { (ratingMva, currentA, voltageKv) ->
-                val rating = ratingMva?.let { mvaToAmps(it, voltageKv) } ?: return@forEach
-                val current = currentA ?: return@forEach
+            ).mapNotNull { (ratingMva, currentA, voltageKv) ->
+                val rating = ratingMva?.let { mvaToAmps(it, voltageKv) } ?: return@mapNotNull null
+                val current = currentA ?: return@mapNotNull null
                 thermalViolation(twt3.id, EquipmentType.THREE_WINDINGS_TRANSFORMER, current, rating)
-                    ?.let { violations += it }
             }
+                .maxByOrNull { it.loadingPercent }
+                ?.let { violations += it }
         }
 
         return violations
