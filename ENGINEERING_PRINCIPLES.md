@@ -278,6 +278,7 @@ Every PR is either **non-critical** or **critical**:
 #### Critical PRs
 1. `nagasawa94` opens the PR and assigns `siliconimaginations` as reviewer.
 2. Claude still polls CI and Gemini and addresses issues, but does **not** merge without Rick's explicit approval.
+3. **Do not sit idle while waiting.** Continue working on other WORK_PLAN tasks that are not blocked by the open critical PR. If the next task depends on the unmerged code, branch off the unreviewed branch and continue; rebase/merge onto main once the blocking PR lands.
 
 #### When Rick says "keep working based on the plan"
 Claude applies the non-critical workflow and works autonomously through `WORK_PLAN.md` — open PR → CI + Gemini green → merge → next task — until a critical decision point is reached, then pauses and notifies Rick.
