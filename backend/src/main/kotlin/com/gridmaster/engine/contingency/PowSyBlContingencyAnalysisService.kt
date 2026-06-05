@@ -172,32 +172,30 @@ class PowSyBlContingencyAnalysisService(
         for (contingency in contingencies) {
             val variantId = "dc-screen-${contingency.id}"
             try {
-                withContext(Dispatchers.Default) {
-                    network.variantManager.cloneVariant(
-                        VariantManagerConstants.INITIAL_VARIANT_ID,
-                        variantId,
-                        true,
+                network.variantManager.cloneVariant(
+                    VariantManagerConstants.INITIAL_VARIANT_ID,
+                    variantId,
+                    true,
+                )
+                network.variantManager.setWorkingVariant(variantId)
+                applyContingencyToNetwork(network, contingency)
+
+                val dcResult =
+                    powerFlowService.solve(
+                        network,
+                        PowerFlowParameters(mode = SolveMode.DC),
                     )
-                    network.variantManager.setWorkingVariant(variantId)
-                    applyContingencyToNetwork(network, contingency)
 
-                    val dcResult =
-                        powerFlowService.solve(
-                            network,
-                            PowerFlowParameters(mode = SolveMode.DC),
+                val hasViolations = dcResult.violations.isNotEmpty()
+                if (hasViolations) {
+                    needsAc += contingency
+                } else {
+                    secureResults +=
+                        ContingencyResult(
+                            contingency = contingency,
+                            status = PostContingencyStatus.SECURE,
+                            violations = emptyList(),
                         )
-
-                    val hasViolations = dcResult.violations.isNotEmpty()
-                    if (hasViolations) {
-                        needsAc += contingency
-                    } else {
-                        secureResults +=
-                            ContingencyResult(
-                                contingency = contingency,
-                                status = PostContingencyStatus.SECURE,
-                                violations = emptyList(),
-                            )
-                    }
                 }
             } catch (e: Exception) {
                 // DC pre-screen failure → escalate to AC
@@ -224,51 +222,50 @@ class PowSyBlContingencyAnalysisService(
         network: Network,
         contingencies: List<Contingency>,
         parameters: ContingencyAnalysisParameters,
-    ): List<ContingencyResult> =
-        withContext(Dispatchers.Default) {
-            val powSyBlContingencies = ContingencyBuilder.toPowSyBlList(contingencies)
-            val contingencyById = contingencies.associateBy { it.id }
-            val results = mutableListOf<ContingencyResult>()
+    ): List<ContingencyResult> {
+        val powSyBlContingencies = ContingencyBuilder.toPowSyBlList(contingencies)
+        val contingencyById = contingencies.associateBy { it.id }
+        val results = mutableListOf<ContingencyResult>()
 
-            runCatching {
-                // SecurityAnalysis.run() returns SecurityAnalysisReport; extract result from it.
-                val saReport = SecurityAnalysis.run(network, powSyBlContingencies)
-                saReport.result.postContingencyResults.forEach { pcResult ->
-                    val contingency = contingencyById[pcResult.contingency.id] ?: return@forEach
-                    val solved =
-                        pcResult.status == PostContingencyComputationStatus.CONVERGED ||
-                            pcResult.status == PostContingencyComputationStatus.NO_IMPACT
-                    if (!solved) {
-                        results +=
-                            ContingencyResult(
-                                contingency = contingency,
-                                status = PostContingencyStatus.NETWORK_FAILURE,
-                                violations = emptyList(),
-                            )
-                        return@forEach
-                    }
-                    val violations =
-                        pcResult.limitViolationsResult.limitViolations.mapNotNull { lv ->
-                            mapLimitViolation(lv, parameters.postContingencyRatingMultiplier, network)
-                        }
-                    val status =
-                        if (violations.isEmpty()) PostContingencyStatus.SECURE else PostContingencyStatus.VIOLATION
-                    results += ContingencyResult(contingency = contingency, status = status, violations = violations)
-                }
-            }.onFailure { e ->
-                log.error("AC SecurityAnalysis failed: ${e.message}", e)
-                contingencies.forEach { contingency ->
+        runCatching {
+            // SecurityAnalysis.run() returns SecurityAnalysisReport; extract result from it.
+            val saReport = SecurityAnalysis.run(network, powSyBlContingencies)
+            saReport.result.postContingencyResults.forEach { pcResult ->
+                val contingency = contingencyById[pcResult.contingency.id] ?: return@forEach
+                val solved =
+                    pcResult.status == PostContingencyComputationStatus.CONVERGED ||
+                        pcResult.status == PostContingencyComputationStatus.NO_IMPACT
+                if (!solved) {
                     results +=
                         ContingencyResult(
                             contingency = contingency,
                             status = PostContingencyStatus.NETWORK_FAILURE,
                             violations = emptyList(),
                         )
+                    return@forEach
                 }
+                val violations =
+                    pcResult.limitViolationsResult.limitViolations.mapNotNull { lv ->
+                        mapLimitViolation(lv, parameters.postContingencyRatingMultiplier, network)
+                    }
+                val status =
+                    if (violations.isEmpty()) PostContingencyStatus.SECURE else PostContingencyStatus.VIOLATION
+                results += ContingencyResult(contingency = contingency, status = status, violations = violations)
             }
-
-            results
+        }.onFailure { e ->
+            log.error("AC SecurityAnalysis failed: ${e.message}", e)
+            contingencies.forEach { contingency ->
+                results +=
+                    ContingencyResult(
+                        contingency = contingency,
+                        status = PostContingencyStatus.NETWORK_FAILURE,
+                        violations = emptyList(),
+                    )
+            }
         }
+
+        return results
+    }
 
     // -------------------------------------------------------------------------
     // Helpers
