@@ -1,0 +1,51 @@
+name: Gemini AI Code Review
+
+# Triggered by commenting /gemini-review on any pull request.
+# Example: post a comment containing "/gemini-review" to have Gemini
+# analyse the diff and post inline suggestions on the PR.
+#
+# Requires: GEMINI_API_KEY repository secret (Google AI Studio key).
+# Model: gemini-2.5-pro (best reasoning; falls back to flash if quota hit).
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  gemini-review:
+    name: Gemini code review
+    runs-on: ubuntu-latest
+
+    # Only run when the comment is on a PR and contains the trigger phrase.
+    if: |
+      github.event.issue.pull_request &&
+      contains(github.event.comment.body, '/gemini-review')
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get PR details
+        id: pr
+        run: |
+          PR_JSON=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.issue.number }})
+          echo "head_sha=$(echo $PR_JSON | jq -r .head.sha)" >> $GITHUB_OUTPUT
+          echo "base_sha=$(echo $PR_JSON | jq -r .base.sha)" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run Gemini review
+        uses: truongnh1992/gemini-ai-code-reviewer@main
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: gemini-2.5-pro
+          # Skip docs, config files, lockfiles, and generated network XML.
+          # Gemini reviews Kotlin, TypeScript, and build scripts only.
+          EXCLUDE: "**/*.md,**/*.txt,**/*.xml,**/*.xiidm,**/*.yml,**/*.yaml,package-lock.json,gradlew,gradlew.bat"
