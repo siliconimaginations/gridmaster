@@ -249,7 +249,7 @@ class PowSyBlContingencyAnalysisService(
                     }
                     val violations =
                         pcResult.limitViolationsResult.limitViolations.mapNotNull { lv ->
-                            mapLimitViolation(lv, parameters.postContingencyRatingMultiplier)
+                            mapLimitViolation(lv, parameters.postContingencyRatingMultiplier, network)
                         }
                     val status =
                         if (violations.isEmpty()) PostContingencyStatus.SECURE else PostContingencyStatus.VIOLATION
@@ -347,10 +347,23 @@ class PowSyBlContingencyAnalysisService(
     private fun mapLimitViolation(
         lv: com.powsybl.security.LimitViolation,
         ratingMultiplier: Double,
+        network: Network,
     ): PostContingencyViolation? {
+        val thermalEquipmentType =
+            when {
+                network.getLine(lv.subjectId) != null -> EquipmentType.LINE
+                network.getTwoWindingsTransformer(lv.subjectId) != null ->
+                    EquipmentType.TWO_WINDINGS_TRANSFORMER
+                network.getThreeWindingsTransformer(lv.subjectId) != null ->
+                    EquipmentType.THREE_WINDINGS_TRANSFORMER
+                else -> {
+                    log.warn("Unknown equipment type for thermal violation on {}", lv.subjectId)
+                    EquipmentType.LINE
+                }
+            }
         val (violationType, equipmentType) =
             when (lv.limitType) {
-                LimitViolationType.CURRENT -> ViolationType.THERMAL to EquipmentType.LINE
+                LimitViolationType.CURRENT -> ViolationType.THERMAL to thermalEquipmentType
                 LimitViolationType.LOW_VOLTAGE -> ViolationType.VOLTAGE_LOW to EquipmentType.BUS
                 LimitViolationType.HIGH_VOLTAGE -> ViolationType.VOLTAGE_HIGH to EquipmentType.BUS
                 else -> return null
