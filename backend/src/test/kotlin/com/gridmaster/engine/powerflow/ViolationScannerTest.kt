@@ -127,7 +127,8 @@ class ViolationScannerTest {
 
     @Test
     fun `transformer thermal violation is detected`() {
-        // ratingMva=100 MVA at 220 kV → ~262 A
+        // ratingMva=100 MVA at 220 kV HV → ~262 A HV-side rating
+        // currentFromA=300 A (HV side, B1 at 220 kV) exceeds rating → violation
         val twt =
             TwoWindingsTransformer(
                 id = "TX1",
@@ -135,14 +136,22 @@ class ViolationScannerTest {
                 fromBusId = "B1",
                 toBusId = "B2",
                 ratingMva = 100.0,
-                currentFromA = 300.0, // > 262 A
+                currentFromA = 300.0, // > ~262 A (HV-side rating)
                 currentToA = null,
                 resistanceOhm = 0.1,
                 reactanceOhm = 1.0,
                 nominalVoltageHvKv = 220.0,
                 nominalVoltageLvKv = 110.0,
             )
-        val snapshot = emptyNetwork().copy(twoWindingsTransformers = listOf(twt))
+        val snapshot =
+            emptyNetwork().copy(
+                buses =
+                    listOf(
+                        Bus(id = "B1", name = "B1", nominalVoltageKv = 220.0),
+                        Bus(id = "B2", name = "B2", nominalVoltageKv = 110.0),
+                    ),
+                twoWindingsTransformers = listOf(twt),
+            )
         val violations = scanner.scan(snapshot).filterIsInstance<NetworkViolation.ThermalViolation>()
         assertThat(violations).hasSize(1)
         assertThat(violations.first().equipmentType).isEqualTo(EquipmentType.TWO_WINDINGS_TRANSFORMER)

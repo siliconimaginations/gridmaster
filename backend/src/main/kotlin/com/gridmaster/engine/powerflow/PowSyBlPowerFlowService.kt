@@ -141,11 +141,9 @@ class PowSyBlPowerFlowService(
         val iterationCount = components.maxOf { it.iterationCount }
 
         val slackBusIds =
-            components
-                .flatMap { component ->
-                    runCatching { listOf(component.slackBusId) }.getOrDefault(emptyList())
-                }
-                .filterNotNull()
+            components.mapNotNull { component ->
+                runCatching { component.slackBusId }.getOrNull()
+            }
 
         return ComponentSummary(status, iterationCount, slackBusIds)
     }

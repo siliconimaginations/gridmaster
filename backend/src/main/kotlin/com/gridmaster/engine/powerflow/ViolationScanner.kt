@@ -3,6 +3,7 @@ package com.gridmaster.engine.powerflow
 import com.gridmaster.engine.model.GridNetwork
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
+import kotlin.math.sqrt
 
 /**
  * Scans a [GridNetwork] snapshot for voltage and thermal violations.
@@ -61,10 +62,27 @@ class ViolationScanner(
         }
 
         // Two-winding transformers
+        // Convert the MVA rating to an equivalent current rating on each side using that
+        // side's own nominal voltage, then compare each side's measured current against its
+        // own rating.  Using a single HV-side conversion for both currents is incorrect
+        // because LV-side current is naturally higher for the same power flow.
+        val busNominalKv = snapshot.buses.associate { it.id to it.nominalVoltageKv }
         for (twt in snapshot.twoWindingsTransformers) {
-            val rating = twt.ratingMva?.let { mvaToAmps(it, twt.nominalVoltageHvKv) } ?: continue
-            val current = maxOfNullable(twt.currentFromA, twt.currentToA) ?: continue
-            thermalViolation(twt.id, EquipmentType.TWO_WINDINGS_TRANSFORMER, current, rating)
+            val ratingMva = twt.ratingMva ?: continue
+            val fromVkv = busNominalKv[twt.fromBusId] ?: continue
+            val toVkv = busNominalKv[twt.toBusId] ?: continue
+            val ratingFromA = mvaToAmps(ratingMva, fromVkv)
+            val ratingToA = mvaToAmps(ratingMva, toVkv)
+            val fromViolation =
+                twt.currentFromA?.let {
+                    thermalViolation(twt.id, EquipmentType.TWO_WINDINGS_TRANSFORMER, it, ratingFromA)
+                }
+            val toViolation =
+                twt.currentToA?.let {
+                    thermalViolation(twt.id, EquipmentType.TWO_WINDINGS_TRANSFORMER, it, ratingToA)
+                }
+            listOfNotNull(fromViolation, toViolation)
+                .maxByOrNull { it.loadingPercent }
                 ?.let { violations += it }
         }
 
@@ -131,6 +149,6 @@ class ViolationScanner(
         }
 
     companion object {
-        private val SQRT3 = Math.sqrt(3.0)
+        private val SQRT3 = sqrt(3.0)
     }
 }
