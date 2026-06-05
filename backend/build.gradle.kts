@@ -37,6 +37,8 @@ dependencies {
     implementation("com.powsybl:powsybl-contingency-api")
     implementation("com.powsybl:powsybl-iidm-serde")
 
+    // Coroutines — NetworkRepository methods are suspend; IO wrapping in SqliteNetworkRepository
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
     // SQLite
     runtimeOnly("org.xerial:sqlite-jdbc:3.45.2.0")
     runtimeOnly("org.hibernate.orm:hibernate-community-dialects:6.4.4.Final")
@@ -48,6 +50,7 @@ dependencies {
     testImplementation("com.powsybl:powsybl-iidm-test")
     testRuntimeOnly("com.h2database:h2")
     testImplementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
 }
 
 tasks.withType<KotlinCompile> {

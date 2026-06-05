@@ -94,12 +94,12 @@ class IidmNetworkMapperImpl(
         network: Network,
         warnings: MutableList<String>,
     ): List<Line> =
-        network.lines.map { line ->
+        network.lines.mapNotNull { line ->
             val fromBusId = line.terminal1.busBreakerView.connectableBus?.id
             val toBusId = line.terminal2.busBreakerView.connectableBus?.id
             if (fromBusId == null || toBusId == null) {
                 warnings += "Line ${line.id} has a terminal with no connectable bus; skipping"
-                return@map null
+                return@mapNotNull null
             }
             Line(
                 id = line.id,
@@ -115,18 +115,18 @@ class IidmNetworkMapperImpl(
                 reactanceOhm = line.x,
                 shuntCapacitanceSiemens = line.b1 + line.b2,
             )
-        }.filterNotNull()
+        }
 
     private fun mapTwoWindingsTransformers(
         network: Network,
         warnings: MutableList<String>,
     ): List<TwoWindingsTransformer> =
-        network.twoWindingsTransformers.map { twt ->
+        network.twoWindingsTransformers.mapNotNull { twt ->
             val fromBusId = twt.terminal1.busBreakerView.connectableBus?.id
             val toBusId = twt.terminal2.busBreakerView.connectableBus?.id
             if (fromBusId == null || toBusId == null) {
                 warnings += "2W transformer ${twt.id} has a terminal with no connectable bus; skipping"
-                return@map null
+                return@mapNotNull null
             }
             val tapPosition = twt.ratioTapChanger?.tapPosition ?: 0
             TwoWindingsTransformer(
@@ -143,19 +143,19 @@ class IidmNetworkMapperImpl(
                 nominalVoltageHvKv = twt.ratedU1,
                 nominalVoltageLvKv = twt.ratedU2,
             )
-        }.filterNotNull()
+        }
 
     private fun mapThreeWindingsTransformers(
         network: Network,
         warnings: MutableList<String>,
     ): List<ThreeWindingsTransformer> =
-        network.threeWindingsTransformers.map { twt3 ->
+        network.threeWindingsTransformers.mapNotNull { twt3 ->
             val bus1Id = twt3.leg1.terminal.busBreakerView.connectableBus?.id
             val bus2Id = twt3.leg2.terminal.busBreakerView.connectableBus?.id
             val bus3Id = twt3.leg3.terminal.busBreakerView.connectableBus?.id
             if (bus1Id == null || bus2Id == null || bus3Id == null) {
                 warnings += "3W transformer ${twt3.id} has a terminal with no connectable bus; skipping"
-                return@map null
+                return@mapNotNull null
             }
             ThreeWindingsTransformer(
                 id = twt3.id,
@@ -185,17 +185,17 @@ class IidmNetworkMapperImpl(
                 resistanceOhm3 = twt3.leg3.r,
                 reactanceOhm3 = twt3.leg3.x,
             )
-        }.filterNotNull()
+        }
 
     private fun mapGenerators(
         network: Network,
         warnings: MutableList<String>,
     ): List<Generator> =
-        network.generators.map { gen ->
+        network.generators.mapNotNull { gen ->
             val busId = gen.terminal.busBreakerView.connectableBus?.id
             if (busId == null) {
                 warnings += "Generator ${gen.id} has no connectable bus; skipping"
-                return@map null
+                return@mapNotNull null
             }
             val nominalV = gen.terminal.voltageLevel.nominalV
             val targetVoltagePu = if (nominalV > 0.0) gen.targetV / nominalV else gen.targetV
@@ -213,17 +213,17 @@ class IidmNetworkMapperImpl(
                 fuelType = meta.fuelType,
                 marginalCostPerMwh = meta.marginalCostPerMwh,
             )
-        }.filterNotNull()
+        }
 
     private fun mapLoads(
         network: Network,
         warnings: MutableList<String>,
     ): List<Load> =
-        network.loads.map { load ->
+        network.loads.mapNotNull { load ->
             val busId = load.terminal.busBreakerView.connectableBus?.id
             if (busId == null) {
                 warnings += "Load ${load.id} has no connectable bus; skipping"
-                return@map null
+                return@mapNotNull null
             }
             Load(
                 id = load.id,
@@ -233,17 +233,17 @@ class IidmNetworkMapperImpl(
                 reactivePowerMvar = load.q0,
                 connected = load.terminal.isConnected,
             )
-        }.filterNotNull()
+        }
 
     private fun mapShuntCompensators(
         network: Network,
         warnings: MutableList<String>,
     ): List<ShuntCompensator> =
-        network.shuntCompensators.map { sc ->
+        network.shuntCompensators.mapNotNull { sc ->
             val busId = sc.terminal.busBreakerView.connectableBus?.id
             if (busId == null) {
                 warnings += "ShuntCompensator ${sc.id} has no connectable bus; skipping"
-                return@map null
+                return@mapNotNull null
             }
             val bPerSection =
                 when {
@@ -263,7 +263,7 @@ class IidmNetworkMapperImpl(
                 currentSectionCount = sc.sectionCount,
                 connected = sc.terminal.isConnected,
             )
-        }.filterNotNull()
+        }
 
     // -------------------------------------------------------------------------
     // applyMutation
@@ -290,6 +290,9 @@ class IidmNetworkMapperImpl(
                         network.getGenerator(mutation.generatorId)
                             ?: throw InvalidMutationException("Generator not found: ${mutation.generatorId}")
                     val nominalV = gen.terminal.voltageLevel.nominalV
+                    require(nominalV > 0.0) {
+                        "Generator ${mutation.generatorId} is on a voltage level with non-positive nominal voltage"
+                    }
                     gen.targetV = mutation.targetVoltagePu * nominalV
                 }
 
