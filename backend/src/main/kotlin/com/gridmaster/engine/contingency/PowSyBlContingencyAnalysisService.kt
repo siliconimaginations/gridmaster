@@ -26,6 +26,7 @@ import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.time.Instant
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.system.measureTimeMillis
 
 /**
@@ -57,6 +58,10 @@ class PowSyBlContingencyAnalysisService(
     // CONFLATED channel — only the latest pending request is kept (debouncing).
     private val triggerChannel = Channel<RunRequest>(Channel.CONFLATED)
 
+    // Tracks the variant ID cloned for the currently-pending (not-yet-consumed) request.
+    // When a new trigger replaces a pending one, the old variant is cleaned up immediately.
+    private val pendingVariantId = AtomicReference<String?>(null)
+
     init {
         // Background consumer — runs analyses serially as requests arrive.
         scope.launch {
@@ -75,7 +80,18 @@ class PowSyBlContingencyAnalysisService(
         network: Network,
         parameters: ContingencyAnalysisParameters,
     ) {
-        triggerChannel.trySend(RunRequest(network, parameters))
+        // Clone the network state synchronously so the analysis always runs on the
+        // state at the time of the trigger call, not some later (post-mutation) state.
+        val variantId = "ca-analysis-${System.nanoTime()}"
+        network.variantManager.cloneVariant(VariantManagerConstants.INITIAL_VARIANT_ID, variantId, true)
+
+        // Clean up any previously-pending variant that is being replaced (CONFLATED channel).
+        pendingVariantId.getAndSet(variantId)?.let { dropped ->
+            runCatching { network.variantManager.removeVariant(dropped) }
+                .onFailure { log.warn("Failed to remove dropped variant {}", dropped, it) }
+        }
+
+        triggerChannel.trySend(RunRequest(network, parameters, variantId))
     }
 
     override fun latestResult(): ContingencyAnalysisResult? = cache.latest()
@@ -93,13 +109,12 @@ class PowSyBlContingencyAnalysisService(
     // -------------------------------------------------------------------------
 
     private suspend fun runAnalysis(request: RunRequest) {
-        val (network, parameters) = request
+        val (network, parameters, analysisVariantId) = request
         log.info("Starting contingency analysis run")
 
-        // Clone the current network state into an analysis-specific variant so that
-        // concurrent game-engine mutations do not affect the analysis in progress.
-        val analysisVariantId = "ca-analysis-${System.nanoTime()}"
-        network.variantManager.cloneVariant(VariantManagerConstants.INITIAL_VARIANT_ID, analysisVariantId, true)
+        // Set the working variant to the snapshot that was cloned in triggerAsync.
+        // This ensures we analyse the network state at trigger time, not the current state.
+        pendingVariantId.compareAndSet(analysisVariantId, null) // clear pending — we own it now
         network.variantManager.setWorkingVariant(analysisVariantId)
 
         try {
@@ -403,5 +418,6 @@ class PowSyBlContingencyAnalysisService(
     private data class RunRequest(
         val network: Network,
         val parameters: ContingencyAnalysisParameters,
+        val analysisVariantId: String,
     )
 }
