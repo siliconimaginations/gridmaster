@@ -3,6 +3,7 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 plugins {
     kotlin("jvm") version "1.9.23"
     kotlin("plugin.spring") version "1.9.23"
+    kotlin("plugin.jpa") version "1.9.23"
     id("org.springframework.boot") version "3.2.4"
     id("io.spring.dependency-management") version "1.1.4"
     id("org.jlleitschuh.gradle.ktlint") version "12.1.0"
@@ -34,7 +35,10 @@ dependencies {
     implementation("com.powsybl:powsybl-open-loadflow")
     implementation("com.powsybl:powsybl-security-analysis-api")
     implementation("com.powsybl:powsybl-contingency-api")
+    implementation("com.powsybl:powsybl-iidm-serde")
 
+    // Coroutines — NetworkRepository methods are suspend; IO wrapping in SqliteNetworkRepository
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
     // SQLite
     runtimeOnly("org.xerial:sqlite-jdbc:3.45.2.0")
     runtimeOnly("org.hibernate.orm:hibernate-community-dialects:6.4.4.Final")
@@ -43,6 +47,10 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("io.mockk:mockk:1.13.10")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
+    testImplementation("com.powsybl:powsybl-iidm-test")
+    testRuntimeOnly("com.h2database:h2")
+    testImplementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
 }
 
 tasks.withType<KotlinCompile> {
