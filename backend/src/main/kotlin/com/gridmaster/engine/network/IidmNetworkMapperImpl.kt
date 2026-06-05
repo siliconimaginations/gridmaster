@@ -202,7 +202,7 @@ class IidmNetworkMapperImpl(
                 if (nominalV > 0.0) {
                     gen.targetV / nominalV
                 } else {
-                    warnings += "Generator \${gen.id} has non-positive nominalV ($nominalV kV); defaulting targetVoltagePu to 1.0"
+                    warnings += "Generator ${gen.id} has non-positive nominalV ($nominalV kV); defaulting targetVoltagePu to 1.0"
                     1.0
                 }
             val meta = metadataProvider.getMetadata(gen.id)
