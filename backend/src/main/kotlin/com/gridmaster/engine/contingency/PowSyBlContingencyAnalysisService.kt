@@ -91,6 +91,12 @@ class PowSyBlContingencyAnalysisService(
         val (network, parameters) = request
         log.info("Starting contingency analysis run")
 
+        // Clone the current network state into an analysis-specific variant so that
+        // concurrent game-engine mutations do not affect the analysis in progress.
+        val analysisVariantId = "ca-analysis-${System.nanoTime()}"
+        network.variantManager.cloneVariant(VariantManagerConstants.INITIAL_VARIANT_ID, analysisVariantId, true)
+        network.variantManager.setWorkingVariant(analysisVariantId)
+
         // Compute snapshot once — used for contingency list building and base case check.
         val snapshot = mapper.toGridNetwork(network)
 
@@ -143,6 +149,12 @@ class PowSyBlContingencyAnalysisService(
             )
 
         cache.update(result)
+
+        // Clean up the analysis variant.
+        runCatching {
+            network.variantManager.setWorkingVariant(VariantManagerConstants.INITIAL_VARIANT_ID)
+            network.variantManager.removeVariant(analysisVariantId)
+        }
 
         log.info(
             "Contingency analysis complete: {} contingencies, {} critical, {}ms " +
@@ -339,8 +351,8 @@ class PowSyBlContingencyAnalysisService(
                 network.getThreeWindingsTransformer(lv.subjectId) != null ->
                     EquipmentType.THREE_WINDINGS_TRANSFORMER
                 else -> {
-                    log.warn("Unknown equipment type for thermal violation on {}", lv.subjectId)
-                    EquipmentType.LINE
+                    log.warn("Unknown equipment type for thermal violation on {}; skipping", lv.subjectId)
+                    return null
                 }
             }
         val (violationType, equipmentType) =
