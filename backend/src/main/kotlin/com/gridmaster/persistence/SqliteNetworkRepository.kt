@@ -43,10 +43,7 @@ class SqliteNetworkRepository(
      * Returns null if no snapshot exists for the session.
      */
     override suspend fun loadIidm(sessionId: String): Network? {
-        val entity =
-            withContext(Dispatchers.IO) {
-                jpaRepository.findById(sessionId).orElse(null)
-            } ?: return null
+        val entity = findEntity(sessionId) ?: return null
         return deserializeNetwork(entity.iidmXml)
     }
 
@@ -54,12 +51,12 @@ class SqliteNetworkRepository(
      * Return the last stored [GridNetwork] snapshot for [sessionId], or null if none exists.
      */
     override suspend fun latestSnapshot(sessionId: String): GridNetwork? {
-        val entity =
-            withContext(Dispatchers.IO) {
-                jpaRepository.findById(sessionId).orElse(null)
-            } ?: return null
+        val entity = findEntity(sessionId) ?: return null
         return objectMapper.readValue(entity.snapshotJson, GridNetwork::class.java)
     }
+
+    private suspend fun findEntity(sessionId: String): NetworkSnapshotEntity? =
+        withContext(Dispatchers.IO) { jpaRepository.findById(sessionId).orElse(null) }
 
     // -------------------------------------------------------------------------
     // Serialisation helpers
