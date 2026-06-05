@@ -1,7 +1,7 @@
 # Event Engine
 
 **Stage**: 1
-**Status**: Draft — awaiting review
+**Status**: Draft — v2, addressing review comments
 **Branch**: `stage/1/08-event-engine`
 **Depends on**: [07-game-clock.md](07-game-clock.md), [09-command-handler.md](09-command-handler.md)
 
@@ -68,7 +68,7 @@ data class WeatherEvent(
     override val description: String,
     override val severity: EventSeverity,
     val type: WeatherEventType,
-    val affectedRegionId: String?,      // null = system-wide
+    val affectedRegionIds: List<String>?,  // null or empty = system-wide; list = specific regions affected
     val durationMinutes: Int,
     val effects: List<EventEffect>,
 ) : GameEvent()
@@ -120,7 +120,8 @@ enum class FuelEventType { PRICE_SPIKE, SUPPLY_DISRUPTION, PRICE_COLLAPSE }
 sealed class EventEffect {
     data class TripElement(val elementId: String) : EventEffect()
     data class DerateElement(val elementId: String, val ratingFactor: Double) : EventEffect()
-    data class ScaleLoad(val regionId: String?, val factor: Double) : EventEffect()
+    data class ScaleLoad(val regionIds: List<String>?, val factor: Double) : EventEffect()
+        // null or empty regionIds = scale load system-wide
     data class ScaleGeneratorCost(val fuelType: FuelType, val factor: Double) : EventEffect()
 }
 
@@ -214,14 +215,15 @@ effect applies correctly to network loads.
 
 ---
 
-## Open Questions
+## Resolved Design Points (from review)
 
-1. **Event catalogue**: the specific events (storm names, policy descriptions,
-   fuel price magnitudes) are game content rather than architecture. Propose
-   defining them in a YAML catalogue file (`resources/events/catalogue.yml`)
-   loaded at startup. Content authoring deferred to Stage 5.
+1. **Event catalogue**: YAML catalogue (`resources/events/catalogue.yml`)
+   approach agreed. Content authoring deferred to Stage 5.
 
-2. **Event card UI blocking**: when a `PolicyEvent` fires, should the clock
-   pause until the player responds, or only slow to 1×? Propose: slow to 1×
-   and display a persistent banner; full pause only if the card has a time
-   limit. UX design (Module 11) to decide.
+2. **Event card UI blocking**: slow to 1× with persistent banner; full pause
+   only if card has a time limit. UX design (Module 11) to specify. Agreed.
+
+3. **`affectedRegionIds`**: changed from `String?` to `List<String>?`.
+   `null` or empty list means system-wide; a non-empty list means only the
+   listed regions are affected. Same change applied to `ScaleLoad` effect.
+   Agreed.
