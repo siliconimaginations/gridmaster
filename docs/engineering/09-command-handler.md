@@ -1,7 +1,7 @@
 # Command Handler
 
 **Stage**: 1
-**Status**: Draft — awaiting review
+**Status**: Draft — v2, addressing review comments
 **Branch**: `stage/1/09-command-handler`
 **Depends on**: [01-network-model.md](01-network-model.md), [02-power-flow.md](02-power-flow.md), [03-contingency-analysis.md](03-contingency-analysis.md), [04-dispatch.md](04-dispatch.md)
 
@@ -38,10 +38,19 @@ them to the IIDM network, and triggers the downstream physics pipeline.
 ```kotlin
 interface CommandHandler {
     /**
-     * Validate and apply a player command. Runs power flow after mutation.
+     * Validate and apply a single player command. Runs power flow after mutation.
      * Synchronous — blocks until power flow completes.
      */
     fun handle(command: PlayerCommand, sessionId: String): CommandResult
+
+    /**
+     * Validate and apply a batch of player commands atomically.
+     * All commands are validated first; if any fail, the entire batch is rejected.
+     * All mutations are applied in order, then a single power flow is run.
+     * More efficient than calling handle() N times when multiple changes
+     * must take effect simultaneously (e.g. dispatch results, UC schedule).
+     */
+    fun handleBatch(commands: List<PlayerCommand>, sessionId: String): BatchCommandResult
 
     /**
      * Apply a list of NetworkMutations directly (from event engine or
@@ -49,6 +58,20 @@ interface CommandHandler {
      */
     fun applyMutations(mutations: List<NetworkMutation>, sessionId: String): CommandResult
 }
+
+data class BatchCommandResult(
+    val success: Boolean,
+    val snapshot: GridNetwork,
+    val powerFlowResult: PowerFlowResult,
+    val newAlerts: List<Alert>,
+    val commandOutcomes: List<CommandOutcome>,  // one per command in the batch
+)
+
+data class CommandOutcome(
+    val commandType: String,
+    val success: Boolean,
+    val rejectionReason: String? = null,
+)
 
 // ── Player commands ──────────────────────────────────────────────────────────
 
@@ -160,6 +183,7 @@ data class CommandResult(
 
 ## Command Pipeline
 
+### Single command
 ```
 PlayerCommand received
         │
@@ -186,14 +210,55 @@ PlayerCommand received
 7. Return CommandResult with updated snapshot
 ```
 
+### Batch command (handleBatch)
+```
+List<PlayerCommand> received
+        │
+        ▼
+1. Validate ALL commands — collect rejections
+   → if any invalid: return BatchCommandResult(success=false) — no mutations applied
+        │
+        ▼
+2. Translate each command to NetworkMutation(s)
+        │
+        ▼
+3. Apply all mutations in order via IidmNetworkMapper
+        │
+        ▼
+4. PowerFlowService.solve() — ONE solve for the entire batch
+        │
+        ▼
+5. Violation scan → generate Alerts
+        │
+        ▼
+6. ContingencyAnalysisService.triggerAsync() if any topology change
+        │
+        ▼
+7. Return BatchCommandResult with per-command outcomes + shared snapshot
+```
+
+**Key benefit of batching**: N commands → 1 power flow solve instead of N.
+This is critical for applying dispatch results (one target per generator) or
+UC commitment actions (commit/decommit multiple units simultaneously) without
+running an intermediate power flow after each generator change.
+
+**Use cases for handleBatch**:
+- Applying `DispatchResult.generatorTargets` (one `SetGeneratorOutput` per generator)
+- Applying `UcResult.commitmentActions` (multiple `CommitGenerator`/`DecommitGenerator`)
+- Event engine applying multiple simultaneous `EventEffect`s
+- Tutorial missions setting up a specific multi-element initial state
+- Player using a planned "batch edit" mode in the UI
+
 ---
 
 ## Design Decisions & Rationale
 
-1. **Single entry point for all mutations.**
+1. **Single entry point for all mutations; batching for efficiency.**
    All state changes — player commands, event effects, dispatch results —
-   funnel through `CommandHandler`. This ensures power flow always runs
-   after every mutation and the game state is never left in an un-solved state.
+   funnel through `CommandHandler`. `handleBatch` applies N mutations then
+   runs a single power flow, avoiding N intermediate solves for operations
+   like applying a full dispatch result or UC schedule. All-or-nothing
+   validation ensures no partial mutations on rejection.
 
 2. **Synchronous command handling.**
    `handle()` blocks until the power flow completes and returns the updated
@@ -216,7 +281,8 @@ PlayerCommand received
 
 | Failure | Handling |
 |---------|----------|
-| Validation failure | `CommandResult(success=false, rejectionReason=...)` — no mutation applied |
+| Single command validation failure | `CommandResult(success=false, rejectionReason=...)` — no mutation applied |
+| Batch validation failure (any command) | `BatchCommandResult(success=false)` — zero mutations applied; all `CommandOutcome`s populated with pass/fail |
 | `applyMutation` throws `InvalidMutationException` | Wrapped as failed `CommandResult` |
 | Power flow returns `NETWORK_FAILURE` | `CommandResult(success=true)` — mutation applied but grid failed; snapshot and alerts reflect the failure state |
 | Unexpected exception | Log; return `CommandResult(success=false, rejectionReason="Internal error")` |
@@ -236,6 +302,6 @@ assert contingency analysis triggered; `RunEconomicDispatch` → assert
 
 ---
 
-## Open Questions
+## Resolved Design Points (from review)
 
-None.
+1. **Batch command support**: `handleBatch(List<PlayerCommand>)` added. Validates all commands first (all-or-nothing), applies all mutations in order, runs a single power flow. `BatchCommandResult` contains per-command outcomes and a shared snapshot. Use cases: dispatch results, UC schedules, event effects, tutorial state setup.
