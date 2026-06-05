@@ -180,24 +180,24 @@ class PowSyBlContingencyAnalysisService(
                     true,
                 )
                 network.variantManager.setWorkingVariant(variantId)
-                applyContingencyToNetwork(network, contingency)
-
-                val dcResult =
-                    powerFlowService.solve(
-                        network,
-                        PowerFlowParameters(mode = SolveMode.DC),
-                    )
-
-                val hasViolations = dcResult.violations.isNotEmpty()
-                if (hasViolations) {
+                if (!applyContingencyToNetwork(network, contingency)) {
                     needsAc += contingency
                 } else {
-                    secureResults +=
-                        ContingencyResult(
-                            contingency = contingency,
-                            status = PostContingencyStatus.SECURE,
-                            violations = emptyList(),
+                    val dcResult =
+                        powerFlowService.solve(
+                            network,
+                            PowerFlowParameters(mode = SolveMode.DC),
                         )
+                    if (dcResult.violations.isNotEmpty()) {
+                        needsAc += contingency
+                    } else {
+                        secureResults +=
+                            ContingencyResult(
+                                contingency = contingency,
+                                status = PostContingencyStatus.SECURE,
+                                violations = emptyList(),
+                            )
+                    }
                 }
             } catch (e: Exception) {
                 // DC pre-screen failure → escalate to AC
@@ -280,32 +280,50 @@ class PowSyBlContingencyAnalysisService(
                 false
             }
 
+    /**
+     * Applies [contingency] to [network] by disconnecting elements.
+     * Returns false if any element was not found — the caller should escalate
+     * to full AC analysis rather than trusting the (unmodified) DC pre-screen result.
+     */
     private fun applyContingencyToNetwork(
         network: Network,
         contingency: Contingency,
-    ) {
+    ): Boolean {
+        var allApplied = true
         contingency.elements.forEach { element ->
-            when (element) {
-                is ContingencyElement.LineOutage ->
-                    network.getLine(element.lineId)?.let {
-                        it.terminal1.disconnect()
-                        it.terminal2.disconnect()
-                    }
-                is ContingencyElement.TwoWindingsTransformerOutage ->
-                    network.getTwoWindingsTransformer(element.transformerId)?.let {
-                        it.terminal1.disconnect()
-                        it.terminal2.disconnect()
-                    }
-                is ContingencyElement.ThreeWindingsTransformerOutage ->
-                    network.getThreeWindingsTransformer(element.transformerId)?.let {
-                        it.leg1.terminal.disconnect()
-                        it.leg2.terminal.disconnect()
-                        it.leg3.terminal.disconnect()
-                    }
-                is ContingencyElement.GeneratorOutage ->
-                    network.getGenerator(element.generatorId)?.terminal?.disconnect()
+            val applied =
+                when (element) {
+                    is ContingencyElement.LineOutage ->
+                        network.getLine(element.lineId)?.also {
+                            it.terminal1.disconnect()
+                            it.terminal2.disconnect()
+                        } != null
+                    is ContingencyElement.TwoWindingsTransformerOutage ->
+                        network.getTwoWindingsTransformer(element.transformerId)?.also {
+                            it.terminal1.disconnect()
+                            it.terminal2.disconnect()
+                        } != null
+                    is ContingencyElement.ThreeWindingsTransformerOutage ->
+                        network.getThreeWindingsTransformer(element.transformerId)?.also {
+                            it.leg1.terminal.disconnect()
+                            it.leg2.terminal.disconnect()
+                            it.leg3.terminal.disconnect()
+                        } != null
+                    is ContingencyElement.GeneratorOutage ->
+                        network.getGenerator(element.generatorId)?.also {
+                            it.terminal.disconnect()
+                        } != null
+                }
+            if (!applied) {
+                log.warn(
+                    "Contingency {}: element {} not found; escalating to AC",
+                    contingency.id,
+                    element,
+                )
+                allApplied = false
             }
         }
+        return allApplied
     }
 
     private fun mapLimitViolation(
@@ -356,17 +374,6 @@ class PowSyBlContingencyAnalysisService(
             severity = severity,
         )
     }
-
-    private fun maxOfNullable(
-        a: Double?,
-        b: Double?,
-    ): Double? =
-        when {
-            a != null && b != null -> maxOf(a, b)
-            a != null -> a
-            b != null -> b
-            else -> null
-        }
 
     private data class RunRequest(
         val network: Network,
