@@ -83,6 +83,10 @@ data class TwoWindingsTransformer(
     val ratioTapPosition: Int = 0,
     val nominalVoltageHvKv: Double,
     val nominalVoltageLvKv: Double,
+    /** Rated voltage of terminal1 (from-side) in kV. Used for per-side MVA→A conversion. */
+    val nominalVoltageFromKv: Double,
+    /** Rated voltage of terminal2 (to-side) in kV. */
+    val nominalVoltageToKv: Double,
 )
 
 /**

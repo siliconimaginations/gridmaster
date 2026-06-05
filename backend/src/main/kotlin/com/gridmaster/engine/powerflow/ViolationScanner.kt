@@ -61,25 +61,14 @@ class ViolationScanner(
                 ?.let { violations += it }
         }
 
-        // Two-winding transformers
-        // Convert the MVA rating to an equivalent current rating on each side using that
-        // side's own nominal voltage, then compare each side's measured current against its
-        // own rating.  Using a single HV-side conversion for both currents is incorrect
-        // because LV-side current is naturally higher for the same power flow.
-        // O(n_buses) map built once per scan — negligible for game-scale networks.
-        val busNominalKv = snapshot.buses.associate { it.id to it.nominalVoltageKv }
+        // Two-winding transformers — use winding rated voltages from the model directly
+        // (nominalVoltageFromKv = ratedU1, nominalVoltageToKv = ratedU2) rather than
+        // bus nominal voltage, to stay consistent with the 3W transformer logic and
+        // avoid incorrect results when winding voltage differs from bus nominal voltage.
         for (twt in snapshot.twoWindingsTransformers) {
             val ratingMva = twt.ratingMva ?: continue
-            val fromVkv =
-                busNominalKv[twt.fromBusId].also {
-                    if (it == null) log.warn("Bus {} not found for 2W transformer {}; skipping thermal check", twt.fromBusId, twt.id)
-                } ?: continue
-            val toVkv =
-                busNominalKv[twt.toBusId].also {
-                    if (it == null) log.warn("Bus {} not found for 2W transformer {}; skipping thermal check", twt.toBusId, twt.id)
-                } ?: continue
-            val ratingFromA = mvaToAmps(ratingMva, fromVkv)
-            val ratingToA = mvaToAmps(ratingMva, toVkv)
+            val ratingFromA = mvaToAmps(ratingMva, twt.nominalVoltageFromKv)
+            val ratingToA = mvaToAmps(ratingMva, twt.nominalVoltageToKv)
             val fromViolation =
                 twt.currentFromA?.let {
                     thermalViolation(twt.id, EquipmentType.TWO_WINDINGS_TRANSFORMER, it, ratingFromA)
@@ -92,7 +81,6 @@ class ViolationScanner(
                 .maxByOrNull { it.loadingPercent }
                 ?.let { violations += it }
         }
-
         // Three-winding transformers — check each leg against its own per-leg MVA rating,
         // then report only the most severely loaded leg (consistent with 2W transformer logic).
         // nominalVoltageXKv is populated from PowSyBl leg.ratedU in the mapper.
