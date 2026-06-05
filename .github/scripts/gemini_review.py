@@ -3,7 +3,7 @@
 Gemini AI code reviewer for pull requests.
 
 Called by .github/workflows/gemini-review.yml on pull_request events.
-Fetches the full PR diff, filters to reviewable files, sends to Gemini,
+Fetches the diff for reviewable files only, sends to Gemini,
 and posts the result as a PR comment (replacing any previous Gemini review).
 
 Environment variables (injected by the workflow):
@@ -16,6 +16,7 @@ Environment variables (injected by the workflow):
 """
 
 import os
+import re
 import subprocess
 import sys
 
@@ -29,14 +30,13 @@ from github import Github
 GEMINI_MODEL = "gemini-2.5-pro"
 
 # Hard cap on diff characters sent to Gemini (~25 k tokens, well within context).
-# If the diff is larger it is truncated with a notice.
 MAX_DIFF_CHARS = 90_000
 
 # File extensions to skip — docs, config, lockfiles, generated files.
 SKIP_EXTENSIONS = {
     ".md", ".txt", ".xml", ".xiidm",
     ".yml", ".yaml",
-    ".json",       # covers package-lock.json; build.gradle.kts is .kts not .json
+    ".json",
     ".png", ".jpg", ".jpeg", ".svg", ".ico",
     ".gitignore", ".gitattributes",
 }
@@ -45,6 +45,10 @@ SKIP_EXTENSIONS = {
 SKIP_FILES = {"gradlew", "gradlew.bat", "package-lock.json"}
 
 REVIEW_HEADER = "## Gemini Code Review 🤖"
+
+# Regex that robustly parses the "b/<filename>" part of a git diff header,
+# handling filenames that contain spaces or special characters.
+_DIFF_HEADER_RE = re.compile(r"^diff --git a/.+ b/(.+)$")
 
 PROMPT_TEMPLATE = """\
 You are an expert code reviewer for a Kotlin/Spring Boot + TypeScript/React project called GridMaster —
@@ -69,7 +73,7 @@ Format your response exactly as follows:
 [1–2 sentences]
 
 ### Issues
-[Each issue on its own line: `file.kt:line — 🔴 Critical / 🟠 Major / 🟡 Minor — description and fix`]
+[Each issue: `file.kt:line — 🔴 Critical / 🟠 Major / 🟡 Minor — description and fix`]
 [Write "None found." if there are no issues]
 
 ### Suggestions
@@ -90,39 +94,44 @@ Be concise. No padding or filler.
 # ---------------------------------------------------------------------------
 
 
+def _should_review(filename: str) -> bool:
+    ext = os.path.splitext(filename)[1].lower()
+    basename = os.path.basename(filename)
+    return ext not in SKIP_EXTENSIONS and basename not in SKIP_FILES
+
+
 def get_filtered_diff(base_sha: str, head_sha: str) -> tuple[str, bool]:
     """
-    Return (filtered_diff, truncated).
-    Runs git diff between base and head, strips files we don't review.
+    Two-step approach:
+    1. Get only the names of changed files — cheap, avoids loading a huge diff.
+    2. Fetch the full diff for reviewable files only.
+    Returns (diff, truncated).
     """
-    result = subprocess.run(
-        ["git", "diff", f"{base_sha}...{head_sha}"],
+    # Step 1: names only
+    names_result = subprocess.run(
+        ["git", "diff", "--name-only", f"{base_sha}...{head_sha}"],
         capture_output=True,
         text=True,
         check=True,
     )
-    raw = result.stdout
-    filtered = _filter_diff(raw)
-    if len(filtered) > MAX_DIFF_CHARS:
-        return filtered[:MAX_DIFF_CHARS], True
-    return filtered, False
+    all_files = [f.strip() for f in names_result.stdout.strip().splitlines() if f.strip()]
+    reviewable = [f for f in all_files if _should_review(f)]
 
+    if not reviewable:
+        return "", False
 
-def _filter_diff(diff: str) -> str:
-    lines = diff.split("\n")
-    out = []
-    include = True
-    for line in lines:
-        if line.startswith("diff --git"):
-            # Extract filename from "diff --git a/path b/path"
-            parts = line.split(" b/")
-            filename = parts[-1] if len(parts) > 1 else ""
-            ext = os.path.splitext(filename)[1].lower()
-            basename = os.path.basename(filename)
-            include = ext not in SKIP_EXTENSIONS and basename not in SKIP_FILES
-        if include:
-            out.append(line)
-    return "\n".join(out)
+    # Step 2: full diff for reviewable files only
+    diff_result = subprocess.run(
+        ["git", "diff", f"{base_sha}...{head_sha}", "--"] + reviewable,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    diff = diff_result.stdout
+
+    if len(diff) > MAX_DIFF_CHARS:
+        return diff[:MAX_DIFF_CHARS], True
+    return diff, False
 
 
 # ---------------------------------------------------------------------------
@@ -142,7 +151,6 @@ def call_gemini(diff: str, truncated: bool) -> str:
     )
 
     prompt = PROMPT_TEMPLATE.format(diff=diff) + notice
-
     response = model.generate_content(prompt)
     return response.text
 
