@@ -18,6 +18,8 @@ class ViolationScanner(
 ) {
     private val log = LoggerFactory.getLogger(ViolationScanner::class.java)
 
+    private val log = LoggerFactory.getLogger(ViolationScanner::class.java)
+
     fun scan(snapshot: GridNetwork): List<NetworkViolation> {
         val violations = mutableListOf<NetworkViolation>()
         violations += scanVoltage(snapshot)
@@ -70,8 +72,14 @@ class ViolationScanner(
         val busNominalKv = snapshot.buses.associate { it.id to it.nominalVoltageKv }
         for (twt in snapshot.twoWindingsTransformers) {
             val ratingMva = twt.ratingMva ?: continue
-            val fromVkv = busNominalKv[twt.fromBusId] ?: continue
-            val toVkv = busNominalKv[twt.toBusId] ?: continue
+            val fromVkv =
+                busNominalKv[twt.fromBusId].also {
+                    if (it == null) log.warn("Bus {} not found for 2W transformer {}; skipping thermal check", twt.fromBusId, twt.id)
+                } ?: continue
+            val toVkv =
+                busNominalKv[twt.toBusId].also {
+                    if (it == null) log.warn("Bus {} not found for 2W transformer {}; skipping thermal check", twt.toBusId, twt.id)
+                } ?: continue
             val ratingFromA = mvaToAmps(ratingMva, fromVkv)
             val ratingToA = mvaToAmps(ratingMva, toVkv)
             val fromViolation =
@@ -87,22 +95,18 @@ class ViolationScanner(
                 ?.let { violations += it }
         }
 
-        // Three-winding transformers — check each leg independently
+        // Three-winding transformers — check each leg against its own per-leg MVA rating.
+        // nominalVoltageXKv is populated from PowSyBl leg.ratedU in the mapper.
         for (twt3 in snapshot.threeWindingsTransformers) {
             listOf(
-                Triple(twt3.ratingMva1, twt3.current1A, "leg1"),
-                Triple(twt3.ratingMva2, twt3.current2A, "leg2"),
-                Triple(twt3.ratingMva3, twt3.current3A, "leg3"),
-            ).forEach { (ratingMva, current, leg) ->
-                // Three-winding transformers don't have a nominal voltage on the
-                // domain model yet — skip MVA→A conversion until leg voltages are added.
-                // TODO: add nominalVoltageKv per leg to ThreeWindingsTransformer (#issue)
-                if (ratingMva != null && current != null) {
-                    log.debug(
-                        "3W transformer ${twt3.id} $leg: rating=${ratingMva}MVA " +
-                            "current=${current}A — thermal check skipped (no leg voltage)",
-                    )
-                }
+                Triple(twt3.ratingMva1, twt3.current1A, twt3.nominalVoltage1Kv),
+                Triple(twt3.ratingMva2, twt3.current2A, twt3.nominalVoltage2Kv),
+                Triple(twt3.ratingMva3, twt3.current3A, twt3.nominalVoltage3Kv),
+            ).forEach { (ratingMva, currentA, voltageKv) ->
+                val rating = ratingMva?.let { mvaToAmps(it, voltageKv) } ?: return@forEach
+                val current = currentA ?: return@forEach
+                thermalViolation(twt3.id, EquipmentType.THREE_WINDINGS_TRANSFORMER, current, rating)
+                    ?.let { violations += it }
             }
         }
 

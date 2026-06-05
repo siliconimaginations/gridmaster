@@ -57,6 +57,7 @@ class PowSyBlPowerFlowService(
             )
         }
 
+        // TODO: use loadFlowResult?.let { } instead of !! for idiomatic null safety (#26)
         val lfResult = loadFlowResult!!
         val (status, iterationCount, slackBusIds) = parseComponentResults(lfResult)
 

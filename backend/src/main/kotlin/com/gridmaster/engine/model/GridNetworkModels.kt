@@ -102,6 +102,12 @@ data class ThreeWindingsTransformer(
     val current1A: Double? = null,
     val current2A: Double? = null,
     val current3A: Double? = null,
+    /** Rated (nominal) voltage of leg 1 in kV. Used for MVA → A conversion in thermal checks. */
+    val nominalVoltage1Kv: Double,
+    /** Rated (nominal) voltage of leg 2 in kV. */
+    val nominalVoltage2Kv: Double,
+    /** Rated (nominal) voltage of leg 3 in kV. */
+    val nominalVoltage3Kv: Double,
     val resistanceOhm1: Double,
     val reactanceOhm1: Double,
     val resistanceOhm2: Double,
