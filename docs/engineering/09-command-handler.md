@@ -161,14 +161,7 @@ sealed class PlayerCommand {
 }
 
 // ── Result ───────────────────────────────────────────────────────────────────
-
-data class CommandResult(
-    val success: Boolean,
-    val snapshot: GridNetwork,          // updated snapshot post-power-flow
-    val powerFlowResult: PowerFlowResult,
-    val newAlerts: List<Alert>,
-    val rejectionReason: String? = null, // non-null if success=false
-)
+// See CommandResult and CommandOutcome defined above (unified type).
 ```
 
 ### Validation rules (examples)
@@ -194,7 +187,7 @@ PlayerCommand received
         │
         ▼
 1. Validate command (domain rules above)
-   → if invalid: return CommandResult(success=false, rejectionReason=...)
+   → if invalid: return CommandResult(success=false) with CommandOutcome.rejectionReason set
         │
         ▼
 2. Translate to NetworkMutation(s)
@@ -286,11 +279,11 @@ running an intermediate power flow after each generator change.
 
 | Failure | Handling |
 |---------|----------|
-| Single command validation failure | `CommandResult(success=false, rejectionReason=...)` — no mutation applied |
+| Single command validation failure | `CommandResult(success=false)` — `commandOutcomes[0].rejectionReason` explains why; no mutation applied |
 | Batch validation failure (any command) | `CommandResult(success=false)` — zero mutations applied; `commandOutcomes` populated with per-command pass/fail |
 | `applyMutation` throws `InvalidMutationException` | Wrapped as failed `CommandResult` |
 | Power flow returns `NETWORK_FAILURE` | `CommandResult(success=true)` — mutation applied but grid failed; snapshot and alerts reflect the failure state |
-| Unexpected exception | Log; return `CommandResult(success=false, rejectionReason="Internal error")` |
+| Unexpected exception | Log; return `CommandResult(success=false)` with `commandOutcomes[0].rejectionReason="Internal error"` |
 
 ---
 
