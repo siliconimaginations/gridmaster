@@ -257,15 +257,38 @@ When Claude (AI assistant) works on this codebase:
 
 Claude operates as **[`nagasawa94`](https://github.com/nagasawa94)** on GitHub — a dedicated bot account with Write access to this repo. All branches pushed and PRs opened by Claude will show `nagasawa94` as the author, keeping Claude's contributions clearly distinct from Rick's (`siliconimaginations`).
 
+### PR classification
+
+Every PR is either **non-critical** or **critical**:
+
+| Type | Examples |
+|------|---------|
+| **Non-critical** | CI changes, tooling, coverage, linting, test fixes, doc updates, refactors within an approved design |
+| **Critical** | Architecture decisions, API/WebSocket design, physics engine changes, game mechanics, UX direction, new submodule design |
+
 ### Review workflow
 
-| PR type | Author | Reviewer | How |
-|---------|--------|----------|-----|
-| Claude opens a PR | `nagasawa94` | `siliconimaginations` (Rick) | Rick reviews diff on GitHub and merges when satisfied |
-| Rick opens a PR | `siliconimaginations` | `nagasawa94` (Claude) | Claude reviews in chat and posts inline comments via GitHub API |
-| Critical PRs (engine, protocol, CI) | either | both | Claude flags in PR description; Rick must explicitly approve before merge |
+#### Non-critical PRs
+1. `nagasawa94` opens the PR. Rick is **not** assigned as reviewer.
+2. Claude polls every ~30 s for: all CI checks green · Gemini AI review present · no unresolved 🔴/🟠 Gemini issues.
+3. Minor Gemini suggestions (🟡) → add a `// TODO:` in code and open a GitHub issue to track. Do not block merge.
+4. Once all criteria are met, Claude merges autonomously and notifies Rick in chat.
+5. After merging, Claude consults `WORK_PLAN.md` and opens the next PR automatically.
 
-**Merging without reviewing the diff is a process violation regardless of CI status.**
+#### Critical PRs
+1. `nagasawa94` opens the PR and assigns `siliconimaginations` as reviewer.
+2. Claude still polls CI and Gemini and addresses issues, but does **not** merge without Rick's explicit approval.
+
+#### When Rick says "keep working based on the plan"
+Claude applies the non-critical workflow and works autonomously through `WORK_PLAN.md` — open PR → CI + Gemini green → merge → next task — until a critical decision point is reached, then pauses and notifies Rick.
+
+| PR type | Author | Assigned reviewer | Merge |
+|---------|--------|-------------------|-------|
+| Non-critical (Claude) | `nagasawa94` | none | Claude merges when CI + Gemini pass |
+| Critical (Claude) | `nagasawa94` | `siliconimaginations` | Rick must approve |
+| Any (Rick) | `siliconimaginations` | `nagasawa94` | Claude reviews in chat; Rick merges |
+
+**Merging without CI green and a passed Gemini review is a process violation.**
 
 ---
 
