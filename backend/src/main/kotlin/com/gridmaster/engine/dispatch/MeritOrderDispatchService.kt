@@ -209,7 +209,7 @@ class MeritOrderDispatchService(
         val combinedSensitivity = inc.sensitivity + abs(dec.sensitivity)
         if (combinedSensitivity < 1e-6) return null
 
-        // Shift to relieve 100% of overload (capped by generator headroom)
+        // Shift by the maximum MW possible given generator headroom on each side
         val incHeadroom = (inc.gen.maxActivePowerMw - (targetMap[inc.genId] ?: 0.0))
         val decHeadroom = ((targetMap[dec.genId] ?: 0.0) - dec.gen.minActivePowerMw)
         val shiftMw = min(incHeadroom, decHeadroom).coerceAtLeast(0.0)

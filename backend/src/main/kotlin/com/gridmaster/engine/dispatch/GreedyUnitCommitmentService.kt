@@ -70,7 +70,7 @@ class GreedyUnitCommitmentService(
                 for (gen in committed) {
                     val capacityWithout =
                         committedCapacity(generators, commitmentState) - gen.maxActivePowerMw
-                    if (capacityWithout < requiredCapacity) break
+                    if (capacityWithout < requiredCapacity) continue // insufficient surplus without this unit; try others
                     val hoursUp = hoursInCurrentState[gen.id] ?: 0
                     if (hoursUp < gen.minUpTimeHours) continue // min up time not met
                     commitmentState[gen.id] = false
