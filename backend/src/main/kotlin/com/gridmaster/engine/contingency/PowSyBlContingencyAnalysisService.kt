@@ -293,13 +293,12 @@ class PowSyBlContingencyAnalysisService(
                         val rating = twt.ratingMva ?: return@forEach
                         val ratingFromA = mvaToAmps(rating, twt.nominalVoltageFromKv)
                         val ratingToA = mvaToAmps(rating, twt.nominalVoltageToKv)
-                        val currentFrom = twt.currentFromA ?: return@forEach
-                        val currentTo = twt.currentToA ?: currentFrom
-                        if (currentFrom / ratingFromA * 100.0 >= thresholds.warningPercent ||
-                            currentTo / ratingToA * 100.0 >= thresholds.warningPercent
-                        ) {
-                            add(twt.id)
-                        }
+                        // Check each side independently — null on one side does not fall back to the other.
+                        val fromOverloaded =
+                            twt.currentFromA?.let { it / ratingFromA * 100.0 >= thresholds.warningPercent } == true
+                        val toOverloaded =
+                            twt.currentToA?.let { it / ratingToA * 100.0 >= thresholds.warningPercent } == true
+                        if (fromOverloaded || toOverloaded) add(twt.id)
                     }
                     snapshot.threeWindingsTransformers.forEach { twt3 ->
                         listOf(
@@ -359,14 +358,17 @@ class PowSyBlContingencyAnalysisService(
                 else -> return null
             }
 
-        val adjustedLimit = lv.limit * ratingMultiplier
+        // Rating multiplier applies only to thermal (current) limits; voltage limits are fixed pu values.
+        val adjustedLimit =
+            if (violationType == ViolationType.THERMAL) lv.limit * ratingMultiplier else lv.limit
         val loadingPercent = lv.value / adjustedLimit * 100.0
         val severity =
             when (violationType) {
                 ViolationType.THERMAL -> thresholds.thermalSeverity(loadingPercent)
+                // voltageSeverity expects the raw p.u. voltage, not a normalised ratio.
                 ViolationType.VOLTAGE_LOW,
                 ViolationType.VOLTAGE_HIGH,
-                -> thresholds.voltageSeverity(lv.value / lv.limit)
+                -> thresholds.voltageSeverity(lv.value)
             } ?: return null
 
         return PostContingencyViolation(
