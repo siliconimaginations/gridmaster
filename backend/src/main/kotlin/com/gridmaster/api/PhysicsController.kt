@@ -77,6 +77,11 @@ class PhysicsController(
      * Power flow is NOT re-run automatically; the caller should follow up with
      * POST /powerflow/run if an immediate updated result is needed.
      *
+     * **Partial application**: if a mutation fails mid-list, earlier mutations in the same
+     * request are already applied and are NOT rolled back. Callers that need atomic multi-mutation
+     * behaviour should send mutations one at a time or clone the session first.
+     * See GitHub issue #34 for tracking transactional mutation support.
+     *
      * Returns the updated [GridNetwork] snapshot (without power-flow results).
      */
     @PostMapping("/network/mutations")
@@ -137,8 +142,10 @@ class PhysicsController(
                 throw PhysicsServiceException(sessionId, "Power flow failed: ${ex.message}", ex)
             }
 
-        session.latestPowerFlowResult = result
-        session.latestSnapshot = result.snapshot
+        synchronized(session) {
+            session.latestPowerFlowResult = result
+            session.latestSnapshot = result.snapshot
+        }
         return result
     }
 
@@ -298,7 +305,7 @@ private fun NetworkMutationDto.toDomain(): NetworkMutation {
             NetworkMutation.SetLoadPower(
                 loadId = targetId,
                 activePowerMw = double("activePowerMw"),
-                reactivePowerMvar = (parameters["reactivePowerMvar"] as? Number)?.toDouble(),
+                reactivePowerMvar = parameters["reactivePowerMvar"]?.let { double("reactivePowerMvar") },
             )
         "CONNECT_LOAD" -> NetworkMutation.ConnectLoad(targetId)
         "DISCONNECT_LOAD" -> NetworkMutation.DisconnectLoad(targetId)
@@ -313,7 +320,7 @@ private fun RunPowerFlowRequest.toDomain(): PowerFlowParameters =
             when (mode.uppercase()) {
                 "AC" -> SolveMode.AC
                 "DC" -> SolveMode.DC
-                else -> throw InvalidMutationException("Unknown solve mode: $mode")
+                else -> throw IllegalArgumentException("Unknown solve mode: $mode")
             },
         distributedSlack = distributedSlack,
         balanceType =
@@ -321,7 +328,7 @@ private fun RunPowerFlowRequest.toDomain(): PowerFlowParameters =
                 "PROPORTIONAL_TO_GENERATION_P_MAX" -> BalanceType.PROPORTIONAL_TO_GENERATION_P_MAX
                 "PROPORTIONAL_TO_GENERATION_REMAINING_MARGIN" -> BalanceType.PROPORTIONAL_TO_GENERATION_REMAINING_MARGIN
                 "PROPORTIONAL_TO_LOAD" -> BalanceType.PROPORTIONAL_TO_LOAD
-                else -> throw InvalidMutationException("Unknown balance type: $balanceType")
+                else -> throw IllegalArgumentException("Unknown balance type: $balanceType")
             },
     )
 
@@ -331,7 +338,7 @@ private fun DispatchRequest.toDomain(): DispatchParameters =
             when (mode.uppercase()) {
                 "MERIT_ORDER" -> DispatchMode.MERIT_ORDER
                 "LP" -> DispatchMode.LP
-                else -> throw InvalidMutationException("Unknown dispatch mode: $mode")
+                else -> throw IllegalArgumentException("Unknown dispatch mode: $mode")
             },
         securityConstrained = securityConstrained,
         reserveMarginFraction = reserveMarginFraction,

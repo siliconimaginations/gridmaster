@@ -41,6 +41,18 @@ class GlobalExceptionHandler {
                 ),
             )
 
+    @ExceptionHandler(IllegalArgumentException::class)
+    fun handleIllegalArgument(ex: IllegalArgumentException): ResponseEntity<ApiErrorResponse> =
+        ResponseEntity
+            .status(HttpStatus.BAD_REQUEST)
+            .body(
+                ApiErrorResponse(
+                    status = 400,
+                    error = "VALIDATION_ERROR",
+                    message = ex.message ?: "Invalid argument",
+                ),
+            )
+
     @ExceptionHandler(MethodArgumentNotValidException::class)
     fun handleValidation(ex: MethodArgumentNotValidException): ResponseEntity<ApiErrorResponse> {
         val msg =
