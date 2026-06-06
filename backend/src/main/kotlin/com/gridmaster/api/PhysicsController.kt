@@ -141,17 +141,20 @@ class PhysicsController(
         val session = sessionStore.get(sessionId)
         val params = request?.toDomain() ?: PowerFlowParameters()
 
+        // Hold the session lock for the entire solve: PowSyBl mutates iidmNetwork in-place
+        // (writes V, θ, I) and the network must not be modified concurrently.
+        // Module 06 (Session Model) will replace this with proper session serialisation.
         val result =
-            try {
-                powerFlowService.solve(session.iidmNetwork, params)
-            } catch (ex: Exception) {
-                throw PhysicsServiceException(sessionId, "Power flow failed: ${ex.message}", ex)
+            synchronized(session) {
+                try {
+                    powerFlowService.solve(session.iidmNetwork, params)
+                } catch (ex: Exception) {
+                    throw PhysicsServiceException(sessionId, "Power flow failed: ${ex.message}", ex)
+                }.also { r ->
+                    session.latestPowerFlowResult = r
+                    session.latestSnapshot = r.snapshot
+                }
             }
-
-        synchronized(session) {
-            session.latestPowerFlowResult = result
-            session.latestSnapshot = result.snapshot
-        }
         return result
     }
 
@@ -194,10 +197,12 @@ class PhysicsController(
         @PathVariable sessionId: String,
     ): ResponseEntity<Void> {
         val session = sessionStore.get(sessionId)
-        contingencyService.triggerAsync(
-            session.iidmNetwork,
-            ContingencyAnalysisParameters(),
-        )
+        // Known limitation (TODO #37): PowSyBl has no Network.copy(); the live iidmNetwork is
+        // passed to the async service. If mutations arrive during the analysis, they may race
+        // with the in-flight solve. Module 06 (Session Model) will fix this by serialising all
+        // physics operations per session via NetworkSerDe round-trip for async isolation.
+        val network = synchronized(session) { session.iidmNetwork }
+        contingencyService.triggerAsync(network, ContingencyAnalysisParameters())
         return ResponseEntity.accepted().build()
     }
 
