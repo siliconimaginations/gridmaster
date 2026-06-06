@@ -180,17 +180,12 @@ class GameSessionService(
     // Helpers
     // -------------------------------------------------------------------------
 
-    // TODO: #42 — use findByIdAndUserId for a single atomic ownership check
     private fun requireOwned(
         sessionId: String,
         userId: String,
-    ): GameSessionEntity {
-        val entity =
-            jpaRepository.findById(sessionId).orElse(null)
-                ?: throw SessionNotFoundException(sessionId)
-        if (entity.userId != userId) throw SessionNotFoundException(sessionId)
-        return entity
-    }
+    ): GameSessionEntity =
+        jpaRepository.findByIdAndUserId(sessionId, userId)
+            ?: throw SessionNotFoundException(sessionId)
 
     private fun serializeNetwork(network: Network): String {
         val baos = ByteArrayOutputStream()

@@ -17,7 +17,6 @@ import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.time.Instant
-import java.util.Optional
 
 private const val USER_ID = "user-abc"
 private const val SESSION_ID = "sess-xyz"
@@ -114,7 +113,7 @@ class GameSessionServiceTest {
 
     @Test
     fun `load returns session and skips re-hydration when already live`() {
-        every { jpaRepository.findById(SESSION_ID) } returns Optional.of(stubEntity())
+        every { jpaRepository.findByIdAndUserId(SESSION_ID, USER_ID) } returns stubEntity()
         every { physicsSessionStore.find(SESSION_ID) } returns
             PhysicsSession(SESSION_ID, mockk(relaxed = true), mockk(relaxed = true))
 
@@ -126,7 +125,7 @@ class GameSessionServiceTest {
 
     @Test
     fun `load re-hydrates PhysicsSessionStore when session not live`() {
-        every { jpaRepository.findById(SESSION_ID) } returns Optional.of(stubEntity())
+        every { jpaRepository.findByIdAndUserId(SESSION_ID, USER_ID) } returns stubEntity()
         every { physicsSessionStore.find(SESSION_ID) } returns null
 
         service.load(SESSION_ID, USER_ID)
@@ -136,7 +135,7 @@ class GameSessionServiceTest {
 
     @Test
     fun `load throws SessionNotFoundException for unknown sessionId`() {
-        every { jpaRepository.findById("bad-id") } returns Optional.empty()
+        every { jpaRepository.findByIdAndUserId("bad-id", USER_ID) } returns null
 
         assertThatThrownBy { service.load("bad-id", USER_ID) }
             .isInstanceOf(SessionNotFoundException::class.java)
@@ -145,7 +144,7 @@ class GameSessionServiceTest {
     @Test
     fun `load throws SessionNotFoundException when session belongs to another user`() {
         val entity = stubEntity().copy(userId = "other-user")
-        every { jpaRepository.findById(SESSION_ID) } returns Optional.of(entity)
+        every { jpaRepository.findByIdAndUserId(SESSION_ID, USER_ID) } returns null
 
         assertThatThrownBy { service.load(SESSION_ID, USER_ID) }
             .isInstanceOf(SessionNotFoundException::class.java)
@@ -157,7 +156,7 @@ class GameSessionServiceTest {
 
     @Test
     fun `delete removes session from DB and PhysicsSessionStore`() {
-        every { jpaRepository.findById(SESSION_ID) } returns Optional.of(stubEntity())
+        every { jpaRepository.findByIdAndUserId(SESSION_ID, USER_ID) } returns stubEntity()
         every { jpaRepository.deleteById(SESSION_ID) } just runs
         every { physicsSessionStore.remove(SESSION_ID) } returns null
 
