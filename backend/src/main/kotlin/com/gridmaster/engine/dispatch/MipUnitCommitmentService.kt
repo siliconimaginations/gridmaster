@@ -150,15 +150,11 @@ class MipUnitCommitmentService(
 
                     // ── Startup indicator: s[g][h] >= y[g][h] - y[g][h-1] ────
                     if (hi == 0) {
-                        // Initial state from generators[gi].committed
+                        // s[g][0] >= y[g][0] - init  →  s[g][0] - y[g][0] >= -init
                         val init = if (gen.committed) 1.0 else 0.0
-                        val sc = solver.makeConstraint(-Double.MAX_VALUE, init, "startup_${gi}_0")
+                        val sc = solver.makeConstraint(-init, Double.MAX_VALUE, "startup_${gi}_0")
                         sc.setCoefficient(s[gi][0], 1.0)
                         sc.setCoefficient(y[gi][0], -1.0)
-                        // Negate: s[g][0] >= y[g][0] - init  →  s[g][0] - y[g][0] >= -init
-                        val sc2 = solver.makeConstraint(-init, Double.MAX_VALUE, "startup2_${gi}_0")
-                        sc2.setCoefficient(s[gi][0], 1.0)
-                        sc2.setCoefficient(y[gi][0], -1.0)
                     } else {
                         // s[g][h] >= y[g][h] - y[g][h-1]  →  s[g][h] - y[g][h] + y[g][h-1] >= 0
                         val sc = solver.makeConstraint(0.0, Double.MAX_VALUE, "startup_${gi}_$hi")
@@ -168,7 +164,8 @@ class MipUnitCommitmentService(
                     }
 
                     // ── Min up time ───────────────────────────────────────────
-                    if (gen.minUpTimeHours > 1 && hi > 0) {
+                    // Include hi=0: s[g][0] already encodes the startup from initial state.
+                    if (gen.minUpTimeHours > 1) {
                         val endH = minOf(hi + gen.minUpTimeHours - 1, h - 1)
                         // Σ_{t=hi}^{endH} y[g][t] >= minUp * s[g][hi]
                         val minUp = solver.makeConstraint(0.0, Double.MAX_VALUE, "minup_${gi}_$hi")
@@ -177,19 +174,25 @@ class MipUnitCommitmentService(
                     }
 
                     // ── Min down time ─────────────────────────────────────────
-                    if (gen.minDownTimeHours > 1 && hi > 0) {
+                    // Constraint: D * (1 + y[hi] - y[hi-1]) >= Σ_{t=hi}^{endH} y[t]
+                    // For hi=0 the initial committed state substitutes for y[hi-1].
+                    if (gen.minDownTimeHours > 1) {
                         val endH = minOf(hi + gen.minDownTimeHours - 1, h - 1)
-                        // Σ_{t=hi}^{endH} (1 - y[g][t]) >= minDown * (y[g][hi-1] - y[g][hi])
-                        // → Σ (1-y[t]) - minDown*(y[h-1]-y[h]) >= 0
-                        val minDown =
-                            solver.makeConstraint(
-                                -(endH - hi + 1).toDouble(),
-                                Double.MAX_VALUE,
-                                "mindown_${gi}_$hi",
-                            )
-                        for (t in hi..endH) minDown.setCoefficient(y[gi][t], -1.0)
-                        minDown.setCoefficient(y[gi][hi - 1], -(endH - hi + 1).toDouble())
-                        minDown.setCoefficient(y[gi][hi], (endH - hi + 1).toDouble())
+                        val windowSize = (endH - hi + 1).toDouble()
+                        if (hi == 0) {
+                            val init = if (gen.committed) 1.0 else 0.0
+                            // lb = windowSize*(init-1); y[hi-1] is a constant so it shifts the bound
+                            val minDown =
+                                solver.makeConstraint(windowSize * (init - 1.0), Double.MAX_VALUE, "mindown_${gi}_0")
+                            for (t in 1..endH) minDown.setCoefficient(y[gi][t], -1.0)
+                            minDown.setCoefficient(y[gi][0], windowSize)
+                        } else {
+                            val minDown =
+                                solver.makeConstraint(-windowSize, Double.MAX_VALUE, "mindown_${gi}_$hi")
+                            for (t in hi..endH) minDown.setCoefficient(y[gi][t], -1.0)
+                            minDown.setCoefficient(y[gi][hi - 1], -windowSize)
+                            minDown.setCoefficient(y[gi][hi], windowSize)
+                        }
                     }
                 }
             }

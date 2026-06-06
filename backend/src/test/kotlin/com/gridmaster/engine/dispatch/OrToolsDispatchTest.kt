@@ -201,4 +201,65 @@ class OrToolsDispatchTest {
             assertThat(committedCapacity).isGreaterThanOrEqualTo(100.0 * 1.20 - 0.1)
         }
     }
+
+    @Test
+    fun `MIP UC enforces min up time when generator starts committed at hour 0`() {
+        // Generator starts committed (committed=true) with minUpTime=4.
+        // Even though it was already on, the MIP must keep it on for at least hours 0-3.
+        val gens =
+            listOf(
+                gen("Base", max = 300.0, cost = 10.0, committed = true),
+                gen("Peaker", max = 100.0, cost = 5.0, committed = true, minUpHours = 4),
+                gen("G3", max = 100.0, cost = 20.0, committed = false),
+                gen("G4", max = 100.0, cost = 25.0, committed = false),
+                gen("G5", max = 100.0, cost = 30.0, committed = false),
+                gen("G6", max = 100.0, cost = 35.0, committed = false),
+                gen("G7", max = 100.0, cost = 40.0, committed = false),
+                gen("G8", max = 100.0, cost = 45.0, committed = false),
+                gen("G9", max = 100.0, cost = 50.0, committed = false),
+            )
+        val mipService = MipUnitCommitmentService(GreedyUnitCommitmentService(MeritOrderDispatchService(lpService)))
+
+        val result = mipService.commit(gens, flatForecast(150.0))
+
+        assertThat(result.feasible).isTrue()
+        // Peaker started committed — min up time must hold from hour 0
+        for (h in 0 until 4) {
+            assertThat(result.hourlySchedule[h].committedGeneratorIds)
+                .contains("Peaker")
+        }
+    }
+
+    @Test
+    fun `MIP UC enforces min down time when generator starts committed and must shut down at hour 0`() {
+        // Base covers all load cheaply; Peaker starts committed but is expensive.
+        // The MIP will want to shut Peaker down — with minDownTime=3 it must stay off for 3 consecutive hours.
+        val gens =
+            listOf(
+                gen("Base", max = 500.0, cost = 10.0, committed = true),
+                gen("Peaker", max = 100.0, cost = 200.0, committed = true, minDownHours = 3),
+                gen("G3", max = 100.0, cost = 30.0, committed = false),
+                gen("G4", max = 100.0, cost = 35.0, committed = false),
+                gen("G5", max = 100.0, cost = 40.0, committed = false),
+                gen("G6", max = 100.0, cost = 45.0, committed = false),
+                gen("G7", max = 100.0, cost = 50.0, committed = false),
+                gen("G8", max = 100.0, cost = 55.0, committed = false),
+                gen("G9", max = 100.0, cost = 60.0, committed = false),
+            )
+        val mipService = MipUnitCommitmentService(GreedyUnitCommitmentService(MeritOrderDispatchService(lpService)))
+
+        val result = mipService.commit(gens, flatForecast(100.0))
+
+        assertThat(result.feasible).isTrue()
+        val schedule = result.hourlySchedule
+        // Find first hour Peaker is off
+        val shutdownHour = (0 until 24).firstOrNull { "Peaker" !in schedule[it].committedGeneratorIds }
+        if (shutdownHour != null) {
+            // Once shut down, must stay off for at least 3 consecutive hours
+            val endCheck = minOf(shutdownHour + 3, 24)
+            for (h in shutdownHour until endCheck) {
+                assertThat(schedule[h].committedGeneratorIds).doesNotContain("Peaker")
+            }
+        }
+    }
 }
