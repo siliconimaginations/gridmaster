@@ -46,6 +46,7 @@ dependencies {
 
     // Coroutines — NetworkRepository methods are suspend; IO wrapping in SqliteNetworkRepository
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
+    implementation("com.google.ortools:ortools-java:9.10.4067")
     // SQLite
     runtimeOnly("org.xerial:sqlite-jdbc:3.45.2.0")
     runtimeOnly("org.hibernate.orm:hibernate-community-dialects:6.4.4.Final")
