@@ -46,9 +46,13 @@ data class CreateSessionRequest(
 data class IssueTokenRequest(
     /**
      * Stable player UUID from a previous token. Leave blank on first launch.
-     * TODO: #43 add @Pattern(UUID) validation to enforce UUID format.
+     * Must be a valid UUID (8-4-4-4-12 hex) when provided.
      */
-    @field:Size(max = 64)
+    @field:Pattern(
+        regexp = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
+        message = "userId must be a valid UUID",
+    )
+    @field:Size(max = 36)
     val userId: String? = null,
 )
 

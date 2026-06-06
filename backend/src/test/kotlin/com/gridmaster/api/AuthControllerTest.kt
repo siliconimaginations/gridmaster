@@ -47,7 +47,7 @@ class AuthControllerTest {
 
     @Test
     fun `POST auth token with existing userId returns token for that user`() {
-        val userId = "existing-user-uuid"
+        val userId = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
         every { jwtService.issue(userId) } returns "reissued.jwt"
 
         val body = """{"userId":"$userId"}"""
@@ -67,6 +67,27 @@ class AuthControllerTest {
 
         mvc.post("/api/auth/token")
             .andExpect { status { isOk() } }
+    }
+
+    @Test
+    fun `POST auth token with non-UUID userId returns 400`() {
+        mvc.post("/api/auth/token") {
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"userId":"not-a-uuid"}"""
+        }.andExpect {
+            status { isBadRequest() }
+        }
+    }
+
+    @Test
+    fun `POST auth token with empty string userId returns 400`() {
+        // Clients must pass null or omit the field entirely; empty string is not a valid UUID
+        mvc.post("/api/auth/token") {
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"userId":""}"""
+        }.andExpect {
+            status { isBadRequest() }
+        }
     }
 
     @TestConfiguration
