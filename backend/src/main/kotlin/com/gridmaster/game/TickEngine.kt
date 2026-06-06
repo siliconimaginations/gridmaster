@@ -22,7 +22,7 @@ interface TickEngine {
      * Register the session and start the tick loop.
      *
      * @throws IllegalArgumentException if [multiplier] is outside 1–100.
-     * @throws IllegalStateException if the session is already running or stopped.
+     * @throws IllegalStateException if the session is already active (running, paused, or slow).
      */
     fun start(
         sessionId: String,
