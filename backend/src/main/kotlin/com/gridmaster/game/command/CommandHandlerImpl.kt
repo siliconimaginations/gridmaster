@@ -278,6 +278,8 @@ class CommandHandlerImpl(
             )
 
             // Trigger async N-1 if topology changed.
+            // TODO: #38 — NetworkSerDe round-trip is correct but O(network size); evaluate
+            //   PowSyBl-native deep copy once compatibility with our BOM is confirmed.
             if (mutations.any { it.isTopologyChange() }) {
                 val networkCopy =
                     ByteArrayOutputStream()
@@ -495,7 +497,13 @@ class CommandHandlerImpl(
             is PlayerCommand.ConnectElement ->
                 when (command.elementType) {
                     EquipmentType.LINE -> listOf(NetworkMutation.ConnectLine(command.elementId))
-                    else -> listOf(NetworkMutation.ConnectGenerator(command.elementId))
+                    // Generators are connected via CommitGenerator; buses and transformers
+                    // do not have a direct connect mutation in the current domain model.
+                    else ->
+                        throw IllegalArgumentException(
+                            "ConnectElement is not supported for equipment type ${command.elementType}. " +
+                                "Use CommitGenerator to connect a generator.",
+                        )
                 }
 
             is PlayerCommand.SetTapPosition ->
