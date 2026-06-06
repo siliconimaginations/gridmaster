@@ -77,11 +77,8 @@ class TickEngineImpl(
         userId: String,
     ) {
         val gameSession = gameSessionService.load(sessionId, userId)
-        check(sessions[sessionId]?.clockState !in setOf(ClockState.RUNNING, ClockState.SLOW)) {
-            "Session $sessionId is already running"
-        }
-        check(sessions[sessionId]?.clockState != ClockState.STOPPED) {
-            "Session $sessionId is stopped and cannot be restarted"
+        check(sessionId !in sessions) {
+            "Session $sessionId is already active. Use /resume if paused, or /stop then re-create if stopped."
         }
 
         val runtime =
@@ -272,7 +269,7 @@ class TickEngineImpl(
                     SLIP_PAUSE_THRESHOLD,
                 )
                 runtime.clockState = ClockState.PAUSED
-                saveRuntime(runtime)
+                engineScope.launch(Dispatchers.IO) { saveRuntime(runtime) }
                 return
             }
         } else {
