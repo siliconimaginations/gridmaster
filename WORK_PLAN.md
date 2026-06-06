@@ -7,6 +7,7 @@ Educational power grid game with client-server architecture.
 - **Frontend**: Vite + React + TypeScript + Babylon.js 7
 - **Repo**: `github.com/siliconimaginations/gridmaster` (private)
 - **Dev process**: UX doc → Engineering spec → Implementation → PR → CI → review → merge
+- **Work queue**: [GitHub Projects board](https://github.com/users/siliconimaginations/projects/2) is authoritative; check it after every merge
 
 ---
 
@@ -17,8 +18,8 @@ Educational power grid game with client-server architecture.
 | 0 | Foundation & Tooling | ✅ Complete |
 | 1 | Physics Engine — design docs | ✅ Complete |
 | 2 | UX Design Docs | ✅ Complete |
-| 3 | Game Engine Core — implementation | 🔜 Next |
-| 4 | 3D Visualization — implementation | 🔜 After 3 |
+| 3 | Game Engine Core — implementation | 🔄 In Progress |
+| 4 | 3D Visualization — implementation | 🔲 Planned |
 | 5 | Tutorial Mode | 🔲 Planned |
 | 6 | Free Play Mode | 🔲 Planned |
 | 7 | Challenge Mode | 🔲 Planned |
@@ -49,11 +50,12 @@ gridmaster/
 │   ├── engineering/            # Per-module engineering specs (.md)
 │   └── ux/                     # UX design documents
 ├── .github/
-│   ├── workflows/
-│   │   └── ci.yml              # Build + lint + test on PR
-│   └── PULL_REQUEST_TEMPLATE.md
+│   ├── badges/                 # Auto-generated coverage badge SVG
+│   └── workflows/
+│       ├── ci.yml              # 5 parallel jobs: lint + test + coverage
+│       └── gemini-review.yml   # AI code review on every PR
 ├── docker-compose.yml
-└── scripts/lint.sh             # ktlint 1.2.1 + ESLint, run before every push
+└── scripts/lint.sh             # ktlint + ESLint, run before every push
 ```
 
 ---
@@ -62,13 +64,15 @@ gridmaster/
 
 Repo live, CI running, local dev works end-to-end.
 
-- GitHub repo + branch protection (main requires PR + review)
+- GitHub repo + branch protection (main requires PR + CI green)
 - Spring Boot skeleton, health endpoint, PowSyBl dependency (BOM `2025.0.2`)
 - Vite + React + TS + Babylon.js skeleton, blank 3D canvas loads
 - SQLite persistence for local dev (designed to swap to Postgres)
-- Single-user auth (hardcoded for now; upgrade to JWT in Stage 5+)
-- GitHub Actions CI: ktlint + ESLint + unit tests on every PR
-- `scripts/lint.sh` for local pre-push checks
+- GitHub Actions CI: 5 parallel jobs — `backend-lint`, `backend-test`, `backend-integration`, `frontend-lint`, `frontend-test`; target wall-clock < 3.5 min
+- Gradle build cache + parallel execution + configuration cache (`backend/gradle.properties`)
+- JaCoCo coverage: 60% overall / 70% changed-files thresholds; badge auto-committed on push to main
+- Gemini AI code review on every PR; blocks merge on 🔴 Critical / 🟠 Major issues
+- `ENGINEERING_PRINCIPLES.md`: shared process rules for all contributors
 
 ---
 
@@ -83,14 +87,14 @@ All 10 backend engineering specs written and merged.
 | `docs/engineering/03-contingency-analysis.md` | N-1 analysis, async background runner |
 | `docs/engineering/04-dispatch.md` | Economic dispatch (LP) + Unit commitment (MIP/OR-Tools) |
 | `docs/engineering/05-physics-api.md` | REST endpoints: network state, commands |
-| `docs/engineering/06-session-model.md` | Session entity, SQLite persistence |
+| `docs/engineering/06-session-model.md` | Session entity, JWT auth, SQLite persistence |
 | `docs/engineering/07-game-clock.md` | Tick engine, speed 1×–100×, pause/resume |
 | `docs/engineering/08-event-engine.md` | Weather/economic/policy events, effect handlers |
 | `docs/engineering/09-command-handler.md` | Player action → validate → physics → new state |
 | `docs/engineering/10-websocket-protocol.md` | Server-push GameStateUpdate each tick |
 
 Key decisions baked into the specs:
-- PowSyBl BOM `com.powsybl:powsybl-dependencies:2025.0.2`
+- PowSyBl BOM `com.powsybl:powsybl-dependencies:2025.0.2` (core 6.7.2, open-loadflow 1.15.2)
 - OR-Tools for UC MIP (SCIP/CBC) and LP dispatch
 - No DC fallback on AC divergence — `NETWORK_FAILURE` event raised
 - Distributed slack bus; `gridMinutesPerTick = 10` (fixed)
@@ -125,44 +129,52 @@ Approved design direction:
 
 ---
 
-## Stage 3 — Backend Implementation 🔜
+## Stage 3 — Backend Implementation 🔄
 
-Implement the physics engine and game engine core. Backend only; frontend runs against mocked or
-stub state until Stage 4.
+Implement the physics engine and game engine core. Backend only; Stage 4 wires the frontend.
 
 ### 3a — Physics Engine
 
-| Submodule | Design Doc | Branch pattern |
-|-----------|-----------|----------------|
-| Network model | `01-network-model.md` | `stage/3/network-model` |
-| Power flow adapter | `02-power-flow.md` | `stage/3/power-flow` |
-| Contingency runner | `03-contingency-analysis.md` | `stage/3/contingency` |
-| Economic dispatch + UC | `04-dispatch.md` | `stage/3/dispatch` |
-| Physics REST API | `05-physics-api.md` | `stage/3/physics-api` |
-| Test fixtures | IEEE 14-bus + IEEE 39-bus IIDM files | `stage/3/test-fixtures` |
+| Submodule | Design Doc | PR | Status |
+|-----------|-----------|-----|--------|
+| Network model | `01-network-model.md` | #15 | ✅ Done |
+| Power flow adapter | `02-power-flow.md` | #21 | ✅ Done |
+| Contingency runner | `03-contingency-analysis.md` | #24 | ✅ Done |
+| Economic dispatch + UC | `04-dispatch.md` | #29 | ✅ Done |
+| Physics REST API | `05-physics-api.md` | #33 | ✅ Done |
 
-Exit criteria: `POST /api/game/powerflow` on IEEE 14-bus returns correct flows; N-1 returns
-critical contingencies; all physics unit tests green.
+Physics exit criteria met: `POST /api/game/powerflow` on IEEE 14-bus returns correct flows; N-1 returns critical contingencies; physics unit tests green.
 
 ### 3b — Game Engine Core
 
-| Submodule | Design Doc | Branch pattern |
-|-----------|-----------|----------------|
-| Session model + persistence | `06-session-model.md` | `stage/3/session-model` |
-| Game clock | `07-game-clock.md` | `stage/3/game-clock` |
-| Event engine | `08-event-engine.md` | `stage/3/event-engine` |
-| Command handler | `09-command-handler.md` | `stage/3/command-handler` |
-| WebSocket state stream | `10-websocket-protocol.md` | `stage/3/websocket` |
+| Submodule | Design Doc | Status |
+|-----------|-----------|--------|
+| Session model + JWT auth | `06-session-model.md` | ✅ Done (PR #41) |
+| Game clock | `07-game-clock.md` | ⬜ Not started |
+| Event engine | `08-event-engine.md` | ⬜ Not started |
+| Command handler | `09-command-handler.md` | ⬜ Not started |
+| WebSocket state stream | `10-websocket-protocol.md` | ⬜ Not started |
 
-Exit criteria: Game clock ticks at configured speed; events fire on schedule; player dispatch
-command updates grid state; new state streams to client over WebSocket within one tick.
+Stage exit criteria: Game clock ticks at configured speed; events fire on schedule; player dispatch command updates grid state; new state streams to client over WebSocket within one tick.
+
+### Open tech-debt items (tracked on board)
+
+| Issue | Title | Priority |
+|-------|-------|----------|
+| #37 | fix(api): async contingency analysis races with concurrent mutations | P2 |
+| #38 | perf(api): replace NetworkSerDe round-trip with PowSyBl-native deep copy | P2 |
+| #40 | fix(api): stricter integer parsing in NetworkMutationDto.toDomain() | P2 |
+| #43 | feat(auth): validate userId format as UUID in IssueTokenRequest | P2 |
+| #46 | feat(game): replace 'ieee14' preset with real IEEE 14-bus XIIDM | P2 |
+
+These will be addressed between or alongside game engine modules as the board dictates.
 
 ---
 
-## Stage 4 — Frontend Implementation 🔜
+## Stage 4 — Frontend Implementation 🔲
 
-3D scene, HUD, and all panels wired to live backend state. Backend from Stage 3 must be
-minimally functional before wiring; scene scaffold can be built in parallel.
+3D scene, HUD, and all panels wired to live backend state. Scene scaffold can be built in parallel
+with Stage 3b.
 
 ### 4a — Babylon.js Scene
 
@@ -202,22 +214,21 @@ minimally functional before wiring; scene scaffold can be built in parallel.
 
 ### 4d — Frontend Art Strategy
 
-No external artists needed for MVP. Work in three phases:
+No external artists needed for MVP.
 
 | Phase | What | How |
 |-------|------|-----|
 | MVP | All grid element meshes (pylons, generators, substations) | Procedural Babylon.js geometry; toon shader makes them look intentional |
 | Polish | Building variety for cities and towns | Free CC0 models from **Kenney.nl** (City Kit, Tiny Town packs) — drop-in `.glb` files |
-| Textures | Terrain grass/dirt, water normal map | AI-generated (Midjourney/DALL-E) using prompts written alongside code |
+| Textures | Terrain grass/dirt, water normal map | AI-generated using prompts written alongside code |
 
 Icons: written as SVG directly. UI animations: Framer Motion (React) + Babylon.js animation groups (scene).
 
-Exit criteria: IEEE 14-bus renders on screen; lines animate power flow; clicking any element opens
-its inspector; HUD updates every tick; dispatch panel opens and submits a command.
+Exit criteria: IEEE 14-bus renders on screen; lines animate power flow; clicking any element opens its inspector; HUD updates every tick; dispatch panel opens and submits a command.
 
 ---
 
-## Stage 5 — Tutorial Mode
+## Stage 5 — Tutorial Mode 🔲
 
 8-mission guided campaign on a 14–20 bus fictional teaching network.
 
@@ -239,9 +250,9 @@ Exit criteria: All 8 missions completable; each teaches its stated concept; prog
 
 ---
 
-## Stage 6 — Free Play Mode
+## Stage 6 — Free Play Mode 🔲
 
-Long-running campaign with organic grid growth and multi-role decisions (~50 → ~500 buses).
+Long-running campaign with organic grid growth (~50 → ~500 buses).
 
 | Submodule | Notes |
 |-----------|-------|
@@ -252,12 +263,11 @@ Long-running campaign with organic grid growth and multi-role decisions (~50 →
 | Policy event cards | "Accept renewable subsidy?" — card-based decisions |
 | Free play seed network | Multi-regional ~50 bus network with expansion zones |
 
-Exit criteria: Session runs 1 simulated year without crash; ≥3 environment event types fire; regions
-unlock organically.
+Exit criteria: Session runs 1 simulated year without crash; ≥3 environment event types fire; regions unlock organically.
 
 ---
 
-## Stage 7 — Challenge Mode
+## Stage 7 — Challenge Mode 🔲
 
 Pre-loaded crisis scenarios, scored resolution.
 
@@ -271,14 +281,13 @@ Exit criteria: ≥3 scenarios completable with correct scoring.
 
 ---
 
-## Stage 8 — Hardening & CI/CD Maturity
+## Stage 8 — Hardening & CI/CD Maturity 🔲
 
 | Submodule | Notes |
 |-----------|-------|
 | Integration tests | Full game loop: clock → event → physics → WebSocket state |
 | Frontend E2E | Playwright: tutorial missions 1–3, challenge launch |
 | Performance profiling | <1000-bus power flow within tick budget |
-| CI enhancements | Coverage reporting, E2E on PR, release tagging |
 | Cloud deploy guide | Docker Compose → cloud-ready config |
 
 ---
@@ -293,5 +302,6 @@ Exit criteria: ≥3 scenarios completable with correct scoring.
 ```
 
 **Branch naming**: `stage/<n>/<short-description>`  
-**PR rules**: linked design doc, lint green, tests added, one reviewer approval required  
+**PR rules**: linked design doc, lint green, tests added; non-critical PRs merge autonomously after CI + Gemini green  
+**Work queue**: always check the [Projects board](https://github.com/users/siliconimaginations/projects/2) after each merge — it is authoritative over this file  
 **Lint**: run `bash scripts/lint.sh` before every push  
