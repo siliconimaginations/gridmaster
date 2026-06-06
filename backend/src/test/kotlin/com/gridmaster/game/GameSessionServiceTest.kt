@@ -178,21 +178,3 @@ class GameSessionServiceTest {
         return baos.toString(Charsets.UTF_8)
     }
 }
-
-// Allow copy() on data class workaround for non-data class entity
-private fun GameSessionEntity.copy(
-    userId: String = this.userId,
-    updatedAt: Instant = this.updatedAt,
-) = GameSessionEntity(
-    id = id,
-    userId = userId,
-    mode = mode,
-    displayName = displayName,
-    iidmXml = iidmXml,
-    gameTimeEpochMinutes = gameTimeEpochMinutes,
-    clockState = clockState,
-    clockSpeedMultiplier = clockSpeedMultiplier,
-    createdAt = createdAt,
-    updatedAt = updatedAt,
-    completedAt = completedAt,
-)

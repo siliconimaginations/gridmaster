@@ -137,20 +137,13 @@ class GameSessionService(
         val existingEntity = requireOwned(sessionId, userId)
 
         val iidmXml = serializeNetwork(physicsSession.iidmNetwork)
-        // TODO: #44 — extract entity copy helper to reduce field-copy boilerplate
         val updated =
-            GameSessionEntity(
-                id = existingEntity.id,
-                userId = existingEntity.userId,
-                mode = existingEntity.mode,
-                displayName = existingEntity.displayName,
+            existingEntity.copy(
                 iidmXml = iidmXml,
                 gameTimeEpochMinutes = gameTimeEpochMinutes,
                 clockState = clockState,
                 clockSpeedMultiplier = clockSpeedMultiplier,
-                createdAt = existingEntity.createdAt,
                 updatedAt = Instant.now(),
-                completedAt = existingEntity.completedAt,
             )
         jpaRepository.save(updated)
         log.debug("Auto-saved session {} at game-time {} min", sessionId, gameTimeEpochMinutes)

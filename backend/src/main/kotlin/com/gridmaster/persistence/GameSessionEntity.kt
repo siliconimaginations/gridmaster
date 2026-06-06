@@ -21,7 +21,7 @@ import java.time.Instant
  */
 @Entity
 @Table(name = "game_sessions")
-class GameSessionEntity(
+data class GameSessionEntity(
     @Id
     val id: String,
     val userId: String,
