@@ -103,8 +103,7 @@ class TickEngineImpl(
         sessionId: String,
         userId: String,
     ): TickClockStatus {
-        val runtime = sessions[sessionId] ?: throw SessionNotFoundException(sessionId)
-        if (runtime.userId != userId) throw SessionNotFoundException(sessionId) // 404 — do not leak ownership
+        val runtime = findAndCheckOwner(sessionId, userId)
         val pausedStatus =
             synchronized(runtime) {
                 check(runtime.clockState in setOf(ClockState.RUNNING, ClockState.SLOW)) {
@@ -122,8 +121,7 @@ class TickEngineImpl(
         sessionId: String,
         userId: String,
     ): TickClockStatus {
-        val runtime = sessions[sessionId] ?: throw SessionNotFoundException(sessionId)
-        if (runtime.userId != userId) throw SessionNotFoundException(sessionId) // 404 — do not leak ownership
+        val runtime = findAndCheckOwner(sessionId, userId)
         val resumedStatus =
             synchronized(runtime) {
                 check(runtime.clockState == ClockState.PAUSED) {
@@ -144,8 +142,7 @@ class TickEngineImpl(
         require(multiplier in 1..MAX_SPEED_MULTIPLIER) {
             "Speed multiplier must be in 1–$MAX_SPEED_MULTIPLIER, got $multiplier"
         }
-        val runtime = sessions[sessionId] ?: throw SessionNotFoundException(sessionId)
-        if (runtime.userId != userId) throw SessionNotFoundException(sessionId) // 404 — do not leak ownership
+        val runtime = findAndCheckOwner(sessionId, userId)
         check(runtime.clockState != ClockState.STOPPED) {
             "Cannot change speed of stopped session $sessionId"
         }
@@ -171,8 +168,7 @@ class TickEngineImpl(
         sessionId: String,
         userId: String,
     ) {
-        val runtime = sessions[sessionId] ?: throw SessionNotFoundException(sessionId)
-        if (runtime.userId != userId) throw SessionNotFoundException(sessionId) // 404 — do not leak ownership
+        val runtime = findAndCheckOwner(sessionId, userId)
         runtime.clockState = ClockState.STOPPED
         runtime.job?.cancel()
         sessions.remove(sessionId)
@@ -339,6 +335,15 @@ class TickEngineImpl(
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
+
+    private fun findAndCheckOwner(
+        sessionId: String,
+        userId: String,
+    ): SessionRuntime {
+        val runtime = sessions[sessionId] ?: throw SessionNotFoundException(sessionId)
+        if (runtime.userId != userId) throw SessionNotFoundException(sessionId) // 404 — do not leak ownership
+        return runtime
+    }
 
     private fun triggerAutoSave(runtime: SessionRuntime) {
         val snapshot = runtime.toStatus()

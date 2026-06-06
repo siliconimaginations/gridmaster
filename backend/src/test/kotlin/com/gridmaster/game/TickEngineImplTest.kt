@@ -269,6 +269,31 @@ class TickEngineImplTest {
         }
 
     // -------------------------------------------------------------------------
+    // Slip detection
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `engine auto-pauses after SLIP_PAUSE_THRESHOLD consecutive slipping ticks`() {
+        runBlocking {
+            // At 100× the slot is 10ms. Mock solve to take 20ms — every tick slips.
+            every { powerFlowService.solve(any()) } answers {
+                Thread.sleep(20) // block for longer than the 10ms slot
+                convergedResult()
+            }
+            every { gameSessionService.load(sessionId, userId) } returns buildGameSession(multiplier = 100)
+            engine.start(sessionId, userId)
+            engine.setSpeed(sessionId, userId, 100)
+
+            // SLIP_PAUSE_THRESHOLD = 10 slips × ~20ms each = ~200ms. Wait 1s to be safe.
+            delay(1000)
+
+            val status = engine.clockStatus(sessionId)
+            assertThat(status).isNotNull
+            assertThat(status!!.clockState).isEqualTo(ClockState.PAUSED)
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // slotMillis helper
     // -------------------------------------------------------------------------
 
