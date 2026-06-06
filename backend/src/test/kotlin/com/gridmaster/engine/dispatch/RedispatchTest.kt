@@ -77,7 +77,7 @@ class RedispatchTest {
     }
 
     @Test
-    fun `additional cost is positive when expensive generator increased`() {
+    fun `additional cost is negative when redispatching from expensive to cheap generator`() {
         val generators =
             listOf(
                 gen("Cheap", min = 0.0, max = 200.0, currentMw = 50.0, cost = 20.0),

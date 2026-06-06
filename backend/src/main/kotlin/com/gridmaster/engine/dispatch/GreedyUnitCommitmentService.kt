@@ -46,6 +46,10 @@ class GreedyUnitCommitmentService(
                 val loadMw = forecast.hourlyLoadMw[hour]
                 val requiredCapacity = loadMw * (1.0 + parameters.reserveMarginFraction)
 
+                // Capture generators committed before this hour's commit step so that
+                // newly-committed generators are not immediately de-committed in the same hour.
+                val initiallyCommittedIds = commitmentState.filterValues { it }.keys.toSet()
+
                 // Commit generators until capacity requirement is met.
                 // Track capacity incrementally (O(N) per hour, not O(N²)).
                 val uncommitted =
@@ -65,9 +69,10 @@ class GreedyUnitCommitmentService(
                 }
 
                 // Try decommitting expensive generators if surplus capacity allows.
-                // Maintain running capacity to avoid recomputing it each iteration.
+                // Only consider generators that were committed before this hour's commit step
+                // to avoid de-committing a generator that was just committed (wasted startup cost).
                 val committed =
-                    generators.filter { commitmentState.getValue(it.id) }
+                    generators.filter { it.id in initiallyCommittedIds }
                         .sortedByDescending { it.marginalCostPerMwh }
 
                 var runningCapacity = currentCapacity
