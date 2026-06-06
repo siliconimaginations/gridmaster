@@ -92,15 +92,16 @@ class PhysicsController(
         val session = sessionStore.get(sessionId)
         val mutations = request.mutations.map { it.toDomain() }
 
-        for (mutation in mutations) {
-            networkMapper.applyMutation(session.iidmNetwork, mutation)
-                .getOrElse { ex ->
-                    throw InvalidMutationException(ex.message ?: "Mutation failed: $mutation")
+        val updated =
+            synchronized(session) {
+                for (mutation in mutations) {
+                    networkMapper.applyMutation(session.iidmNetwork, mutation)
+                        .getOrElse { ex ->
+                            throw InvalidMutationException(ex.message ?: "Mutation failed: $mutation")
+                        }
                 }
-        }
-
-        val updated = networkMapper.toGridNetwork(session.iidmNetwork)
-        session.latestSnapshot = updated
+                networkMapper.toGridNetwork(session.iidmNetwork).also { session.latestSnapshot = it }
+            }
         return updated
     }
 
@@ -221,7 +222,7 @@ class PhysicsController(
                 throw PhysicsServiceException(sessionId, "Dispatch failed: ${ex.message}", ex)
             }
 
-        session.latestDispatchResult = result
+        synchronized(session) { session.latestDispatchResult = result }
         return result
     }
 
@@ -257,7 +258,7 @@ class PhysicsController(
                 throw PhysicsServiceException(sessionId, "Unit commitment failed: ${ex.message}", ex)
             }
 
-        session.latestUcResult = result
+        synchronized(session) { session.latestUcResult = result }
         return result
     }
 }
@@ -305,7 +306,15 @@ private fun NetworkMutationDto.toDomain(): NetworkMutation {
             NetworkMutation.SetLoadPower(
                 loadId = targetId,
                 activePowerMw = double("activePowerMw"),
-                reactivePowerMvar = parameters["reactivePowerMvar"]?.let { double("reactivePowerMvar") },
+                // TODO: #34 — consider unifying all parameter parsing into a single robust helper
+                reactivePowerMvar =
+                    parameters["reactivePowerMvar"]?.let { v ->
+                        when (v) {
+                            is Number -> v.toDouble()
+                            is String -> v.toDoubleOrNull()
+                            else -> null
+                        }
+                    },
             )
         "CONNECT_LOAD" -> NetworkMutation.ConnectLoad(targetId)
         "DISCONNECT_LOAD" -> NetworkMutation.DisconnectLoad(targetId)
