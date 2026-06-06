@@ -18,7 +18,6 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 import java.util.concurrent.ConcurrentHashMap
 
-
 // Extracts the common severity from either NetworkViolation subtype.
 private val NetworkViolation.severity: ViolationSeverity
     get() =
@@ -51,7 +50,6 @@ private val NetworkViolation.severity: ViolationSeverity
  * [ViolationSeverity.CRITICAL] violation is detected the clock drops to 1× and
  * [ClockState.SLOW]. It restores automatically when the condition clears.
  */
-
 
 @Component
 class TickEngineImpl(
