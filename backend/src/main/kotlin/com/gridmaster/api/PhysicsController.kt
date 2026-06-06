@@ -76,16 +76,13 @@ class PhysicsController(
     }
 
     /**
-     * POST /api/sessions/{sessionId}/network/mutations — apply one or more mutations.
+     * POST /api/sessions/{sessionId}/network/mutations — apply one or more mutations atomically.
      *
-     * Mutations are applied sequentially to the live IIDM network.
-     * Power flow is NOT re-run automatically; the caller should follow up with
-     * POST /powerflow/run if an immediate updated result is needed.
+     * All mutations in the request are applied as a single atomic unit: either every mutation
+     * succeeds and the network is updated, or the first failure triggers a full rollback to the
+     * pre-request state and a 400 is returned. No partial application occurs.
      *
-     * **Partial application**: if a mutation fails mid-list, earlier mutations in the same
-     * request are already applied and are NOT rolled back. Callers that need atomic multi-mutation
-     * behaviour should send mutations one at a time or clone the session first.
-     * See GitHub issue #34 for tracking transactional mutation support.
+     * Power flow is NOT re-run automatically; follow up with POST /powerflow/run if needed.
      *
      * Returns the updated [GridNetwork] snapshot (without power-flow results).
      */
@@ -99,12 +96,27 @@ class PhysicsController(
 
         val updated =
             synchronized(session) {
-                for (mutation in mutations) {
-                    networkMapper.applyMutation(session.iidmNetwork, mutation)
-                        .getOrElse { ex ->
-                            throw InvalidMutationException(ex.message ?: "Mutation failed: $mutation")
-                        }
+                // Snapshot the live network before applying any mutations so we can
+                // roll back atomically if one of them fails mid-list.
+                val snapshot =
+                    java.io.ByteArrayOutputStream()
+                        .also { com.powsybl.iidm.serde.NetworkSerDe.write(session.iidmNetwork, it) }
+                        .toByteArray()
+
+                try {
+                    for (mutation in mutations) {
+                        networkMapper.applyMutation(session.iidmNetwork, mutation)
+                            .getOrElse { ex ->
+                                throw InvalidMutationException(ex.message ?: "Mutation failed: $mutation")
+                            }
+                    }
+                } catch (ex: InvalidMutationException) {
+                    // Restore network to pre-request state before surfacing the error
+                    session.iidmNetwork =
+                        com.powsybl.iidm.serde.NetworkSerDe.read(java.io.ByteArrayInputStream(snapshot))
+                    throw ex
                 }
+
                 networkMapper.toGridNetwork(session.iidmNetwork).also { session.latestSnapshot = it }
             }
         return updated

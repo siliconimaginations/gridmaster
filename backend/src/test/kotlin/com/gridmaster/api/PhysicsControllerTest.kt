@@ -25,6 +25,7 @@ import com.gridmaster.engine.powerflow.SolveMode
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -171,6 +172,39 @@ class PhysicsControllerTest {
             contentType = MediaType.APPLICATION_JSON
             content = """{"mutations":[]}"""
         }.andExpect { status { isBadRequest() } }
+    }
+
+    @Test
+    fun `POST mutations rolls back network when second mutation fails`() {
+        val iidmNetwork = mockSession.iidmNetwork
+        val originalNetworkRef = mockSession.iidmNetwork
+
+        // First mutation succeeds, second fails
+        every {
+            networkMapper.applyMutation(any(), any<NetworkMutation.SetGeneratorOutput>())
+        } returns Result.success(iidmNetwork)
+        every {
+            networkMapper.applyMutation(any(), any<NetworkMutation.TripLine>())
+        } returns Result.failure(RuntimeException("Line not found"))
+
+        val body = """{"mutations":[
+            {"type":"SET_GENERATOR_OUTPUT","targetId":"G1","parameters":{"targetPMw":90.0}},
+            {"type":"TRIP_LINE","targetId":"nonexistent-line"}
+        ]}"""
+
+        mvc.post("$BASE/network/mutations") {
+            contentType = MediaType.APPLICATION_JSON
+            content = body
+        }.andExpect {
+            status { isBadRequest() }
+        }
+
+        // Network was restored from snapshot — iidmNetwork is now a deserialized replacement,
+        // not the original object. The snapshot was taken before any mutations ran.
+        assertThat(mockSession.iidmNetwork).isNotSameAs(originalNetworkRef)
+
+        // Session snapshot was not updated — latestSnapshot still points to the pre-request value
+        assertThat(mockSession.latestSnapshot).isSameAs(mockSnapshot)
     }
 
     // -----------------------------------------------------------------------
