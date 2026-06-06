@@ -197,12 +197,17 @@ class PhysicsController(
         @PathVariable sessionId: String,
     ): ResponseEntity<Void> {
         val session = sessionStore.get(sessionId)
-        // Known limitation (TODO #37): PowSyBl has no Network.copy(); the live iidmNetwork is
-        // passed to the async service. If mutations arrive during the analysis, they may race
-        // with the in-flight solve. Module 06 (Session Model) will fix this by serialising all
-        // physics operations per session via NetworkSerDe round-trip for async isolation.
-        val network = synchronized(session) { session.iidmNetwork }
-        contingencyService.triggerAsync(network, ContingencyAnalysisParameters())
+        // Produce an isolated network snapshot via IIDM XML round-trip under the session lock.
+        // This ensures the async analysis works on a frozen copy; subsequent mutations on
+        // session.iidmNetwork will not corrupt the in-flight solve.
+        // Module 06 (Session Model) will own this pattern centrally — see issue #37.
+        val networkSnapshot =
+            synchronized(session) {
+                val baos = java.io.ByteArrayOutputStream()
+                com.powsybl.iidm.serde.NetworkSerDe.write(session.iidmNetwork, baos)
+                com.powsybl.iidm.serde.NetworkSerDe.read(java.io.ByteArrayInputStream(baos.toByteArray()))
+            }
+        contingencyService.triggerAsync(networkSnapshot, ContingencyAnalysisParameters())
         return ResponseEntity.accepted().build()
     }
 
@@ -340,14 +345,14 @@ private fun NetworkMutationDto.toDomain(): NetworkMutation {
 private fun RunPowerFlowRequest.toDomain(): PowerFlowParameters =
     PowerFlowParameters(
         mode =
-            when (mode.uppercase()) {
+            when (mode.uppercase(java.util.Locale.ROOT)) {
                 "AC" -> SolveMode.AC
                 "DC" -> SolveMode.DC
                 else -> throw IllegalArgumentException("Unknown solve mode: $mode")
             },
         distributedSlack = distributedSlack,
         balanceType =
-            when (balanceType.uppercase()) {
+            when (balanceType.uppercase(java.util.Locale.ROOT)) {
                 "PROPORTIONAL_TO_GENERATION_P_MAX" -> BalanceType.PROPORTIONAL_TO_GENERATION_P_MAX
                 "PROPORTIONAL_TO_GENERATION_REMAINING_MARGIN" -> BalanceType.PROPORTIONAL_TO_GENERATION_REMAINING_MARGIN
                 "PROPORTIONAL_TO_LOAD" -> BalanceType.PROPORTIONAL_TO_LOAD
@@ -358,7 +363,7 @@ private fun RunPowerFlowRequest.toDomain(): PowerFlowParameters =
 private fun DispatchRequest.toDomain(): DispatchParameters =
     DispatchParameters(
         mode =
-            when (mode.uppercase()) {
+            when (mode.uppercase(java.util.Locale.ROOT)) {
                 "MERIT_ORDER" -> DispatchMode.MERIT_ORDER
                 "LP" -> DispatchMode.LP
                 else -> throw IllegalArgumentException("Unknown dispatch mode: $mode")

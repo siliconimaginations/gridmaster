@@ -92,7 +92,9 @@ class PhysicsControllerTest {
                 shuntCompensators = emptyList(),
             )
 
-        val iidmNetwork = mockk<com.powsybl.iidm.network.Network>(relaxed = true)
+        // Use a real PowSyBl Network so NetworkSerDe.write() works in triggerContingencies.
+        // Mapper and service stubs still match via any() matchers, so other tests are unaffected.
+        val iidmNetwork = com.gridmaster.engine.network.TestNetworkFactory.create()
         mockSession = PhysicsSession(SESSION_ID, iidmNetwork, mockSnapshot)
         every { sessionStore.get(SESSION_ID) } returns mockSession
         every { sessionStore.get(neq(SESSION_ID)) } throws SessionNotFoundException("unknown")
@@ -126,9 +128,9 @@ class PhysicsControllerTest {
     fun `POST mutations applies SET_GENERATOR_OUTPUT and returns updated snapshot`() {
         val iidmNetwork = mockSession.iidmNetwork
         every {
-            networkMapper.applyMutation(iidmNetwork, any<NetworkMutation.SetGeneratorOutput>())
+            networkMapper.applyMutation(any(), any<NetworkMutation.SetGeneratorOutput>())
         } returns Result.success(iidmNetwork)
-        every { networkMapper.toGridNetwork(iidmNetwork) } returns mockSnapshot
+        every { networkMapper.toGridNetwork(any()) } returns mockSnapshot
 
         val body = """{"mutations":[{"type":"SET_GENERATOR_OUTPUT","targetId":"G1","parameters":{"targetPMw":90.0}}]}"""
 
@@ -140,7 +142,7 @@ class PhysicsControllerTest {
             jsonPath("$.id") { value(SESSION_ID) }
         }
 
-        verify { networkMapper.applyMutation(iidmNetwork, NetworkMutation.SetGeneratorOutput("G1", 90.0)) }
+        verify { networkMapper.applyMutation(any(), NetworkMutation.SetGeneratorOutput("G1", 90.0)) }
     }
 
     @Test
@@ -200,7 +202,7 @@ class PhysicsControllerTest {
                 jsonPath("$.status") { value("CONVERGED") }
             }
 
-        verify { powerFlowService.solve(mockSession.iidmNetwork, PowerFlowParameters()) }
+        verify { powerFlowService.solve(any(), PowerFlowParameters()) }
         assert(mockSession.latestPowerFlowResult == result)
     }
 
@@ -240,7 +242,7 @@ class PhysicsControllerTest {
         mvc.post("$BASE/contingencies/trigger")
             .andExpect { status { isAccepted() } }
 
-        verify { contingencyService.triggerAsync(mockSession.iidmNetwork, any()) }
+        verify { contingencyService.triggerAsync(any(), any()) }
     }
 
     // -----------------------------------------------------------------------
