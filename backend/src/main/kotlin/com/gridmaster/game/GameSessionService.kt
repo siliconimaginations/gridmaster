@@ -137,6 +137,7 @@ class GameSessionService(
         val existingEntity = requireOwned(sessionId, userId)
 
         val iidmXml = serializeNetwork(physicsSession.iidmNetwork)
+        // TODO: #44 — extract entity copy helper to reduce field-copy boilerplate
         val updated =
             GameSessionEntity(
                 id = existingEntity.id,
@@ -179,6 +180,7 @@ class GameSessionService(
     // Helpers
     // -------------------------------------------------------------------------
 
+    // TODO: #42 — use findByIdAndUserId for a single atomic ownership check
     private fun requireOwned(
         sessionId: String,
         userId: String,

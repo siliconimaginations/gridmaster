@@ -44,7 +44,10 @@ data class CreateSessionRequest(
  * when a previous token expires). Omitting it triggers first-launch UUID minting.
  */
 data class IssueTokenRequest(
-    /** Stable player UUID from a previous token. Leave blank on first launch. */
+    /**
+     * Stable player UUID from a previous token. Leave blank on first launch.
+     * TODO: #43 add @Pattern(UUID) validation to enforce UUID format.
+     */
     @field:Size(max = 64)
     val userId: String? = null,
 )
