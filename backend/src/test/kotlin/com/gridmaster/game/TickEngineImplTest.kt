@@ -68,7 +68,7 @@ class TickEngineImplTest {
         every { gameSessionService.load(sessionId, userId) } returns buildGameSession()
         every { gameSessionService.save(any(), any(), any(), any(), any()) } returns buildGameSession()
         every { powerFlowService.solve(any(), any()) } returns convergedResult()
-        justRun { contingencyAnalysisService.triggerAsync(any(), any()) }
+        justRun { contingencyAnalysisService.triggerAsync(any()) }
     }
 
     @AfterEach
@@ -142,7 +142,7 @@ class TickEngineImplTest {
     }
 
     @Test
-    fun `stop then start throws because session was stopped`() {
+    fun `stop unregisters session from engine`() {
         engine.start(sessionId, userId)
         engine.stop(sessionId, userId)
         // After stop, session is removed — start would re-register;

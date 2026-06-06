@@ -228,6 +228,7 @@ class TickEngineImpl(
                 powerFlowService.solve(physicsSession.iidmNetwork)
             } catch (e: Exception) {
                 log.error("Power flow solve failed for session {}, tick {}", runtime.sessionId, ctx.tickNumber, e)
+                // TODO: #64 — transition to PAUSED instead of STOPPED so the player can inspect and resume
                 runtime.clockState = ClockState.STOPPED
                 return
             }

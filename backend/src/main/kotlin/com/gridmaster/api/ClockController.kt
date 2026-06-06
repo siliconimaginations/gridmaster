@@ -50,7 +50,10 @@ class ClockController(private val tickEngine: TickEngine) {
         auth: Authentication,
     ): ResponseEntity<ClockStatusResponse> {
         tickEngine.start(sessionId, auth.name)
-        return ResponseEntity.ok(ClockStatusResponse.from(tickEngine.clockStatus(sessionId)!!))
+        val startStatus =
+            tickEngine.clockStatus(sessionId)
+                ?: return ResponseEntity.notFound().build()
+        return ResponseEntity.ok(ClockStatusResponse.from(startStatus))
     }
 
     /**
@@ -65,7 +68,10 @@ class ClockController(private val tickEngine: TickEngine) {
         auth: Authentication,
     ): ResponseEntity<ClockStatusResponse> {
         tickEngine.pause(sessionId, auth.name)
-        return ResponseEntity.ok(ClockStatusResponse.from(tickEngine.clockStatus(sessionId)!!))
+        val pauseStatus =
+            tickEngine.clockStatus(sessionId)
+                ?: return ResponseEntity.notFound().build()
+        return ResponseEntity.ok(ClockStatusResponse.from(pauseStatus))
     }
 
     /**
@@ -79,7 +85,10 @@ class ClockController(private val tickEngine: TickEngine) {
         auth: Authentication,
     ): ResponseEntity<ClockStatusResponse> {
         tickEngine.resume(sessionId, auth.name)
-        return ResponseEntity.ok(ClockStatusResponse.from(tickEngine.clockStatus(sessionId)!!))
+        val resumeStatus =
+            tickEngine.clockStatus(sessionId)
+                ?: return ResponseEntity.notFound().build()
+        return ResponseEntity.ok(ClockStatusResponse.from(resumeStatus))
     }
 
     /**
@@ -94,7 +103,10 @@ class ClockController(private val tickEngine: TickEngine) {
         auth: Authentication,
     ): ResponseEntity<ClockStatusResponse> {
         tickEngine.setSpeed(sessionId, auth.name, request.multiplier)
-        return ResponseEntity.ok(ClockStatusResponse.from(tickEngine.clockStatus(sessionId)!!))
+        val speedStatus =
+            tickEngine.clockStatus(sessionId)
+                ?: return ResponseEntity.notFound().build()
+        return ResponseEntity.ok(ClockStatusResponse.from(speedStatus))
     }
 
     /**
