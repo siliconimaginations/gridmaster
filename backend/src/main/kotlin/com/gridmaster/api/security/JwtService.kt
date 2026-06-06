@@ -18,13 +18,25 @@ import javax.crypto.SecretKey
  * flow — the server issues a token on first launch and the client stores it. The
  * secret is configured via [gridmaster.auth.jwt-secret]; an insecure default is
  * provided for local dev and **must** be overridden in any shared deployment.
+ *
+ * The constructor validates the secret length eagerly so a misconfigured secret is
+ * caught at startup rather than on the first token operation.
  */
 @Service
 class JwtService(
     @Value("\${gridmaster.auth.jwt-secret}") rawSecret: String,
     @Value("\${gridmaster.auth.jwt-expiry-days:30}") private val expiryDays: Long,
 ) {
-    private val signingKey: SecretKey = Keys.hmacShaKeyFor(rawSecret.toByteArray(Charsets.UTF_8))
+    private val signingKey: SecretKey
+
+    init {
+        val secretBytes = rawSecret.toByteArray(Charsets.UTF_8)
+        require(secretBytes.size >= 32) {
+            "Insecure configuration: gridmaster.auth.jwt-secret must be at least 32 bytes " +
+                "(256 bits) long for HMAC-SHA256. Current length: ${secretBytes.size} bytes."
+        }
+        signingKey = Keys.hmacShaKeyFor(secretBytes)
+    }
 
     /**
      * Issue a JWT for [userId] valid for [expiryDays] days from now.

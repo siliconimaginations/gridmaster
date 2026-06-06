@@ -40,7 +40,7 @@ class GameSessionServiceTest {
             userId = USER_ID,
             mode = GameMode.TUTORIAL,
             displayName = "My Session",
-            iidmXml = buildMinimalIidmXml(sessionId),
+            iidmXml = buildMinimalIidmXml(),
             gameTimeEpochMinutes = 0L,
             clockState = ClockState.PAUSED,
             clockSpeedMultiplier = 1,
@@ -172,7 +172,7 @@ class GameSessionServiceTest {
     // -----------------------------------------------------------------------
 
     /** Produce a valid (but tiny) IIDM XML that PowSyBl can deserialise. */
-    private fun buildMinimalIidmXml(networkId: String): String {
+    private fun buildMinimalIidmXml(): String {
         // Use PresetNetworkFactory to build a real IIDM so load() round-trips.
         val baos = java.io.ByteArrayOutputStream()
         com.powsybl.iidm.serde.NetworkSerDe.write(PresetNetworkFactory.create("tutorial"), baos)
