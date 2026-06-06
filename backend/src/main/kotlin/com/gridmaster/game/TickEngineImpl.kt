@@ -8,6 +8,7 @@ import com.gridmaster.engine.powerflow.NetworkViolation
 import com.gridmaster.engine.powerflow.PowerFlowResult
 import com.gridmaster.engine.powerflow.PowerFlowService
 import com.gridmaster.engine.powerflow.ViolationSeverity
+import com.gridmaster.game.event.EventEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -58,6 +59,7 @@ class TickEngineImpl(
     private val gameSessionService: GameSessionService,
     private val powerFlowService: PowerFlowService,
     private val contingencyAnalysisService: ContingencyAnalysisService,
+    private val eventEngine: EventEngine,
     @Value("\${gridmaster.clock.auto-save-interval:$DEFAULT_AUTO_SAVE_INTERVAL}")
     private val autoSaveInterval: Long,
 ) : TickEngine {
@@ -95,6 +97,7 @@ class TickEngineImpl(
             engineScope.launch {
                 runTickLoop(runtime)
             }
+        eventEngine.register(sessionId)
         log.info("Started tick loop for session {} at {}×", sessionId, runtime.speedMultiplier)
         return runtime.toStatus()
     }
@@ -173,6 +176,7 @@ class TickEngineImpl(
         runtime.clockState = ClockState.STOPPED
         runtime.job?.cancel()
         sessions.remove(sessionId)
+        eventEngine.unregister(sessionId)
         log.info("Stopped tick loop for session {}", sessionId)
     }
 
@@ -260,7 +264,16 @@ class TickEngineImpl(
             contingencyAnalysisService.triggerAsync(physicsSession.iidmNetwork)
         }
 
-        // Step 7: EventEngine.onTick() — wired in Module 08
+        // Step 7: EventEngine.onTick()
+        val firedEvents = eventEngine.onTick(ctx, pfResult.snapshot)
+        if (firedEvents.isNotEmpty()) {
+            log.debug(
+                "EventEngine fired {} events for session {} at t={}min",
+                firedEvents.size,
+                runtime.sessionId,
+                ctx.gameTimeMinutes,
+            )
+        }
         // Step 8: WebSocket broadcast — wired in Module 10
 
         // Step 9: auto-save

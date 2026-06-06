@@ -40,6 +40,7 @@ class TickEngineImplTest {
     private lateinit var gameSessionService: GameSessionService
     private lateinit var powerFlowService: PowerFlowService
     private lateinit var contingencyAnalysisService: ContingencyAnalysisService
+    private lateinit var eventEngine: com.gridmaster.game.event.EventEngine
     private lateinit var engine: TickEngineImpl
 
     private val sessionId = "session-1"
@@ -53,6 +54,7 @@ class TickEngineImplTest {
         gameSessionService = mockk()
         powerFlowService = mockk()
         contingencyAnalysisService = mockk()
+        eventEngine = mockk(relaxed = true)
 
         engine =
             TickEngineImpl(
@@ -60,6 +62,7 @@ class TickEngineImplTest {
                 gameSessionService = gameSessionService,
                 powerFlowService = powerFlowService,
                 contingencyAnalysisService = contingencyAnalysisService,
+                eventEngine = eventEngine,
                 autoSaveInterval = 5L,
             )
 
