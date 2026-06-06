@@ -18,6 +18,15 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 import java.util.concurrent.ConcurrentHashMap
 
+
+// Extracts the common severity from either NetworkViolation subtype.
+private val NetworkViolation.severity: ViolationSeverity
+    get() =
+        when (this) {
+            is NetworkViolation.VoltageViolation -> severity
+            is NetworkViolation.ThermalViolation -> severity
+        }
+
 /**
  * Coroutine-based implementation of [TickEngine].
  *
@@ -43,13 +52,6 @@ import java.util.concurrent.ConcurrentHashMap
  * [ClockState.SLOW]. It restores automatically when the condition clears.
  */
 
-/** Extracts the common severity from either [NetworkViolation] subtype. */
-private val NetworkViolation.severity: ViolationSeverity
-    get() =
-        when (this) {
-            is NetworkViolation.VoltageViolation -> severity
-            is NetworkViolation.ThermalViolation -> severity
-        }
 
 @Component
 class TickEngineImpl(
