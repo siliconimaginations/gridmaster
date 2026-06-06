@@ -205,7 +205,7 @@ class TickEngineImpl(
                 throw e
             }
             log.error("Tick loop failed unexpectedly for session {}", runtime.sessionId, e)
-            runtime.clockState = ClockState.STOPPED
+            synchronized(runtime) { runtime.clockState = ClockState.STOPPED }
         } finally {
             log.debug("Tick loop ended for session {}", runtime.sessionId)
         }
@@ -226,7 +226,7 @@ class TickEngineImpl(
         val physicsSession =
             physicsSessionStore.find(runtime.sessionId) ?: run {
                 log.warn("Session {} no longer in PhysicsSessionStore — stopping clock", runtime.sessionId)
-                runtime.clockState = ClockState.STOPPED
+                synchronized(runtime) { runtime.clockState = ClockState.STOPPED }
                 return
             }
 
@@ -237,7 +237,7 @@ class TickEngineImpl(
             } catch (e: Exception) {
                 log.error("Power flow solve failed for session {}, tick {}", runtime.sessionId, ctx.tickNumber, e)
                 // TODO: #64 — transition to PAUSED instead of STOPPED so the player can inspect and resume
-                runtime.clockState = ClockState.STOPPED
+                synchronized(runtime) { runtime.clockState = ClockState.STOPPED }
                 return
             }
 
@@ -275,7 +275,7 @@ class TickEngineImpl(
                     runtime.sessionId,
                     SLIP_PAUSE_THRESHOLD,
                 )
-                runtime.clockState = ClockState.PAUSED
+                synchronized(runtime) { runtime.clockState = ClockState.PAUSED }
                 triggerAutoSave(runtime)
                 return
             }
