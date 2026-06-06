@@ -27,7 +27,7 @@ interface TickEngine {
     fun start(
         sessionId: String,
         userId: String,
-    )
+    ): TickClockStatus
 
     /**
      * Pause the tick loop. The tick currently in progress completes before the loop halts.
@@ -38,7 +38,7 @@ interface TickEngine {
     fun pause(
         sessionId: String,
         userId: String,
-    )
+    ): TickClockStatus
 
     /**
      * Resume a paused clock.
@@ -48,7 +48,7 @@ interface TickEngine {
     fun resume(
         sessionId: String,
         userId: String,
-    )
+    ): TickClockStatus
 
     /**
      * Change the speed multiplier. Takes effect on the next tick.
@@ -60,7 +60,7 @@ interface TickEngine {
         sessionId: String,
         userId: String,
         multiplier: Int,
-    )
+    ): TickClockStatus
 
     /**
      * Permanently stop the tick loop. The session transitions to [ClockState.STOPPED]
@@ -71,8 +71,15 @@ interface TickEngine {
         userId: String,
     )
 
-    /** Current runtime status, or null if the session is not registered. */
-    fun clockStatus(sessionId: String): TickClockStatus?
+    /**
+     * Current runtime status, or null if the session is not registered.
+     * If [userId] is provided, ownership is verified — returns null if the session
+     * exists but belongs to another user.
+     */
+    fun clockStatus(
+        sessionId: String,
+        userId: String? = null,
+    ): TickClockStatus?
 }
 
 /** Fixed in-game time advance per tick, regardless of speed multiplier. */

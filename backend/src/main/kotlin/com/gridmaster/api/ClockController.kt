@@ -33,7 +33,7 @@ class ClockController(private val tickEngine: TickEngine) {
         auth: Authentication,
     ): ResponseEntity<ClockStatusResponse> {
         val status =
-            tickEngine.clockStatus(sessionId)
+            tickEngine.clockStatus(sessionId, auth.name)
                 ?: return ResponseEntity.notFound().build()
         return ResponseEntity.ok(ClockStatusResponse.from(status))
     }
@@ -49,10 +49,7 @@ class ClockController(private val tickEngine: TickEngine) {
         @PathVariable sessionId: String,
         auth: Authentication,
     ): ResponseEntity<ClockStatusResponse> {
-        tickEngine.start(sessionId, auth.name)
-        val startStatus =
-            tickEngine.clockStatus(sessionId)
-                ?: return ResponseEntity.notFound().build()
+        val startStatus = tickEngine.start(sessionId, auth.name)
         return ResponseEntity.ok(ClockStatusResponse.from(startStatus))
     }
 
@@ -67,10 +64,7 @@ class ClockController(private val tickEngine: TickEngine) {
         @PathVariable sessionId: String,
         auth: Authentication,
     ): ResponseEntity<ClockStatusResponse> {
-        tickEngine.pause(sessionId, auth.name)
-        val pauseStatus =
-            tickEngine.clockStatus(sessionId)
-                ?: return ResponseEntity.notFound().build()
+        val pauseStatus = tickEngine.pause(sessionId, auth.name)
         return ResponseEntity.ok(ClockStatusResponse.from(pauseStatus))
     }
 
@@ -84,10 +78,7 @@ class ClockController(private val tickEngine: TickEngine) {
         @PathVariable sessionId: String,
         auth: Authentication,
     ): ResponseEntity<ClockStatusResponse> {
-        tickEngine.resume(sessionId, auth.name)
-        val resumeStatus =
-            tickEngine.clockStatus(sessionId)
-                ?: return ResponseEntity.notFound().build()
+        val resumeStatus = tickEngine.resume(sessionId, auth.name)
         return ResponseEntity.ok(ClockStatusResponse.from(resumeStatus))
     }
 
@@ -102,10 +93,7 @@ class ClockController(private val tickEngine: TickEngine) {
         @Valid @RequestBody request: SetSpeedRequest,
         auth: Authentication,
     ): ResponseEntity<ClockStatusResponse> {
-        tickEngine.setSpeed(sessionId, auth.name, request.multiplier)
-        val speedStatus =
-            tickEngine.clockStatus(sessionId)
-                ?: return ResponseEntity.notFound().build()
+        val speedStatus = tickEngine.setSpeed(sessionId, auth.name, request.multiplier)
         return ResponseEntity.ok(ClockStatusResponse.from(speedStatus))
     }
 

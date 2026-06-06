@@ -77,7 +77,6 @@ class TickEngineImpl(
         userId: String,
     ) {
         val gameSession = gameSessionService.load(sessionId, userId)
-        // TODO: #69 — use putIfAbsent for atomic check-and-register
         check(!sessions.containsKey(sessionId)) {
             "Session $sessionId is already active. Use /resume if paused, or /stop then re-create if stopped."
         }
@@ -90,12 +89,17 @@ class TickEngineImpl(
                 speedMultiplier = gameSession.clockSpeedMultiplier.coerceIn(1, MAX_SPEED_MULTIPLIER),
                 gameTimeMinutes = gameSession.gameTimeEpochMinutes,
             )
-        sessions[sessionId] = runtime
+        // Atomic check-and-register; see TODO #69 for remaining TOCTOU note.
+        val displaced = sessions.putIfAbsent(sessionId, runtime)
+        check(displaced == null) {
+            "Session $sessionId is already active. Use /resume if paused, or /stop then re-create if stopped."
+        }
         runtime.job =
             engineScope.launch {
                 runTickLoop(runtime)
             }
         log.info("Started tick loop for session {} at {}×", sessionId, runtime.speedMultiplier)
+        return runtime.toStatus()
     }
 
     override fun pause(
@@ -113,6 +117,7 @@ class TickEngineImpl(
             saveRuntime(runtime)
         }
         log.info("Paused session {}", sessionId)
+        return runtime.toStatus()
     }
 
     override fun resume(
@@ -126,6 +131,7 @@ class TickEngineImpl(
         }
         runtime.clockState = ClockState.RUNNING
         log.info("Resumed session {}", sessionId)
+        return runtime.toStatus()
     }
 
     override fun setSpeed(
@@ -154,6 +160,7 @@ class TickEngineImpl(
             }
         }
         log.info("Set speed for session {} to {}×", sessionId, multiplier)
+        return runtime.toStatus()
     }
 
     override fun stop(
@@ -168,15 +175,13 @@ class TickEngineImpl(
         log.info("Stopped tick loop for session {}", sessionId)
     }
 
-    override fun clockStatus(sessionId: String): TickClockStatus? {
+    override fun clockStatus(
+        sessionId: String,
+        userId: String?,
+    ): TickClockStatus? {
         val runtime = sessions[sessionId] ?: return null
-        return TickClockStatus(
-            clockState = runtime.clockState,
-            speedMultiplier = runtime.speedMultiplier,
-            gameTimeMinutes = runtime.gameTimeMinutes,
-            tickCount = runtime.tickCount,
-            autoSlowed = runtime.autoSlowed,
-        )
+        if (userId != null && runtime.userId != userId) return null
+        return runtime.toStatus()
     }
 
     // -------------------------------------------------------------------------
@@ -392,4 +397,14 @@ internal class SessionRuntime(
     /** Speed multiplier to restore when auto-slow clears. */
     @Volatile
     var autoSlowPreviousSpeed: Int? = null
+
+    /** Snapshot of the current state as an immutable [TickClockStatus]. */
+    fun toStatus() =
+        TickClockStatus(
+            clockState = clockState,
+            speedMultiplier = speedMultiplier,
+            gameTimeMinutes = gameTimeMinutes,
+            tickCount = tickCount,
+            autoSlowed = autoSlowed,
+        )
 }
