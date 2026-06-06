@@ -13,10 +13,21 @@ import java.time.Instant
 // Requests
 // -------------------------------------------------------------------------
 
+/**
+ * Request body for `POST /api/sessions`.
+ *
+ * [networkPreset] must be one of the keys in [PresetNetworkFactory.knownPresets].
+ */
 data class CreateSessionRequest(
+    /** Human-readable label for the session; must be non-blank. */
     @field:NotBlank
     val displayName: String,
+    /** Game mode the session will run under. Defaults to [GameMode.TUTORIAL]. */
     val mode: GameMode = GameMode.TUTORIAL,
+    /**
+     * Name of the bundled seed network to load.
+     * Must be lowercase alphanumeric with underscores, max 64 characters.
+     */
     @field:NotBlank
     @field:Pattern(
         regexp = "^[a-z0-9_]+$",
@@ -26,11 +37,14 @@ data class CreateSessionRequest(
     val networkPreset: String = "tutorial",
 )
 
+/**
+ * Request body for `POST /api/auth/token`.
+ *
+ * Supplying a non-blank [userId] re-issues a token for an existing player (used
+ * when a previous token expires). Omitting it triggers first-launch UUID minting.
+ */
 data class IssueTokenRequest(
-    /**
-     * Optional stable player UUID supplied by the client on re-issue.
-     * If omitted or blank, the server mints a new UUID for the first launch.
-     */
+    /** Stable player UUID from a previous token. Leave blank on first launch. */
     @field:Size(max = 64)
     val userId: String? = null,
 )
@@ -39,34 +53,47 @@ data class IssueTokenRequest(
 // Responses
 // -------------------------------------------------------------------------
 
-/** Lightweight summary returned in list responses. */
+/** Lightweight session summary returned in list responses (`GET /api/sessions`). */
 data class SessionSummaryDto(
     val id: String,
     val mode: GameMode,
     val displayName: String,
+    /** Accumulated game-time minutes; useful for displaying session age in the lobby. */
     val gameTimeEpochMinutes: Long,
     val clockState: ClockState,
     val updatedAt: Instant,
 )
 
-/** Full session detail returned on create and GET-by-id. Omits IIDM XML (large). */
+/**
+ * Full session detail returned on create (`POST /api/sessions`) and load
+ * (`GET /api/sessions/{id}`). Omits IIDM XML — callers use the physics API
+ * to query live network state.
+ */
 data class SessionDetailDto(
     val id: String,
+    /** Owning player UUID; matches the `sub` claim in the caller's JWT. */
     val userId: String,
     val mode: GameMode,
     val displayName: String,
     val gameTimeEpochMinutes: Long,
     val clockState: ClockState,
+    /** Speed multiplier last applied to the clock (1–100). */
     val clockSpeedMultiplier: Int,
     val createdAt: Instant,
     val updatedAt: Instant,
+    /** Non-null when the session has reached a terminal state. */
     val completedAt: Instant?,
+    /** Preset names accepted by `POST /api/sessions`. */
     val availablePresets: Set<String> = PresetNetworkFactory.knownPresets,
 )
 
+/** Response body for `POST /api/auth/token`. */
 data class TokenResponse(
+    /** Signed HMAC-SHA256 JWT to be sent as a Bearer token on subsequent requests. */
     val token: String,
+    /** Stable player UUID encoded in the token's `sub` claim. */
     val userId: String,
+    /** Token validity window in days from issuance. */
     val expiresInDays: Long,
 )
 
@@ -74,6 +101,7 @@ data class TokenResponse(
 // Domain → DTO mappers
 // -------------------------------------------------------------------------
 
+/** Map a [GameSession] to a [SessionSummaryDto] suitable for list responses. */
 fun GameSession.toSummaryDto() =
     SessionSummaryDto(
         id = id,
@@ -84,6 +112,7 @@ fun GameSession.toSummaryDto() =
         updatedAt = updatedAt,
     )
 
+/** Map a [GameSession] to a [SessionDetailDto], omitting the raw IIDM XML. */
 fun GameSession.toDetailDto() =
     SessionDetailDto(
         id = id,
