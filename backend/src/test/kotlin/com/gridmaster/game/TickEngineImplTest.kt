@@ -2,6 +2,7 @@ package com.gridmaster.game
 
 import com.gridmaster.api.PhysicsSession
 import com.gridmaster.api.PhysicsSessionStore
+import com.gridmaster.api.SessionNotFoundException
 import com.gridmaster.engine.contingency.ContingencyAnalysisService
 import com.gridmaster.engine.model.GridNetwork
 import com.gridmaster.engine.powerflow.ConvergenceStatus
@@ -181,8 +182,9 @@ class TickEngineImplTest {
 
     @Test
     fun `setSpeed on unregistered session throws`() {
+        // Unregistered session now throws SessionNotFoundException (→ 404 from controller)
         assertThatThrownBy { engine.setSpeed(sessionId, userId, 10) }
-            .isInstanceOf(IllegalStateException::class.java)
+            .isInstanceOf(SessionNotFoundException::class.java)
     }
 
     // -------------------------------------------------------------------------
