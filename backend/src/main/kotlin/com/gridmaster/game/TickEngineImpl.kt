@@ -105,15 +105,17 @@ class TickEngineImpl(
     ): TickClockStatus {
         val runtime = sessions[sessionId] ?: throw SessionNotFoundException(sessionId)
         if (runtime.userId != userId) throw SessionNotFoundException(sessionId) // 404 — do not leak ownership
-        synchronized(runtime) {
-            check(runtime.clockState in setOf(ClockState.RUNNING, ClockState.SLOW)) {
-                "Cannot pause session $sessionId in state ${runtime.clockState}"
+        val pausedStatus =
+            synchronized(runtime) {
+                check(runtime.clockState in setOf(ClockState.RUNNING, ClockState.SLOW)) {
+                    "Cannot pause session $sessionId in state ${runtime.clockState}"
+                }
+                runtime.clockState = ClockState.PAUSED
+                runtime.toStatus()
             }
-            runtime.clockState = ClockState.PAUSED
-        }
         triggerAutoSave(runtime)
         log.info("Paused session {}", sessionId)
-        return runtime.toStatus()
+        return pausedStatus
     }
 
     override fun resume(
@@ -122,14 +124,16 @@ class TickEngineImpl(
     ): TickClockStatus {
         val runtime = sessions[sessionId] ?: throw SessionNotFoundException(sessionId)
         if (runtime.userId != userId) throw SessionNotFoundException(sessionId) // 404 — do not leak ownership
-        synchronized(runtime) {
-            check(runtime.clockState == ClockState.PAUSED) {
-                "Cannot resume session $sessionId in state ${runtime.clockState}"
+        val resumedStatus =
+            synchronized(runtime) {
+                check(runtime.clockState == ClockState.PAUSED) {
+                    "Cannot resume session $sessionId in state ${runtime.clockState}"
+                }
+                runtime.clockState = ClockState.RUNNING
+                runtime.toStatus()
             }
-            runtime.clockState = ClockState.RUNNING
-        }
         log.info("Resumed session {}", sessionId)
-        return runtime.toStatus()
+        return resumedStatus
     }
 
     override fun setSpeed(
@@ -145,20 +149,22 @@ class TickEngineImpl(
         check(runtime.clockState != ClockState.STOPPED) {
             "Cannot change speed of stopped session $sessionId"
         }
-        synchronized(runtime) {
-            runtime.speedMultiplier = multiplier
-            // If the player manually changes speed, clear any active auto-slow so
-            // applyAutoSlow() cannot overwrite the player's explicit choice.
-            if (runtime.autoSlowed) {
-                runtime.autoSlowed = false
-                runtime.autoSlowPreviousSpeed = null
-                if (runtime.clockState == ClockState.SLOW) {
-                    runtime.clockState = ClockState.RUNNING
+        val speedStatus =
+            synchronized(runtime) {
+                runtime.speedMultiplier = multiplier
+                // If the player manually changes speed, clear any active auto-slow so
+                // applyAutoSlow() cannot overwrite the player's explicit choice.
+                if (runtime.autoSlowed) {
+                    runtime.autoSlowed = false
+                    runtime.autoSlowPreviousSpeed = null
+                    if (runtime.clockState == ClockState.SLOW) {
+                        runtime.clockState = ClockState.RUNNING
+                    }
                 }
+                runtime.toStatus()
             }
-        }
         log.info("Set speed for session {} to {}×", sessionId, multiplier)
-        return runtime.toStatus()
+        return speedStatus
     }
 
     override fun stop(
