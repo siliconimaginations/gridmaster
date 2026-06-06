@@ -92,7 +92,7 @@ tasks.jacocoTestReport {
     reports {
         xml.required = true
         html.required = true
-        csv.required = true   // needed by cicirello/jacoco-badge-generator
+        csv.required = true // needed by cicirello/jacoco-badge-generator
     }
     // Exclude generated/config classes from coverage metrics.
     classDirectories.setFrom(
