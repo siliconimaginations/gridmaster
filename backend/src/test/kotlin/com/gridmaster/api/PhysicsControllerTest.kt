@@ -1,6 +1,9 @@
 package com.gridmaster.api
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.gridmaster.api.security.JwtAuthFilter
+import com.gridmaster.api.security.JwtService
+import com.gridmaster.api.security.SecurityConfig
 import com.gridmaster.engine.contingency.ContingencyAnalysisService
 import com.gridmaster.engine.dispatch.DispatchResult
 import com.gridmaster.engine.dispatch.DispatchService
@@ -28,7 +31,9 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest
 import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Import
 import org.springframework.http.MediaType
+import org.springframework.security.test.context.support.WithMockUser
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.post
@@ -42,6 +47,8 @@ private val BASE = "/api/sessions/$SESSION_ID"
  * Uses [WebMvcTest] for the Spring MVC layer only (no application context).
  */
 @WebMvcTest(PhysicsController::class)
+@Import(SecurityConfig::class, JwtAuthFilter::class)
+@WithMockUser
 class PhysicsControllerTest {
     @Autowired lateinit var mvc: MockMvc
 
@@ -362,5 +369,7 @@ class PhysicsControllerTest {
         @Bean fun dispatchService() = mockk<DispatchService>(relaxed = true)
 
         @Bean fun unitCommitmentService() = mockk<UnitCommitmentService>(relaxed = true)
+
+        @Bean fun jwtService() = mockk<JwtService>(relaxed = true)
     }
 }
