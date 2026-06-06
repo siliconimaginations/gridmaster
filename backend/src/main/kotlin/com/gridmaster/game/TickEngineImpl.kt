@@ -103,14 +103,21 @@ class TickEngineImpl(
         userId: String,
     ): TickClockStatus {
         val runtime = requireRuntime(sessionId)
-        check(runtime.userId == userId) { "User $userId does not own session $sessionId" }
+        if (runtime.userId != userId) throw SessionNotFoundException(sessionId) // 404 — do not leak ownership
         check(runtime.clockState in setOf(ClockState.RUNNING, ClockState.SLOW)) {
             "Cannot pause session $sessionId in state ${runtime.clockState}"
         }
         runtime.clockState = ClockState.PAUSED
-        // Auto-save on pause — fire-and-forget on IO dispatcher
+        // Auto-save on pause — snapshot first so the IO coroutine saves this tick's state.
+        val pauseSnapshot = runtime.toStatus()
         engineScope.launch(Dispatchers.IO) {
-            saveRuntime(runtime)
+            saveSnapshot(
+                sessionId = runtime.sessionId,
+                userId = runtime.userId,
+                gameTimeMinutes = pauseSnapshot.gameTimeMinutes,
+                clockState = pauseSnapshot.clockState,
+                speedMultiplier = pauseSnapshot.speedMultiplier,
+            )
         }
         log.info("Paused session {}", sessionId)
         return runtime.toStatus()
@@ -121,7 +128,7 @@ class TickEngineImpl(
         userId: String,
     ): TickClockStatus {
         val runtime = requireRuntime(sessionId)
-        check(runtime.userId == userId) { "User $userId does not own session $sessionId" }
+        if (runtime.userId != userId) throw SessionNotFoundException(sessionId) // 404 — do not leak ownership
         check(runtime.clockState == ClockState.PAUSED) {
             "Cannot resume session $sessionId in state ${runtime.clockState}"
         }
@@ -139,7 +146,7 @@ class TickEngineImpl(
             "Speed multiplier must be in 1–$MAX_SPEED_MULTIPLIER, got $multiplier"
         }
         val runtime = requireRuntime(sessionId)
-        check(runtime.userId == userId) { "User $userId does not own session $sessionId" }
+        if (runtime.userId != userId) throw SessionNotFoundException(sessionId) // 404 — do not leak ownership
         check(runtime.clockState != ClockState.STOPPED) {
             "Cannot change speed of stopped session $sessionId"
         }
@@ -164,7 +171,7 @@ class TickEngineImpl(
         userId: String,
     ) {
         val runtime = requireRuntime(sessionId)
-        check(runtime.userId == userId) { "User $userId does not own session $sessionId" }
+        if (runtime.userId != userId) throw SessionNotFoundException(sessionId) // 404 — do not leak ownership
         runtime.clockState = ClockState.STOPPED
         runtime.job?.cancel()
         sessions.remove(sessionId)
@@ -259,7 +266,18 @@ class TickEngineImpl(
         runtime.gameTimeMinutes += GRID_MINUTES_PER_TICK
 
         if (shouldSave) {
-            engineScope.launch(Dispatchers.IO) { saveRuntime(runtime) }
+            // Snapshot mutable state before handing off to the IO coroutine so the
+            // saved values reflect this tick, not a future one.
+            val snapshot = runtime.toStatus()
+            engineScope.launch(Dispatchers.IO) {
+                saveSnapshot(
+                    sessionId = runtime.sessionId,
+                    userId = runtime.userId,
+                    gameTimeMinutes = snapshot.gameTimeMinutes,
+                    clockState = snapshot.clockState,
+                    speedMultiplier = snapshot.speedMultiplier,
+                )
+            }
         }
 
         // Slip detection and pacing
@@ -274,7 +292,16 @@ class TickEngineImpl(
                     SLIP_PAUSE_THRESHOLD,
                 )
                 runtime.clockState = ClockState.PAUSED
-                engineScope.launch(Dispatchers.IO) { saveRuntime(runtime) }
+                val slipSnapshot = runtime.toStatus()
+                engineScope.launch(Dispatchers.IO) {
+                    saveSnapshot(
+                        sessionId = runtime.sessionId,
+                        userId = runtime.userId,
+                        gameTimeMinutes = slipSnapshot.gameTimeMinutes,
+                        clockState = slipSnapshot.clockState,
+                        speedMultiplier = slipSnapshot.speedMultiplier,
+                    )
+                }
                 return
             }
         } else {
@@ -334,17 +361,23 @@ class TickEngineImpl(
     private fun requireRuntime(sessionId: String): SessionRuntime =
         sessions[sessionId] ?: throw IllegalStateException("Session $sessionId is not registered in TickEngine")
 
-    private fun saveRuntime(runtime: SessionRuntime) {
+    private fun saveSnapshot(
+        sessionId: String,
+        userId: String,
+        gameTimeMinutes: Long,
+        clockState: ClockState,
+        speedMultiplier: Int,
+    ) {
         try {
             gameSessionService.save(
-                sessionId = runtime.sessionId,
-                userId = runtime.userId,
-                gameTimeEpochMinutes = runtime.gameTimeMinutes,
-                clockState = runtime.clockState,
-                clockSpeedMultiplier = runtime.speedMultiplier,
+                sessionId = sessionId,
+                userId = userId,
+                gameTimeEpochMinutes = gameTimeMinutes,
+                clockState = clockState,
+                clockSpeedMultiplier = speedMultiplier,
             )
         } catch (e: Exception) {
-            log.error("Auto-save failed for session {}", runtime.sessionId, e)
+            log.error("Auto-save failed for session {}", sessionId, e)
         }
     }
 
