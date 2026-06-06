@@ -4,6 +4,7 @@ import com.gridmaster.api.PhysicsSessionStore
 import com.gridmaster.engine.dispatch.DispatchMode
 import com.gridmaster.engine.powerflow.EquipmentType
 import com.gridmaster.game.ClockState
+import com.gridmaster.game.TickEngine
 import com.gridmaster.game.command.CommandHandler
 import com.gridmaster.game.command.GeneratorSchedule
 import com.gridmaster.game.command.PlayerCommand
@@ -32,6 +33,7 @@ class CommandWebSocketController(
     private val sessionStore: PhysicsSessionStore,
     private val gameStatePublisher: GameStatePublisher,
     private val eventEngine: EventEngine,
+    private val tickEngine: TickEngine,
     private val messagingTemplate: SimpMessagingTemplate,
 ) {
     private val log = LoggerFactory.getLogger(CommandWebSocketController::class.java)
@@ -75,24 +77,28 @@ class CommandWebSocketController(
             }
 
         val result = commandHandler.handle(command, userId)
-        val tickNumber = session.latestPowerFlowResult?.let { 0L } ?: 0L
+        val clockStatus = tickEngine.clockStatus(sessionId)
+        val currentTick = clockStatus?.tickCount ?: 0L
+        val currentGameTime = clockStatus?.gameTimeMinutes ?: 0L
+        val currentClockState = clockStatus?.clockState ?: ClockState.PAUSED
+        val currentSpeed = clockStatus?.speedMultiplier ?: 1
 
         val ack =
             CommandAck(
                 commandType = message.commandType,
                 success = result.success,
                 rejectionReason = result.commandOutcomes.firstOrNull()?.rejectionReason,
-                appliedAtTick = tickNumber,
+                appliedAtTick = currentTick,
             )
 
         if (result.success) {
-            val pendingCards = eventEngine.pendingCards(sessionId).ifEmpty { emptyList() }
+            val pendingCards = eventEngine.pendingCards(sessionId)
             gameStatePublisher.publishFull(
                 sessionId = sessionId,
-                tickNumber = tickNumber,
-                gameTimeMinutes = 0L, // TickEngine owns authoritative game time
-                clockState = ClockState.RUNNING, // command succeeded — clock not paused by this path
-                clockSpeedMultiplier = 1,
+                tickNumber = currentTick,
+                gameTimeMinutes = currentGameTime,
+                clockState = currentClockState,
+                clockSpeedMultiplier = currentSpeed,
                 powerFlowResult = result.powerFlowResult,
                 newAlerts = result.newAlerts,
                 pendingCards = pendingCards,

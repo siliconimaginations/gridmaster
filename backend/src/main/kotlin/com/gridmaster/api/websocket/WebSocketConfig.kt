@@ -31,7 +31,8 @@ class WebSocketConfig(
     override fun registerStompEndpoints(registry: StompEndpointRegistry) {
         registry
             .addEndpoint("/ws")
-            .setAllowedOriginPatterns("*") // Tightened per deployment via environment config
+            // TODO: restrict to configured origins in production via gridmaster.websocket.allowed-origins property
+            .setAllowedOriginPatterns("*")
             .withSockJS()
     }
 
