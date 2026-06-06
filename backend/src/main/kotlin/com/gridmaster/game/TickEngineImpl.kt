@@ -105,10 +105,12 @@ class TickEngineImpl(
     ): TickClockStatus {
         val runtime = sessions[sessionId] ?: throw SessionNotFoundException(sessionId)
         if (runtime.userId != userId) throw SessionNotFoundException(sessionId) // 404 — do not leak ownership
-        check(runtime.clockState in setOf(ClockState.RUNNING, ClockState.SLOW)) {
-            "Cannot pause session $sessionId in state ${runtime.clockState}"
+        synchronized(runtime) {
+            check(runtime.clockState in setOf(ClockState.RUNNING, ClockState.SLOW)) {
+                "Cannot pause session $sessionId in state ${runtime.clockState}"
+            }
+            runtime.clockState = ClockState.PAUSED
         }
-        runtime.clockState = ClockState.PAUSED
         triggerAutoSave(runtime)
         log.info("Paused session {}", sessionId)
         return runtime.toStatus()
@@ -120,10 +122,12 @@ class TickEngineImpl(
     ): TickClockStatus {
         val runtime = sessions[sessionId] ?: throw SessionNotFoundException(sessionId)
         if (runtime.userId != userId) throw SessionNotFoundException(sessionId) // 404 — do not leak ownership
-        check(runtime.clockState == ClockState.PAUSED) {
-            "Cannot resume session $sessionId in state ${runtime.clockState}"
+        synchronized(runtime) {
+            check(runtime.clockState == ClockState.PAUSED) {
+                "Cannot resume session $sessionId in state ${runtime.clockState}"
+            }
+            runtime.clockState = ClockState.RUNNING
         }
-        runtime.clockState = ClockState.RUNNING
         log.info("Resumed session {}", sessionId)
         return runtime.toStatus()
     }
@@ -328,9 +332,6 @@ class TickEngineImpl(
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
-
-    private fun requireRuntime(sessionId: String): SessionRuntime =
-        sessions[sessionId] ?: throw IllegalStateException("Session $sessionId is not registered in TickEngine")
 
     private fun triggerAutoSave(runtime: SessionRuntime) {
         val snapshot = runtime.toStatus()
