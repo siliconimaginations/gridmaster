@@ -251,6 +251,7 @@ class EventEngineImpl : EventEngine {
             }
         val expiresAt = durationMinutes?.let { currentTime + it }
 
+        // TODO: #72 — unify effect derivation; EconomicEvent/FuelEvent should use effects list like WeatherEvent
         val effects =
             when (event) {
                 is WeatherEvent -> event.effects
@@ -338,6 +339,7 @@ class EventEngineImpl : EventEngine {
         }
     }
 
+    // TODO: #71 — pre-compute busId→regionId map to avoid O(N*M) nested search
     private fun scaleLoadMutations(
         effect: EventEffect.ScaleLoad,
         snapshot: GridNetwork,
@@ -382,6 +384,7 @@ class EventEngineImpl : EventEngine {
 // Per-session event state
 // ─────────────────────────────────────────────────────────────────────────────
 
+// TODO: #73 — remove duplicate INITIAL_OFFSET_MINUTES from SessionEventState.Companion
 internal class SessionEventState(val config: EventConfig) {
     val random: Random =
         if (config.randomSeed != null) Random(config.randomSeed) else Random.Default
