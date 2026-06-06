@@ -77,7 +77,7 @@ class TickEngineImpl(
         userId: String,
     ) {
         val gameSession = gameSessionService.load(sessionId, userId)
-        check(sessionId !in sessions) {
+        check(!sessions.containsKey(sessionId)) {
             "Session $sessionId is already active. Use /resume if paused, or /stop then re-create if stopped."
         }
 
