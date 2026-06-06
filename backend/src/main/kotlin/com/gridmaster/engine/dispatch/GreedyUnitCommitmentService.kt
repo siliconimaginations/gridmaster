@@ -55,7 +55,7 @@ class GreedyUnitCommitmentService(
                 var currentCapacity = committedCapacity(generators, commitmentState)
                 for (gen in uncommitted) {
                     if (currentCapacity >= requiredCapacity) break
-                    val hoursDown = hoursInCurrentState[gen.id] ?: 0
+                    val hoursDown = hoursInCurrentState.getValue(gen.id)
                     if (hoursDown < gen.minDownTimeHours) continue // min down time not met
                     commitmentState[gen.id] = true
                     currentCapacity += gen.maxActivePowerMw
@@ -73,7 +73,7 @@ class GreedyUnitCommitmentService(
                 var runningCapacity = currentCapacity
                 for (gen in committed) {
                     if (runningCapacity - gen.maxActivePowerMw < requiredCapacity) continue
-                    val hoursUp = hoursInCurrentState[gen.id] ?: 0
+                    val hoursUp = hoursInCurrentState.getValue(gen.id)
                     if (hoursUp < gen.minUpTimeHours) continue // min up time not met
                     commitmentState[gen.id] = false
                     runningCapacity -= gen.maxActivePowerMw
@@ -83,7 +83,7 @@ class GreedyUnitCommitmentService(
 
                 // Increment hours in current state for all generators
                 generators.forEach { gen ->
-                    hoursInCurrentState[gen.id] = (hoursInCurrentState[gen.id] ?: 0) + 1
+                    hoursInCurrentState[gen.id] = (hoursInCurrentState.getValue(gen.id)) + 1
                 }
 
                 // Run economic dispatch for this hour

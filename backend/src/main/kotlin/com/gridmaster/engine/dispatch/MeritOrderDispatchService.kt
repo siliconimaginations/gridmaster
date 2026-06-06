@@ -2,7 +2,6 @@ package com.gridmaster.engine.dispatch
 
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
-import java.time.Instant
 import kotlin.math.abs
 import kotlin.math.min
 
@@ -41,73 +40,14 @@ class MeritOrderDispatchService(
     private fun meritOrderDispatch(
         generators: List<DispatchableGenerator>,
         totalLoadMw: Double,
-        parameters: DispatchParameters,
-    ): DispatchResult {
-        val committed = generators.filter { it.committed }
-
-        // Step 1: all committed generators run at minimum (must-run)
-        val dispatch = committed.associateTo(mutableMapOf()) { it.id to it.minActivePowerMw }
-        var remaining = totalLoadMw - dispatch.values.sum()
-
-        // Step 2: serve remaining load in merit order
-        val sorted = committed.sortedBy { it.marginalCostPerMwh }
-        var marginalUnit: DispatchableGenerator? = null
-        var marginalCost = 0.0
-
-        for (gen in sorted) {
-            if (remaining <= 0.0) break
-            val headroom = gen.maxActivePowerMw - gen.minActivePowerMw
-            val increment = min(headroom, remaining)
-            dispatch[gen.id] = gen.minActivePowerMw + increment
-            remaining -= increment
-            if (increment > 0.0) {
-                marginalUnit = gen
-                marginalCost = gen.marginalCostPerMwh
-            }
-        }
-
-        val unserved = maxOf(0.0, remaining)
-        if (unserved > 0.0) {
-            log.warn("Dispatch: unserved load {:.1f} MW — committed capacity insufficient", unserved)
-        }
-
-        val totalDispatched = dispatch.values.sum()
-        val meritOrder = buildMeritOrderTable(sorted, dispatch, marginalUnit)
-
-        log.debug(
-            "Merit order dispatch: load={:.1f} MW dispatched={:.1f} MW unserved={:.1f} MW SMC={:.2f} £/MWh",
-            totalLoadMw,
-            totalDispatched,
-            unserved,
-            marginalCost,
-        )
-
-        return DispatchResult(
-            targets = dispatch.map { (id, mw) -> GeneratorTarget(id, mw) },
-            meritOrder = meritOrder,
+        @Suppress("UNUSED_PARAMETER") parameters: DispatchParameters,
+    ): DispatchResult =
+        runMeritOrder(
+            generators = generators,
             totalLoadMw = totalLoadMw,
-            totalDispatchedMw = totalDispatched,
-            systemMarginalCostPerMwh = marginalCost,
-            unservedLoadMw = unserved,
-            dispatchedAt = Instant.now(),
+            logWarn = { log.warn(it) },
+            logDebug = { log.debug(it) },
         )
-    }
-
-    private fun buildMeritOrderTable(
-        sorted: List<DispatchableGenerator>,
-        dispatch: Map<String, Double>,
-        marginalUnit: DispatchableGenerator?,
-    ): List<MeritOrderEntry> =
-        sorted.map { gen ->
-            MeritOrderEntry(
-                generatorId = gen.id,
-                marginalCostPerMwh = gen.marginalCostPerMwh,
-                minMw = gen.minActivePowerMw,
-                maxMw = gen.maxActivePowerMw,
-                dispatchedMw = dispatch[gen.id] ?: 0.0,
-                isMarginalUnit = gen.id == marginalUnit?.id,
-            )
-        }
 
     // -------------------------------------------------------------------------
     // Congestion redispatch
