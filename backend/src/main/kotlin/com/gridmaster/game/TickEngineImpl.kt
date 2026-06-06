@@ -149,11 +149,12 @@ class TickEngineImpl(
         val speedStatus =
             synchronized(runtime) {
                 runtime.speedMultiplier = multiplier
-                // If the player manually changes speed, clear any active auto-slow so
-                // applyAutoSlow() cannot overwrite the player's explicit choice.
+                // If the player manually changes speed, clear any active auto-slow and
+                // set the override flag so applyAutoSlow() won't re-engage on the same tick.
                 if (runtime.autoSlowed) {
                     runtime.autoSlowed = false
                     runtime.autoSlowPreviousSpeed = null
+                    runtime.playerSpeedOverride = true
                     if (runtime.clockState == ClockState.SLOW) {
                         runtime.clockState = ClockState.RUNNING
                     }
@@ -315,7 +316,7 @@ class TickEngineImpl(
                 pfResult.violations.any { it.severity == ViolationSeverity.CRITICAL }
 
         synchronized(runtime) {
-            if (needsSlow && !runtime.autoSlowed && runtime.clockState == ClockState.RUNNING) {
+            if (needsSlow && !runtime.autoSlowed && !runtime.playerSpeedOverride && runtime.clockState == ClockState.RUNNING) {
                 log.info(
                     "Auto-slow activated for session {} (status={}, critical violations={})",
                     runtime.sessionId,
@@ -326,12 +327,16 @@ class TickEngineImpl(
                 runtime.speedMultiplier = 1
                 runtime.clockState = ClockState.SLOW
                 runtime.autoSlowed = true
-            } else if (!needsSlow && runtime.autoSlowed && runtime.clockState == ClockState.SLOW) {
-                log.info("Auto-slow cleared for session {} — restoring speed", runtime.sessionId)
-                runtime.speedMultiplier = runtime.autoSlowPreviousSpeed ?: 1
-                runtime.autoSlowPreviousSpeed = null
-                runtime.clockState = ClockState.RUNNING
-                runtime.autoSlowed = false
+            } else if (!needsSlow) {
+                // Condition resolved — clear override flag so auto-slow can engage again next time
+                runtime.playerSpeedOverride = false
+                if (runtime.autoSlowed && runtime.clockState == ClockState.SLOW) {
+                    log.info("Auto-slow cleared for session {} — restoring speed", runtime.sessionId)
+                    runtime.speedMultiplier = runtime.autoSlowPreviousSpeed ?: 1
+                    runtime.autoSlowPreviousSpeed = null
+                    runtime.clockState = ClockState.RUNNING
+                    runtime.autoSlowed = false
+                }
             }
         }
     }
@@ -431,6 +436,14 @@ internal class SessionRuntime(
     /** Set by pause() to signal the tick loop to save once the current tick finishes. */
     @Volatile
     var pendingSave: Boolean = false
+
+    /**
+     * Set by [TickEngineImpl.setSpeed] when the player explicitly overrides an active
+     * auto-slow. Prevents [TickEngineImpl.applyAutoSlow] from immediately re-engaging
+     * while the triggering condition persists. Cleared when the condition resolves.
+     */
+    @Volatile
+    var playerSpeedOverride: Boolean = false
 
     /** Snapshot of the current state as an immutable [TickClockStatus]. Synchronized for consistency. */
     fun toStatus(): TickClockStatus =

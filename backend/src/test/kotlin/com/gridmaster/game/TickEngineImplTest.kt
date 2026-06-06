@@ -198,7 +198,7 @@ class TickEngineImplTest {
             // Start at 100× so ticks fire every 10ms
             every { gameSessionService.load(sessionId, userId) } returns buildGameSession(multiplier = 100)
             engine.start(sessionId, userId)
-            engine.setSpeed(sessionId, userId, 100)
+            // start() already uses multiplier=100 from the loaded session; no setSpeed needed
             delay(200)
 
             val status = engine.clockStatus(sessionId)
