@@ -149,6 +149,8 @@ sealed class EventEffect {
  * The player must choose one [CardOption] before the simulation advances.
  */
 data class EventCard(
+    /** Unique identifier used to look up this card in [EventEngine.resolveCard]. */
+    val cardId: String = java.util.UUID.randomUUID().toString(),
     val prompt: String,
     val options: List<CardOption>,
 )
@@ -164,6 +166,11 @@ data class CardOption(
     val label: String,
     val effects: List<EventEffect>,
     val costGbp: Double = 0.0,
+    /**
+     * How long duration-based effect modifiers from this option last (game-minutes).
+     * Null = permanent (never expires).
+     */
+    val durationMinutes: Int? = null,
 )
 
 // ─────────────────────────────────────────────────────────────────────────────

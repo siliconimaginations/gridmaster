@@ -79,12 +79,13 @@ interface EventEngine {
      * Resolve a pending [EventCard] by selecting [optionIndex].
      * The chosen option's effects are applied on the next tick.
      *
+     * @param cardId The [EventCard.cardId] of the card to resolve (unique per card instance).
      * @throws IllegalArgumentException if [optionIndex] is out of range.
-     * @throws IllegalStateException if [sessionId] has no pending cards.
+     * @throws IllegalStateException if [sessionId] has no pending cards or the card is not found.
      */
     fun resolveCard(
         sessionId: String,
-        cardPrompt: String,
+        cardId: String,
         optionIndex: Int,
     )
 }

@@ -122,7 +122,7 @@ class EventEngineImpl : EventEngine {
 
     override fun resolveCard(
         sessionId: String,
-        cardPrompt: String,
+        cardId: String,
         optionIndex: Int,
     ) {
         val state =
@@ -130,18 +130,19 @@ class EventEngineImpl : EventEngine {
                 ?: throw IllegalStateException("Session $sessionId has no pending event cards")
         synchronized(state) {
             val card =
-                state.pendingCards.find { it.prompt == cardPrompt }
-                    ?: throw IllegalStateException("No pending card with prompt: $cardPrompt")
+                state.pendingCards.find { it.cardId == cardId }
+                    ?: throw IllegalStateException("No pending card with id: $cardId")
             require(optionIndex in card.options.indices) {
                 "Option index $optionIndex out of range for card with ${card.options.size} options"
             }
             state.pendingCards.remove(card)
-            // Queue the chosen option's effects for application on the next tick
-            state.deferredCardEffects.addAll(card.options[optionIndex].effects)
+            // Queue the chosen option (not just its effects) so durationMinutes is preserved
+            state.deferredCardEffects.add(card.options[optionIndex])
             log.info(
-                "EventEngine: session {} resolved card '{}' → option [{}] '{}'",
+                "EventEngine: session {} resolved card '{}' (id={}) → option [{}] '{}'",
                 sessionId,
-                cardPrompt,
+                card.prompt,
+                cardId,
                 optionIndex,
                 card.options[optionIndex].label,
             )
@@ -207,32 +208,51 @@ class EventEngineImpl : EventEngine {
         snapshot: GridNetwork,
     ): List<FiredEvent> {
         if (state.deferredCardEffects.isEmpty()) return emptyList()
-        val effects = state.deferredCardEffects.toList()
+        val options = state.deferredCardEffects.toList()
         state.deferredCardEffects.clear()
-        val mutations = effects.flatMap { convertEffect(it, snapshot, state, context.gameTimeMinutes, null) }
-        return if (mutations.isNotEmpty()) {
-            listOf(
-                FiredEvent(
-                    event =
-                        PolicyEvent(
-                            id = "card-choice-${context.gameTimeMinutes}",
-                            description = "Player card choice applied",
-                            severity = EventSeverity.INFO,
-                            card =
-                                EventCard(
-                                    prompt = "Card choice",
-                                    options = emptyList(),
-                                ),
+
+        val allMutations = mutableListOf<NetworkMutation>()
+        for (option in options) {
+            val expiresAt = option.durationMinutes?.let { context.gameTimeMinutes + it }
+            allMutations += option.effects.flatMap { convertEffect(it, snapshot, state, context.gameTimeMinutes, expiresAt) }
+            // Store duration-based modifiers as active effects so they expire correctly
+            if (expiresAt != null) {
+                val modifiers =
+                    option.effects.filterIsInstance<EventEffect.ScaleGeneratorCost>() +
+                        option.effects.filterIsInstance<EventEffect.DerateElement>()
+                if (modifiers.isNotEmpty()) {
+                    state.activeModifiers.add(
+                        ActiveEffectModifier(
+                            eventId = "card-choice-${context.gameTimeMinutes}",
+                            effects = modifiers,
+                            expiresAt = expiresAt,
                         ),
-                    firedAtGameTimeMinutes = context.gameTimeMinutes,
-                    mutations = mutations,
-                    card = null,
-                    expiresAtGameTimeMinutes = null,
-                ),
-            )
-        } else {
-            emptyList()
+                    )
+                }
+            }
         }
+
+        // Always log the card-choice event so the player decision appears in the event log,
+        // even when effects are modifier-only (no network mutations produced).
+        return listOf(
+            FiredEvent(
+                event =
+                    PolicyEvent(
+                        id = "card-choice-${context.gameTimeMinutes}",
+                        description = "Player card choice applied",
+                        severity = EventSeverity.INFO,
+                        card =
+                            EventCard(
+                                prompt = "Card choice",
+                                options = emptyList(),
+                            ),
+                    ),
+                firedAtGameTimeMinutes = context.gameTimeMinutes,
+                mutations = allMutations,
+                card = null,
+                expiresAtGameTimeMinutes = null,
+            ),
+        )
     }
 
     private fun fireEvent(
@@ -397,8 +417,8 @@ internal class SessionEventState(val config: EventConfig) {
                 (-config.meanFor(cat) * ln(random.nextDouble().coerceAtLeast(1e-9))).toLong()
         }.toMutableMap()
 
-    /** Effects from resolved card options, applied on the next tick. */
-    val deferredCardEffects: MutableList<EventEffect> = mutableListOf()
+    /** Card options from resolved player decisions, applied on the next tick. */
+    val deferredCardEffects: MutableList<CardOption> = mutableListOf()
 
     /** Cards awaiting player response. */
     val pendingCards: MutableList<EventCard> = mutableListOf()
@@ -444,7 +464,9 @@ private object BuiltInCatalogue {
                 type = WeatherEventType.STORM,
                 affectedRegionIds = null,
                 durationMinutes = 120,
-                effects = emptyList(), // Target element resolved at runtime in real catalogue
+                // Load reduction models customer outages during severe storm.
+                // Fine-grained line trips are resolved at runtime in the YAML catalogue (Stage 5).
+                effects = listOf(EventEffect.ScaleLoad(regionIds = null, factor = 0.92)),
             ),
             WeatherEvent(
                 id = "evt-heatwave-001",

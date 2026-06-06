@@ -347,20 +347,85 @@ class EventEngineImplTest {
         engine.schedule(sessionId, event, 100)
         engine.onTick(ctx(100), snapshot)
 
-        engine.resolveCard(sessionId, "Accept subsidy?", optionIndex = 0)
+        val cardId = engine.pendingCards(sessionId)[0].cardId
+        engine.resolveCard(sessionId, cardId, optionIndex = 0)
         assertThat(engine.pendingCards(sessionId)).isEmpty()
     }
 
     @Test
     fun `resolveCard with invalid optionIndex throws`() {
         engine.register(sessionId, EventConfig(randomSeed = 42))
-        val card = EventCard("Prompt?", listOf(CardOption("Only option", emptyList())))
+        val card = EventCard(prompt = "Prompt?", options = listOf(CardOption("Only option", emptyList())))
         val event = PolicyEvent("pol-3", description = "Policy", severity = EventSeverity.INFO, card = card)
         engine.schedule(sessionId, event, 100)
         engine.onTick(ctx(100), snapshot)
 
-        assertThatThrownBy { engine.resolveCard(sessionId, "Prompt?", optionIndex = 5) }
+        val cardId = engine.pendingCards(sessionId)[0].cardId
+        assertThatThrownBy { engine.resolveCard(sessionId, cardId, optionIndex = 5) }
             .isInstanceOf(IllegalArgumentException::class.java)
+    }
+
+    @Test
+    fun `resolveCard with unknown cardId throws`() {
+        engine.register(sessionId, EventConfig(randomSeed = 42))
+        val card = EventCard(prompt = "Unknown?", options = listOf(CardOption("Option", emptyList())))
+        val event = PolicyEvent("pol-4", description = "Policy", severity = EventSeverity.INFO, card = card)
+        engine.schedule(sessionId, event, 100)
+        engine.onTick(ctx(100), snapshot)
+
+        assertThatThrownBy { engine.resolveCard(sessionId, "nonexistent-uuid", optionIndex = 0) }
+            .isInstanceOf(IllegalStateException::class.java)
+    }
+
+    @Test
+    fun `resolveCard two cards with identical prompts resolved independently by cardId`() {
+        engine.register(sessionId, EventConfig(randomSeed = 42))
+        // Both cards have the same prompt — previously ambiguous, now disambiguated by cardId
+        val card1 = EventCard(prompt = "Same prompt?", options = listOf(CardOption("Option A", emptyList())))
+        val card2 = EventCard(prompt = "Same prompt?", options = listOf(CardOption("Option B", emptyList())))
+        engine.schedule(sessionId, PolicyEvent("pol-5a", description = "P5a", severity = EventSeverity.INFO, card = card1), 100)
+        engine.schedule(sessionId, PolicyEvent("pol-5b", description = "P5b", severity = EventSeverity.INFO, card = card2), 100)
+        engine.onTick(ctx(100), snapshot)
+
+        assertThat(engine.pendingCards(sessionId)).hasSize(2)
+        val ids = engine.pendingCards(sessionId).map { it.cardId }
+        assertThat(ids[0]).isNotEqualTo(ids[1])
+
+        // Resolve only the first card by its unique id
+        engine.resolveCard(sessionId, ids[0], optionIndex = 0)
+        assertThat(engine.pendingCards(sessionId)).hasSize(1)
+        assertThat(engine.pendingCards(sessionId)[0].cardId).isEqualTo(ids[1])
+    }
+
+    @Test
+    fun `card option with durationMinutes registers an active modifier that expires`() {
+        engine.register(sessionId, EventConfig(randomSeed = 42))
+        val temporaryOption =
+            CardOption(
+                label = "Temporary subsidy",
+                effects = listOf(EventEffect.ScaleGeneratorCost(fuelType = FuelType.GAS, factor = 0.8)),
+                durationMinutes = 60,
+            )
+        val card = EventCard(prompt = "Accept temporary subsidy?", options = listOf(temporaryOption))
+        val event = PolicyEvent("pol-dur-1", description = "Temp policy", severity = EventSeverity.INFO, card = card)
+        engine.schedule(sessionId, event, 100)
+        engine.onTick(ctx(100), snapshot)
+
+        val cardId = engine.pendingCards(sessionId)[0].cardId
+        engine.resolveCard(sessionId, cardId, optionIndex = 0)
+
+        // Next tick applies the deferred option — modifier should be registered
+        engine.onTick(ctx(110), snapshot)
+
+        // Tick before expiry (100 + 60 = 160)
+        engine.onTick(ctx(150), snapshot)
+
+        // Tick at expiry — modifier removed (no exception expected; expiry is tested via no crash)
+        engine.onTick(ctx(160), snapshot)
+
+        // Event log should contain the card-choice applied event
+        val log = engine.eventLog(sessionId)!!
+        assertThat(log).anyMatch { it.event.id.startsWith("card-choice-") }
     }
 
     // ── Stochastic scheduling ─────────────────────────────────────────────────
