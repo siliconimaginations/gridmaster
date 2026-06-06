@@ -273,7 +273,7 @@ Every PR is either **non-critical** or **critical**:
 2. Claude polls every ~30 s for: all CI checks green · Gemini AI review present · no unresolved 🔴/🟠 Gemini issues.
 3. Minor Gemini suggestions (🟡) → add a `// TODO:` in code and open a GitHub issue to track. Do not block merge.
 4. Once all criteria are met, Claude merges autonomously and notifies Rick in chat.
-5. After merging, Claude consults `WORK_PLAN.md` and opens the next PR automatically.
+5. After merging, Claude **checks the GitHub Projects board** to determine the next task (see §9 "Determining the next task").
 
 #### Critical PRs
 1. `nagasawa94` opens the PR with `**PR Classification:** CRITICAL` in the description and assigns `siliconimaginations` as reviewer.
@@ -315,6 +315,22 @@ When Claude encounters a genuinely hard problem (platform incompatibility, ambig
 2. Notify Rick in chat with the issue link.
 3. Claude may work around the issue or pause — judgement call based on whether it is on the critical path.
 4. When the issue is resolved (by Claude or Rick), close the issue with a comment explaining the resolution.
+
+#### Determining the next task
+
+After every merged PR, Claude must follow this sequence to decide what to work on next:
+
+1. **Check the GitHub Projects board** at `https://github.com/users/siliconimaginations/projects/2`.
+2. Take the highest-priority item in **This Sprint** (or **In Progress**) that is not blocked.
+3. If the board is empty or all items are blocked, run the weekly triage (see `docs/process/tech-debt-cadence.md §1`) and surface the result to Rick.
+4. Announce the next planned task in chat before starting — Rick can override the selection.
+
+**Do not rely on `WORK_PLAN.md` alone** to determine next steps. The board is the authoritative queue; `WORK_PLAN.md` is the long-range roadmap. Rick may re-prioritise board items at any time, so always read the board fresh after each merge.
+
+When choosing between two items of equal priority, prefer:
+- An item that unblocks other items over one that stands alone
+- A tech-debt item over a new feature if the debt is on the critical path
+- A smaller item (≤ 200 lines) if a larger one would produce an oversized PR without a split plan
 
 ---
 
