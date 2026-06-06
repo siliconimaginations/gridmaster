@@ -327,3 +327,55 @@ A feature is **done** when:
 - [ ] Coverage targets met
 - [ ] No unresolved review comments
 - [ ] `WORK_PLAN.md` stage updated if the feature completed a stage milestone
+
+---
+
+## 11. PR Size Policy
+
+**Recommended**: < 400 lines changed (excluding generated files and lock files).
+**Hard limit**: 1 000 lines changed. A PR exceeding this must be split before review starts — no exceptions.
+
+### How to split a large module
+
+A single module commonly maps to 3–4 sequential PRs:
+
+| PR | Contents | Approx. size |
+|----|----------|-------------|
+| 1 | Domain model + persistence entity + repository | ≤ 200 lines |
+| 2 | Service layer + preset/factory code | ≤ 300 lines |
+| 3 | Controller + DTOs | ≤ 200 lines |
+| 4 | Tests | ≤ 300 lines |
+
+Each PR in the sequence must pass CI and be merged before the next one opens. Use `// TODO: #<issue>` stubs to compile without the later pieces.
+
+### Claude-specific rule
+
+Before starting implementation of any module, Claude must verify the total estimated line count against these limits and propose a split plan in chat if the estimate exceeds 400 lines. Raising the concern **after** coding is a process violation.
+
+---
+
+## 12. Tech Debt & Coverage Process
+
+See [`docs/process/tech-debt-cadence.md`](docs/process/tech-debt-cadence.md) for the full weekly cadence.
+
+**Labels** (applied on every new issue):
+
+| Label | Meaning |
+|-------|---------|
+| `tech-debt` | Refactor, cleanup, design debt |
+| `performance` | Measurable speed or resource improvement |
+| `coverage` | Test coverage gap |
+| `docs` | Stale or missing documentation |
+| `ci` | Pipeline or tooling change |
+| `priority/P1` | This sprint |
+| `priority/P2` | Next 1–2 sprints |
+| `priority/P3` | Backlog |
+
+**Coverage thresholds** (enforced in CI):
+
+| Layer | Minimum (overall) | Minimum (changed files on PR) |
+|-------|-------------------|-------------------------------|
+| Backend (JaCoCo) | 60% | 70% |
+| Frontend (Vitest) | 60% | 70% |
+
+Thresholds rise 5 pp per major stage milestone. The current values reflect Stage 3 (backend implementation in progress).

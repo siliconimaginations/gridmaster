@@ -35,8 +35,8 @@ object PresetNetworkFactory {
     fun create(networkPreset: String): Network =
         when (networkPreset) {
             "tutorial" -> buildTutorialNetwork()
-            "ieee14" -> buildTutorialNetwork() // TODO: #41 replace with proper IEEE 14-bus XIIDM
-            "freeplay50" -> buildTutorialNetwork() // TODO: #42 replace with 50-bus free-play seed
+            "ieee14" -> buildTutorialNetwork() // TODO: #46 replace with proper IEEE 14-bus XIIDM
+            "freeplay50" -> buildTutorialNetwork() // TODO: #47 replace with 50-bus free-play seed
             else -> throw IllegalArgumentException(
                 "Unknown network preset: '$networkPreset'. " +
                     "Valid presets: ${knownPresets.joinToString()}",

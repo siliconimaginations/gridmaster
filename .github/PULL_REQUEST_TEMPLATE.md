@@ -35,3 +35,12 @@
 ## Screenshots / logs (if UI or API change)
 
 <!-- Attach screenshot or paste relevant log output -->
+
+## PR Size
+
+<!-- Count: `git diff --stat origin/main | tail -1` -->
+- [ ] Changed lines: _____ (target < 400; hard limit 1 000 — split if over)
+
+## PR Classification (Claude-authored PRs only)
+
+**PR Classification:** <!-- CRITICAL or NON-CRITICAL -->
