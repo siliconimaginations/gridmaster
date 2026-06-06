@@ -9,10 +9,30 @@ It is the operational companion to the policies in `ENGINEERING_PRINCIPLES.md §
 
 | Frequency | Activity |
 |-----------|----------|
-| Every PR | Coverage gate, lint, Gemini review |
+| Every PR | Coverage gate, lint, Gemini review, project management (create issues, update board) |
+| After every PR merges | Pull next work item from the board |
 | Weekly (or per sprint boundary) | Issue triage, coverage trend review |
 | Every 5 merged implementation PRs | Doc staleness review |
 | Quarterly | Full tech debt burn-down sprint |
+
+---
+
+## 0. Per-PR Project Management
+
+Every PR is an opportunity to keep the backlog accurate. Claude performs these steps as part of the autonomous review loop:
+
+**During a PR:**
+1. If Gemini or review comments surface new problems not worth fixing now, open a GitHub issue immediately (don't just leave a mental note).
+2. Label each new issue (`tech-debt`, `performance`, `coverage`, or `docs`) and set a priority.
+3. Add issues to the **Backlog** column on the GitHub Projects board.
+4. Promote any issue that is a safety/data-integrity risk (e.g. race conditions, data loss) to `priority/P1` and move it to **This Sprint**.
+
+**After a PR merges:**
+1. Query the GitHub Projects board for the top `priority/P1` item in **This Sprint**; if none, take the top `priority/P2`.
+2. Announce the next planned task to Rick in the merge summary message.
+3. If the board is empty, run the weekly triage (§1 below) before proceeding.
+
+This keeps the work queue self-refreshing — Rick does not need to manually assign the next task unless he wants to override the board order.
 
 ---
 
@@ -50,9 +70,15 @@ Coverage is reported two ways:
 2. Compare the last 4–5 runs for `Overall Project` percentage.
 3. If it drops >3 pp between runs, investigate which merged PR caused it and open a `coverage / P1` issue.
 
-### Planned tooling (backlog)
-- Add a coverage badge to `README.md` sourced from the main-branch workflow artifact.
-- Upload to Codecov for historical trending (when the project has multiple active contributors).
+### Immediate next actions (prioritised)
+
+Coverage monitoring is a **priority item**. The following are scheduled for the next available sprint slot, in order:
+
+1. **Coverage badge in README** — source from the main-branch CI artifact. Gives instant visibility without opening the Actions tab.
+2. **Codecov integration** — upload JaCoCo and Vitest reports to Codecov for historical trending and PR annotations. Free for public/private repos up to a team size.
+3. **Coverage threshold escalation** — raise overall minimum from 60% → 70% once the game engine core (Modules 07–10) is merged.
+
+Tracking issue: open a `coverage / P2` issue for items 1–2 if none exists.
 
 ---
 
