@@ -85,7 +85,8 @@ missing very few real violations.
 Network change detected (mutation, new tick with load shift)
         │
         ▼
-ContingencyAnalysisService enqueues a run (debounced — 5-tick minimum gap)
+ContingencyAnalysisService enqueues a run (debounced — CONFLATED channel, latest trigger wins;
+        game clock triggers every 6 ticks / 1 grid-hour during free play)
         │
         ▼ (background coroutine — does not block game tick)
 Run DC pre-screen → filter → run AC on flagged contingencies
