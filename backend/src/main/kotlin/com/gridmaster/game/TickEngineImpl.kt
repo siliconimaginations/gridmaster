@@ -75,7 +75,7 @@ class TickEngineImpl(
     override fun start(
         sessionId: String,
         userId: String,
-    ) {
+    ): TickClockStatus {
         val gameSession = gameSessionService.load(sessionId, userId)
         check(!sessions.containsKey(sessionId)) {
             "Session $sessionId is already active. Use /resume if paused, or /stop then re-create if stopped."
@@ -105,7 +105,7 @@ class TickEngineImpl(
     override fun pause(
         sessionId: String,
         userId: String,
-    ) {
+    ): TickClockStatus {
         val runtime = requireRuntime(sessionId)
         check(runtime.userId == userId) { "User $userId does not own session $sessionId" }
         check(runtime.clockState in setOf(ClockState.RUNNING, ClockState.SLOW)) {
@@ -123,7 +123,7 @@ class TickEngineImpl(
     override fun resume(
         sessionId: String,
         userId: String,
-    ) {
+    ): TickClockStatus {
         val runtime = requireRuntime(sessionId)
         check(runtime.userId == userId) { "User $userId does not own session $sessionId" }
         check(runtime.clockState == ClockState.PAUSED) {
@@ -138,7 +138,7 @@ class TickEngineImpl(
         sessionId: String,
         userId: String,
         multiplier: Int,
-    ) {
+    ): TickClockStatus {
         require(multiplier in 1..MAX_SPEED_MULTIPLIER) {
             "Speed multiplier must be in 1–$MAX_SPEED_MULTIPLIER, got $multiplier"
         }
