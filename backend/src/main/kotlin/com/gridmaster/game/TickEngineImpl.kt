@@ -412,13 +412,15 @@ internal class SessionRuntime(
     @Volatile
     var autoSlowPreviousSpeed: Int? = null
 
-    /** Snapshot of the current state as an immutable [TickClockStatus]. */
-    fun toStatus() =
-        TickClockStatus(
-            clockState = clockState,
-            speedMultiplier = speedMultiplier,
-            gameTimeMinutes = gameTimeMinutes,
-            tickCount = tickCount,
-            autoSlowed = autoSlowed,
-        )
+    /** Snapshot of the current state as an immutable [TickClockStatus]. Synchronized for consistency. */
+    fun toStatus(): TickClockStatus =
+        synchronized(this) {
+            TickClockStatus(
+                clockState = clockState,
+                speedMultiplier = speedMultiplier,
+                gameTimeMinutes = gameTimeMinutes,
+                tickCount = tickCount,
+                autoSlowed = autoSlowed,
+            )
+        }
 }
