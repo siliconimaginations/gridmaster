@@ -28,8 +28,10 @@ class RedispatchTest {
 
         assertThat(result.actions).hasSize(1)
         val action = result.actions.first()
-        assertThat(action.increaseGeneratorId).isEqualTo("G1")
-        assertThat(action.decreaseGeneratorId).isEqualTo("G2")
+        // G2 has negative sensitivity → increase to reduce branch flow
+        // G1 has positive sensitivity → decrease to reduce branch flow
+        assertThat(action.increaseGeneratorId).isEqualTo("G2")
+        assertThat(action.decreaseGeneratorId).isEqualTo("G1")
         assertThat(action.shiftMw).isGreaterThan(0.0)
         assertThat(result.remainingViolations).isEmpty()
     }
@@ -42,7 +44,7 @@ class RedispatchTest {
                 gen("G2", min = 0.0, max = 100.0, currentMw = 0.0, cost = 50.0), // at min
             )
         val targets = generators.map { GeneratorTarget(it.id, it.currentActivePowerMw) }
-        // Both generators have positive sensitivity — no counter-pair possible
+        // Both generators have positive sensitivity → both decrease candidates, no increase candidate
         val gsk =
             mapOf(
                 "G1" to mapOf("BRANCH-1" to 0.6),
@@ -89,9 +91,9 @@ class RedispatchTest {
             )
         val result = service.congestionRedispatch(targets, generators, listOf("BR-1"), gsk)
 
-        // Expensive goes up, Cheap goes down → additional cost
+        // Cheap increases (20/MWh), Expensive decreases (80/MWh) → cost savings (negative additional cost)
         if (result.actions.isNotEmpty()) {
-            assertThat(result.additionalCostGbp).isGreaterThan(0.0)
+            assertThat(result.additionalCostGbp).isLessThan(0.0)
         }
     }
 

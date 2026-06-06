@@ -96,11 +96,9 @@ class GreedyUnitCommitmentService(
 
                 val reserveMw =
                     committedCapacity(generators, commitmentState) - dispatchResult.totalDispatchedMw
+                // meritOrder already has dispatchedMw and marginalCostPerMwh — O(N)
                 totalOperatingCost +=
-                    dispatchResult.targets.sumOf { target ->
-                        val gen = generators.find { it.id == target.generatorId }
-                        (gen?.marginalCostPerMwh ?: 0.0) * target.targetMw
-                    }
+                    dispatchResult.meritOrder.sumOf { it.dispatchedMw * it.marginalCostPerMwh }
 
                 hourlySchedule +=
                     UcHourSchedule(

@@ -185,28 +185,31 @@ class MeritOrderDispatchService(
                 GskEntry(genId, sens, gen)
             }
 
+        // To relieve an overload (reduce branch flow):
+        // - Increase generation where GSK < 0 (counter-flow: more output → less branch flow)
+        // - Decrease generation where GSK > 0 (pro-flow: less output → less branch flow)
         val increaseCandidates =
             entries.filter { e ->
-                e.sensitivity > 0 &&
+                e.sensitivity < 0 &&
                     (targetMap[e.genId] ?: 0.0) < e.gen.maxActivePowerMw - 1e-3
             }
         val decreaseCandidates =
             entries.filter { e ->
-                e.sensitivity < 0 &&
+                e.sensitivity > 0 &&
                     (targetMap[e.genId] ?: 0.0) > e.gen.minActivePowerMw + 1e-3
             }
 
         if (increaseCandidates.isEmpty() || decreaseCandidates.isEmpty()) return null
 
-        // Pick the pair with the highest total sensitivity magnitude
+        // Maximise flow reduction potential: dec.sensitivity - inc.sensitivity (both terms positive)
         val best =
             increaseCandidates.flatMap { inc ->
                 decreaseCandidates.map { dec -> inc to dec }
-            }.maxByOrNull { (inc, dec) -> inc.sensitivity + abs(dec.sensitivity) }
+            }.maxByOrNull { (inc, dec) -> dec.sensitivity - inc.sensitivity }
                 ?: return null
 
         val (inc, dec) = best
-        val combinedSensitivity = inc.sensitivity + abs(dec.sensitivity)
+        val combinedSensitivity = dec.sensitivity - inc.sensitivity // always positive
         if (combinedSensitivity < 1e-6) return null
 
         // Shift by the maximum MW possible given generator headroom on each side
