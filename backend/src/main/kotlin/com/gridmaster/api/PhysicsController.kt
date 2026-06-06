@@ -35,6 +35,11 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 import java.time.Instant
 
+// TODO: #35 — consider making blocking physics endpoints (runPowerFlow, runDispatch, etc.)
+//             suspend functions once the game engine is coroutine-driven (Stage 5+).
+// TODO: #36 — move domain exceptions (SessionNotFoundException, InvalidMutationException,
+//             PhysicsServiceException) to a dedicated api/exceptions.kt file.
+
 /**
  * REST API for physics operations scoped to a game session.
  *
@@ -294,6 +299,18 @@ private fun NetworkMutationDto.toDomain(): NetworkMutation {
             else -> throw InvalidMutationException("Parameter '$key' has unexpected type: ${v::class}")
         }
 
+    // Returns null when key is absent; throws for non-null values of invalid type.
+    fun nullableDouble(key: String): Double? {
+        val v = parameters[key] ?: return null
+        return when (v) {
+            is Number -> v.toDouble()
+            is String ->
+                v.toDoubleOrNull()
+                    ?: throw InvalidMutationException("Parameter '$key' is not a valid number: $v")
+            else -> throw InvalidMutationException("Parameter '$key' has unexpected type: ${v::class}")
+        }
+    }
+
     return when (type) {
         "SET_GENERATOR_OUTPUT" -> NetworkMutation.SetGeneratorOutput(targetId, double("targetPMw"))
         "SET_GENERATOR_VOLTAGE" -> NetworkMutation.SetGeneratorVoltage(targetId, double("targetVoltagePu"))
@@ -306,15 +323,7 @@ private fun NetworkMutationDto.toDomain(): NetworkMutation {
             NetworkMutation.SetLoadPower(
                 loadId = targetId,
                 activePowerMw = double("activePowerMw"),
-                // TODO: #34 — consider unifying all parameter parsing into a single robust helper
-                reactivePowerMvar =
-                    parameters["reactivePowerMvar"]?.let { v ->
-                        when (v) {
-                            is Number -> v.toDouble()
-                            is String -> v.toDoubleOrNull()
-                            else -> null
-                        }
-                    },
+                reactivePowerMvar = nullableDouble("reactivePowerMvar"),
             )
         "CONNECT_LOAD" -> NetworkMutation.ConnectLoad(targetId)
         "DISCONNECT_LOAD" -> NetworkMutation.DisconnectLoad(targetId)

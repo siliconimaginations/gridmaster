@@ -17,8 +17,10 @@ import java.util.concurrent.ConcurrentHashMap
  * Module 06 (Session Model) will replace it with a richer session lifecycle
  * (persistence, save/resume, multi-player isolation).
  *
- * Thread safety: all mutable state is guarded by the [PhysicsSession] lock or
- * [ConcurrentHashMap] structural operations.
+ * Thread safety: all multi-property writes to [PhysicsSession] are wrapped in
+ * `synchronized(session)` in [com.gridmaster.api.PhysicsController], which already
+ * ensures memory visibility. `@Volatile` on individual fields is therefore redundant
+ * and has been omitted.
  */
 @Component
 class PhysicsSessionStore {
@@ -54,13 +56,13 @@ class PhysicsSessionStore {
 data class PhysicsSession(
     val sessionId: String,
     /** Live PowSyBl Network — mutated by applying [com.gridmaster.engine.model.NetworkMutation]s. */
-    @Volatile var iidmNetwork: Network,
+    var iidmNetwork: Network,
     /** Latest GridNetwork snapshot produced after the most recent power flow solve. */
-    @Volatile var latestSnapshot: GridNetwork,
-    @Volatile var latestPowerFlowResult: PowerFlowResult? = null,
-    @Volatile var latestContingencyResult: ContingencyAnalysisResult? = null,
-    @Volatile var latestDispatchResult: DispatchResult? = null,
-    @Volatile var latestUcResult: UcResult? = null,
+    var latestSnapshot: GridNetwork,
+    var latestPowerFlowResult: PowerFlowResult? = null,
+    var latestContingencyResult: ContingencyAnalysisResult? = null,
+    var latestDispatchResult: DispatchResult? = null,
+    var latestUcResult: UcResult? = null,
 )
 
 /** Thrown when a requested session does not exist in [PhysicsSessionStore]. */
