@@ -393,9 +393,9 @@ class TickEngineImpl(
 /**
  * Mutable runtime state for one active session.
  *
- * Fields written by control commands (pause/resume/setSpeed) and read by the
- * tick loop are declared `@Volatile` so that changes from the calling thread
- * are visible to the coroutine thread without additional synchronisation.
+ * Fields are declared `@Volatile` for single-field visibility across threads.
+ * Compound state transitions (check-then-set) use `synchronized(this)` blocks
+ * to ensure atomicity — `@Volatile` alone is insufficient for those operations.
  */
 internal class SessionRuntime(
     val sessionId: String,
