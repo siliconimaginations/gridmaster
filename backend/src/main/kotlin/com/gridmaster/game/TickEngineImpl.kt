@@ -140,13 +140,16 @@ class TickEngineImpl(
         check(runtime.clockState != ClockState.STOPPED) {
             "Cannot change speed of stopped session $sessionId"
         }
-        runtime.speedMultiplier = multiplier
-        // If the player manually raises speed, clear any active auto-slow
-        if (runtime.autoSlowed) {
-            runtime.autoSlowed = false
-            runtime.autoSlowPreviousSpeed = null
-            if (runtime.clockState == ClockState.SLOW) {
-                runtime.clockState = ClockState.RUNNING
+        synchronized(runtime) {
+            runtime.speedMultiplier = multiplier
+            // If the player manually changes speed, clear any active auto-slow so
+            // applyAutoSlow() cannot overwrite the player's explicit choice.
+            if (runtime.autoSlowed) {
+                runtime.autoSlowed = false
+                runtime.autoSlowPreviousSpeed = null
+                if (runtime.clockState == ClockState.SLOW) {
+                    runtime.clockState = ClockState.RUNNING
+                }
             }
         }
         log.info("Set speed for session {} to {}×", sessionId, multiplier)
@@ -249,7 +252,7 @@ class TickEngineImpl(
         // Step 8: WebSocket broadcast — wired in Module 10
 
         // Step 9: auto-save
-        val shouldSave = ctx.tickNumber % autoSaveInterval == 0L
+        val shouldSave = autoSaveInterval > 0 && ctx.tickNumber % autoSaveInterval == 0L
         runtime.tickCount++
         runtime.gameTimeMinutes += GRID_MINUTES_PER_TICK
 
@@ -300,23 +303,25 @@ class TickEngineImpl(
             pfResult.status == ConvergenceStatus.NETWORK_FAILURE ||
                 pfResult.violations.any { it.severity == ViolationSeverity.CRITICAL }
 
-        if (needsSlow && !runtime.autoSlowed && runtime.clockState == ClockState.RUNNING) {
-            log.info(
-                "Auto-slow activated for session {} (status={}, critical violations={})",
-                runtime.sessionId,
-                pfResult.status,
-                pfResult.violations.count { it.severity == ViolationSeverity.CRITICAL },
-            )
-            runtime.autoSlowPreviousSpeed = runtime.speedMultiplier
-            runtime.speedMultiplier = 1
-            runtime.clockState = ClockState.SLOW
-            runtime.autoSlowed = true
-        } else if (!needsSlow && runtime.autoSlowed && runtime.clockState == ClockState.SLOW) {
-            log.info("Auto-slow cleared for session {} — restoring speed", runtime.sessionId)
-            runtime.speedMultiplier = runtime.autoSlowPreviousSpeed ?: 1
-            runtime.autoSlowPreviousSpeed = null
-            runtime.clockState = ClockState.RUNNING
-            runtime.autoSlowed = false
+        synchronized(runtime) {
+            if (needsSlow && !runtime.autoSlowed && runtime.clockState == ClockState.RUNNING) {
+                log.info(
+                    "Auto-slow activated for session {} (status={}, critical violations={})",
+                    runtime.sessionId,
+                    pfResult.status,
+                    pfResult.violations.count { it.severity == ViolationSeverity.CRITICAL },
+                )
+                runtime.autoSlowPreviousSpeed = runtime.speedMultiplier
+                runtime.speedMultiplier = 1
+                runtime.clockState = ClockState.SLOW
+                runtime.autoSlowed = true
+            } else if (!needsSlow && runtime.autoSlowed && runtime.clockState == ClockState.SLOW) {
+                log.info("Auto-slow cleared for session {} — restoring speed", runtime.sessionId)
+                runtime.speedMultiplier = runtime.autoSlowPreviousSpeed ?: 1
+                runtime.autoSlowPreviousSpeed = null
+                runtime.clockState = ClockState.RUNNING
+                runtime.autoSlowed = false
+            }
         }
     }
 
