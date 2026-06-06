@@ -20,8 +20,8 @@ import com.powsybl.iidm.network.TopologyKind
  *    TX12 (S1 HV→LV)                    L34
  *      |                                  |
  *   [B1L 110kV]            [B4 220kV]──Load2
- *      |                        |
- *     L14──────────────────────/
+ *                               |
+ *   L14: B1 (HV)──────────────/
  */
 object PresetNetworkFactory {
     /** Maps a [networkPreset] string to a network-builder function. */
