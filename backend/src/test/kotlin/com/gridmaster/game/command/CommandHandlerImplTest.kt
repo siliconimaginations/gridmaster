@@ -402,6 +402,117 @@ class CommandHandlerImplTest {
         assertThat(result.newAlerts.any { it is Alert.ConvergenceAlert }).isTrue()
     }
 
+    // ── VoltageAlert ──────────────────────────────────────────────────────────
+
+    @Test
+    fun `voltage violation produces VoltageAlert`() {
+        every { powerFlowService.solve(any(), any()) } returns pfResultWithVoltageViolation()
+
+        val result =
+            handler.handle(
+                PlayerCommand.SetGeneratorOutput(sessionId, "g1", 80.0),
+                userId,
+            )
+
+        assertThat(result.newAlerts).hasSize(1)
+        assertThat(result.newAlerts[0]).isInstanceOf(Alert.VoltageAlert::class.java)
+        val va = result.newAlerts[0] as Alert.VoltageAlert
+        assertThat(va.voltagePu).isEqualTo(0.88)
+    }
+
+    // ── Power flow exception rollback ─────────────────────────────────────────
+
+    @Test
+    fun `power flow exception rolls back network and returns failure`() {
+        every { powerFlowService.solve(any(), any()) } throws RuntimeException("Solver crash")
+        val originalRef = session.iidmNetwork
+
+        val result =
+            handler.handle(
+                PlayerCommand.SetGeneratorOutput(sessionId, "g1", 80.0),
+                userId,
+            )
+
+        assertThat(result.success).isFalse()
+        assertThat(result.commandOutcomes[0].rejectionReason).contains("Power flow error")
+        assertThat(session.iidmNetwork).isNotSameAs(originalRef)
+    }
+
+    // ── ConnectElement ────────────────────────────────────────────────────────
+
+    @Test
+    fun `ConnectElement LINE produces ConnectLine mutation`() {
+        val captured = slot<NetworkMutation.ConnectLine>()
+        every { networkMapper.applyMutation(any(), capture(captured)) } returns Result.success(session.iidmNetwork)
+
+        val result =
+            handler.handle(
+                PlayerCommand.ConnectElement(sessionId, "l1", EquipmentType.LINE),
+                userId,
+            )
+
+        assertThat(result.success).isTrue()
+        assertThat(captured.captured.lineId).isEqualTo("l1")
+    }
+
+    @Test
+    fun `ConnectElement unknown line rejected`() {
+        val result =
+            handler.handle(
+                PlayerCommand.ConnectElement(sessionId, "no-such-line", EquipmentType.LINE),
+                userId,
+            )
+        assertThat(result.success).isFalse()
+        assertThat(result.commandOutcomes[0].rejectionReason).contains("not found")
+    }
+
+    // ── ResumeClock ───────────────────────────────────────────────────────────
+
+    @Test
+    fun `ResumeClock delegates to TickEngine and skips mutation pipeline`() {
+        val result = handler.handle(PlayerCommand.ResumeClock(sessionId), userId)
+        assertThat(result.success).isTrue()
+        verify { tickEngine.resume(sessionId, userId) }
+        verify(exactly = 0) { networkMapper.applyMutation(any(), any()) }
+    }
+
+    // ── ApplyUcSchedule ───────────────────────────────────────────────────────
+
+    @Test
+    fun `ApplyUcSchedule commit produces ConnectGenerator and SetGeneratorOutput`() {
+        val captured = mutableListOf<NetworkMutation>()
+        every { networkMapper.applyMutation(any(), capture(captured)) } returns Result.success(session.iidmNetwork)
+
+        val result =
+            handler.handle(
+                PlayerCommand.ApplyUcSchedule(
+                    sessionId,
+                    listOf(GeneratorSchedule("g-off", committed = true, targetMw = 75.0)),
+                ),
+                userId,
+            )
+
+        assertThat(result.success).isTrue()
+        assertThat(captured).hasSize(2)
+        assertThat(captured[0]).isInstanceOf(NetworkMutation.ConnectGenerator::class.java)
+        val setOut = captured[1] as NetworkMutation.SetGeneratorOutput
+        assertThat(setOut.targetPMw).isEqualTo(75.0)
+    }
+
+    @Test
+    fun `ApplyUcSchedule unknown generator rejected`() {
+        val result =
+            handler.handle(
+                PlayerCommand.ApplyUcSchedule(
+                    sessionId,
+                    listOf(GeneratorSchedule("nonexistent", committed = true)),
+                ),
+                userId,
+            )
+        assertThat(result.success).isFalse()
+        assertThat(result.commandOutcomes[0].rejectionReason).contains("not found")
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun buildMinimalSnapshot(connectedGenerators: List<String> = listOf("g1", "g2")): GridNetwork {
@@ -505,5 +616,25 @@ class CommandHandlerImplTest {
             slackBusIds = emptyList(),
             violations = emptyList(),
             solveTimeMs = 5,
+        )
+
+    private fun pfResultWithVoltageViolation() =
+        PowerFlowResult(
+            status = ConvergenceStatus.CONVERGED,
+            solveMode = SolveMode.AC,
+            iterationCount = 3,
+            snapshot = snapshot,
+            slackBusIds = listOf("b1"),
+            violations =
+                listOf(
+                    NetworkViolation.VoltageViolation(
+                        busId = "b1",
+                        voltagePu = 0.88,
+                        limitMinPu = 0.95,
+                        limitMaxPu = 1.05,
+                        severity = ViolationSeverity.WARNING,
+                    ),
+                ),
+            solveTimeMs = 8,
         )
 }
