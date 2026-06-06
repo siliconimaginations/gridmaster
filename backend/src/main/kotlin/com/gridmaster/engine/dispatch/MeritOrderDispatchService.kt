@@ -141,14 +141,12 @@ class MeritOrderDispatchService(
 
         if (increaseCandidates.isEmpty() || decreaseCandidates.isEmpty()) return null
 
-        // Maximise flow reduction potential: dec.sensitivity - inc.sensitivity (both terms positive)
-        val best =
-            increaseCandidates.flatMap { inc ->
-                decreaseCandidates.map { dec -> inc to dec }
-            }.maxByOrNull { (inc, dec) -> dec.sensitivity - inc.sensitivity }
-                ?: return null
-
-        val (inc, dec) = best
+        // Maximise flow reduction: dec.sensitivity - inc.sensitivity.
+        // Since the two terms are independent, select each candidate independently — O(N+M).
+        // inc has sensitivity < 0: pick most negative (largest absolute counter-flow effect)
+        // dec has sensitivity > 0: pick most positive (largest pro-flow effect to remove)
+        val inc = increaseCandidates.minByOrNull { it.sensitivity } ?: return null
+        val dec = decreaseCandidates.maxByOrNull { it.sensitivity } ?: return null
         val combinedSensitivity = dec.sensitivity - inc.sensitivity // always positive
         if (combinedSensitivity < 1e-6) return null
 
