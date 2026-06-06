@@ -46,34 +46,37 @@ class GreedyUnitCommitmentService(
                 val loadMw = forecast.hourlyLoadMw[hour]
                 val requiredCapacity = loadMw * (1.0 + parameters.reserveMarginFraction)
 
-                // Commit generators until capacity requirement is met
+                // Commit generators until capacity requirement is met.
+                // Track capacity incrementally (O(N) per hour, not O(N²)).
                 val uncommitted =
                     generators.filter { !commitmentState.getValue(it.id) }
                         .sortedWith(compareBy({ it.startupCostGbp }, { it.marginalCostPerMwh }))
 
+                var currentCapacity = committedCapacity(generators, commitmentState)
                 for (gen in uncommitted) {
-                    val currentCapacity = committedCapacity(generators, commitmentState)
                     if (currentCapacity >= requiredCapacity) break
                     val hoursDown = hoursInCurrentState[gen.id] ?: 0
                     if (hoursDown < gen.minDownTimeHours) continue // min down time not met
                     commitmentState[gen.id] = true
+                    currentCapacity += gen.maxActivePowerMw
                     hoursInCurrentState[gen.id] = 0
                     totalStartupCost += gen.startupCostGbp
                     log.debug("UC hour {}: committing {} (startup £{:.0f})", hour, gen.id, gen.startupCostGbp)
                 }
 
-                // Try decommitting expensive generators if surplus capacity allows
+                // Try decommitting expensive generators if surplus capacity allows.
+                // Maintain running capacity to avoid recomputing it each iteration.
                 val committed =
                     generators.filter { commitmentState.getValue(it.id) }
                         .sortedByDescending { it.marginalCostPerMwh }
 
+                var runningCapacity = currentCapacity
                 for (gen in committed) {
-                    val capacityWithout =
-                        committedCapacity(generators, commitmentState) - gen.maxActivePowerMw
-                    if (capacityWithout < requiredCapacity) continue // insufficient surplus without this unit; try others
+                    if (runningCapacity - gen.maxActivePowerMw < requiredCapacity) continue
                     val hoursUp = hoursInCurrentState[gen.id] ?: 0
                     if (hoursUp < gen.minUpTimeHours) continue // min up time not met
                     commitmentState[gen.id] = false
+                    runningCapacity -= gen.maxActivePowerMw
                     hoursInCurrentState[gen.id] = 0
                     log.debug("UC hour {}: decommitting {}", hour, gen.id)
                 }
