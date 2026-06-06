@@ -85,6 +85,12 @@ class PhysicsController(
      * Power flow is NOT re-run automatically; follow up with POST /powerflow/run if needed.
      *
      * Returns the updated [GridNetwork] snapshot (without power-flow results).
+     *
+     * NOTE: The snapshot/rollback logic here mirrors [com.gridmaster.game.command.CommandHandlerImpl].
+     * Direct delegation to [com.gridmaster.game.command.CommandHandler.applyMutations] is intentionally
+     * avoided because that path always runs power flow. This REST endpoint is a low-level tool for
+     * tutorial missions and test setups that need to stage network state without triggering a solve.
+     * See TODO #76 for a future consolidation plan.
      */
     @PostMapping("/network/mutations")
     fun applyMutations(
