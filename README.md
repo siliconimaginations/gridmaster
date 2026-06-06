@@ -1,5 +1,8 @@
 # GridMaster
 
+![CI](https://github.com/siliconimaginations/gridmaster/actions/workflows/ci.yml/badge.svg)
+![Coverage](.github/badges/jacoco.svg)
+
 An educational power grid simulation game. Players learn how real power grids are operated and planned — from reading power flows and dispatching generators, to contingency analysis, economic dispatch, and long-term expansion planning.
 
 ## Tech Stack
