@@ -134,18 +134,41 @@ class OrToolsDispatchTest {
     // ── MIP unit commitment ───────────────────────────────────────────────────
 
     @Test
-    fun `MIP UC falls back to greedy for small networks`() {
-        val gens = List(5) { i -> gen("G$i", max = 100.0, cost = (i + 1) * 10.0) }
+    fun `MIP UC uses SCIP for networks up to the generator limit`() {
+        // 10 generators — within MIP_GENERATOR_LIMIT (20); solver path, not greedy
+        val gens = List(10) { i -> gen("G$i", max = 100.0, cost = (i + 1) * 10.0) }
         val mipService = MipUnitCommitmentService(GreedyUnitCommitmentService(MeritOrderDispatchService(lpService)))
 
         val result = mipService.commit(gens, flatForecast(200.0))
+        assertThat(result.hourlySchedule).hasSize(24)
+        assertThat(result.feasible).isTrue()
+        // solve time > 0 confirms the MIP path was taken (greedy reports 0 ms via copy)
+        assertThat(result.solveTimeMs).isGreaterThan(0L)
+    }
+
+    /**
+     * Verifies that [MipUnitCommitmentService] delegates to [GreedyUnitCommitmentService] when
+     * the network exceeds [MipUnitCommitmentService.MIP_GENERATOR_LIMIT].
+     *
+     * MIP solve time grows exponentially with generator count: for large instances SCIP is
+     * impractical within the wall-clock budget, so the greedy heuristic is the correct path.
+     * [GreedyUnitCommitmentService] is wired in explicitly here (rather than mocked) so that
+     * the test also validates the full dispatch pipeline for the fallback case.
+     */
+    @Test
+    fun `MIP UC falls back to greedy for networks above the generator limit`() {
+        // 25 generators — above MIP_GENERATOR_LIMIT (20); greedy heuristic path exercised
+        val gens = List(25) { i -> gen("G$i", max = 80.0, cost = (i + 1) * 5.0) }
+        val mipService = MipUnitCommitmentService(GreedyUnitCommitmentService(MeritOrderDispatchService(lpService)))
+
+        val result = mipService.commit(gens, flatForecast(400.0))
         assertThat(result.hourlySchedule).hasSize(24)
         assertThat(result.feasible).isTrue()
     }
 
     @Test
     fun `MIP UC produces feasible 24-hour schedule for medium network`() {
-        // 10 generators — above greedy threshold of 8
+        // 10 generators — within MIP_GENERATOR_LIMIT (20), so SCIP is used
         val gens =
             List(10) { i ->
                 gen("G$i", min = 5.0, max = 80.0, cost = (i + 1) * 8.0, committed = i < 5)
@@ -200,6 +223,32 @@ class OrToolsDispatchTest {
             val committedCapacity = hour.committedGeneratorIds.size * 60.0
             assertThat(committedCapacity).isGreaterThanOrEqualTo(100.0 * 1.20 - 0.1)
         }
+    }
+
+    @Test
+    fun `MIP UC solves 20-generator case within time limit`() {
+        // 20 generators — at the MIP_GENERATOR_LIMIT boundary; verify solve completes in time
+        val gens =
+            List(20) { i ->
+                gen(
+                    "G$i",
+                    min = 5.0,
+                    max = 60.0,
+                    cost = (i + 1) * 4.0,
+                    committed = i < 10,
+                    startupCost = (i + 1) * 50.0,
+                    minUpHours = if (i % 3 == 0) 2 else 0,
+                    minDownHours = if (i % 4 == 0) 2 else 0,
+                )
+            }
+        val mipService = MipUnitCommitmentService(GreedyUnitCommitmentService(MeritOrderDispatchService(lpService)))
+
+        val result = mipService.commit(gens, flatForecast(300.0))
+
+        assertThat(result.feasible).isTrue()
+        assertThat(result.solveTimeMs)
+            .describedAs("20-gen MIP solve should complete within SCIP time limit")
+            .isLessThan(MipUnitCommitmentService.SOLVER_TIME_LIMIT_MS)
     }
 
     @Test

@@ -31,22 +31,28 @@ import kotlin.system.measureTimeMillis
  *     Min down time:  Σ_{t=h}^{h+minDown-1} (1-y[g][t]) ≥ minDown * (y[g][h-1]-y[g][h])
  * ```
  *
- * For small networks (≤ [GREEDY_THRESHOLD] generators) the greedy heuristic is used instead
- * for speed. The MIP path is activated for larger instances.
+ * MIP is used for networks up to [MIP_GENERATOR_LIMIT] generators, where the solve time is
+ * acceptable and the optimal solution is desirable. For larger networks, MIP solve time grows
+ * exponentially, so the greedy heuristic is used instead to keep scheduling tractable.
  *
  * This implementation is the `@Primary` [UnitCommitmentService] bean; [GreedyUnitCommitmentService]
- * remains available as a `@Qualifier("greedy")` fallback.
+ * remains available as a `@Qualifier("greedy")` fallback for large networks and on solver failure.
  */
 @Primary
 @Service
 class MipUnitCommitmentService(
+    /** Greedy heuristic fallback — used for large networks and on MIP solver failure. */
     private val greedy: GreedyUnitCommitmentService,
 ) : UnitCommitmentService {
     private val log = LoggerFactory.getLogger(MipUnitCommitmentService::class.java)
 
     companion object {
-        /** Use greedy below this threshold for speed (MIP is overkill for tiny networks). */
-        const val GREEDY_THRESHOLD = 8
+        /**
+         * Maximum number of generators for which the MIP solver is used.
+         * Networks above this size fall back to the greedy heuristic: MIP solve time grows
+         * exponentially with generator count, making it impractical for large instances.
+         */
+        const val MIP_GENERATOR_LIMIT = 20
 
         /** SCIP time limit per solve in milliseconds. */
         const val SOLVER_TIME_LIMIT_MS = 10_000L
@@ -57,8 +63,12 @@ class MipUnitCommitmentService(
         forecast: LoadForecast,
         parameters: DispatchParameters,
     ): UcResult {
-        if (generators.size <= GREEDY_THRESHOLD) {
-            log.debug("MipUC: {} generators ≤ threshold {} — using greedy", generators.size, GREEDY_THRESHOLD)
+        if (generators.size > MIP_GENERATOR_LIMIT) {
+            log.debug(
+                "MipUC: {} generators > limit {} — using greedy heuristic for tractability",
+                generators.size,
+                MIP_GENERATOR_LIMIT,
+            )
             return greedy.commit(generators, forecast, parameters)
         }
         return solveMip(generators, forecast, parameters)
@@ -85,7 +95,7 @@ class MipUnitCommitmentService(
             val solver =
                 MPSolver.createSolver("SCIP")
                     ?: run {
-                        log.warn("MipUC: SCIP solver not available — falling back to greedy")
+                        log.warn("MipUC: SCIP solver not available — falling back to greedy heuristic")
                         return greedy.commit(generators, forecast, parameters)
                     }
 
