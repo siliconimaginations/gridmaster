@@ -11,8 +11,11 @@ import org.springframework.data.jpa.repository.JpaRepository
  * must always scope queries to the authenticated userId.
  */
 interface GameSessionJpaRepository : JpaRepository<GameSessionEntity, String> {
-    /** Return all sessions owned by [userId], in database-natural order. */
-    fun findAllByUserId(userId: String): List<GameSessionEntity>
+    /**
+     * Return all sessions owned by [userId], ordered by most recently updated first.
+     * Sorting is delegated to the database to avoid in-memory sorting on large lists.
+     */
+    fun findAllByUserIdOrderByUpdatedAtDesc(userId: String): List<GameSessionEntity>
 
     /** Return sessions owned by [userId] filtered by [mode]. */
     fun findAllByUserIdAndMode(

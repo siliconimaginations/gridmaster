@@ -100,7 +100,8 @@ class GameSessionServiceTest {
     fun `listForUser returns sessions sorted by updatedAt descending`() {
         val older = stubEntity("s1").copy(updatedAt = Instant.ofEpochSecond(100))
         val newer = stubEntity("s2").copy(updatedAt = Instant.ofEpochSecond(200))
-        every { jpaRepository.findAllByUserId(USER_ID) } returns listOf(older, newer)
+        // DB returns newest first; service must preserve that order without re-sorting
+        every { jpaRepository.findAllByUserIdOrderByUpdatedAtDesc(USER_ID) } returns listOf(newer, older)
 
         val result = service.listForUser(USER_ID)
 

@@ -86,8 +86,7 @@ class GameSessionService(
 
     /** Return all sessions belonging to [userId], ordered by [GameSessionEntity.updatedAt] descending. */
     fun listForUser(userId: String): List<GameSession> =
-        jpaRepository.findAllByUserId(userId)
-            .sortedByDescending { it.updatedAt }
+        jpaRepository.findAllByUserIdOrderByUpdatedAtDesc(userId)
             .map { it.toDomain() }
 
     /**
