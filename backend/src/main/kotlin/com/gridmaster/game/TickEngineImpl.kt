@@ -77,10 +77,6 @@ class TickEngineImpl(
         userId: String,
     ): TickClockStatus {
         val gameSession = gameSessionService.load(sessionId, userId)
-        check(!sessions.containsKey(sessionId)) {
-            "Session $sessionId is already active. Use /resume if paused, or /stop then re-create if stopped."
-        }
-
         val runtime =
             SessionRuntime(
                 sessionId = sessionId,
@@ -89,7 +85,7 @@ class TickEngineImpl(
                 speedMultiplier = gameSession.clockSpeedMultiplier.coerceIn(1, MAX_SPEED_MULTIPLIER),
                 gameTimeMinutes = gameSession.gameTimeEpochMinutes,
             )
-        // Atomic check-and-register; see TODO #69 for remaining TOCTOU note.
+        // Atomic check-and-register: putIfAbsent eliminates the TOCTOU race (closes #69).
         val displaced = sessions.putIfAbsent(sessionId, runtime)
         check(displaced == null) {
             "Session $sessionId is already active. Use /resume if paused, or /stop then re-create if stopped."
