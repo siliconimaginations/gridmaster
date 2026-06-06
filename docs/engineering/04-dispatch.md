@@ -352,8 +352,13 @@ compared to pure economic merit order.
    seconds — well within the game's day-ahead planning timescale.
    The MIP formulation is also transparent enough to show the player
    (commitment schedule table, startup costs, marginal units per hour).
-   *Alternative*: greedy. Rejected — not guaranteed feasible; educational
-   value is higher when the solution is known to be optimal.
+   *Alternative*: greedy. Rejected as the long-term approach — not
+   guaranteed feasible; educational value is higher when the solution is
+   known to be optimal. **Implementation note**: OR-Tools MIP is deferred
+   to issue #28. The current implementation uses a greedy heuristic
+   (`GreedyUnitCommitmentService`) which is sufficient for small tutorial
+   networks (<20 generators). LP dispatch similarly falls back to merit-order
+   until the OR-Tools dependency is integrated.
 
 3. **Redispatch as a separate call from economic dispatch.**
    Separating `economicDispatch` from `congestionRedispatch` makes the
@@ -428,6 +433,9 @@ compared to pure economic merit order.
    setting. Agreed.
 
 4. **OR-Tools for UC and LP dispatch**: MIP (SCIP/CBC via OR-Tools) for
-   unit commitment; LP mode added as an option for economic dispatch.
-   `com.google.ortools:ortools-java` added to dependencies in
-   implementation PR. Agreed.
+   unit commitment; LP mode as an option for economic dispatch. Agreed as
+   the target design. **Current implementation status**: OR-Tools
+   integration is deferred (tracked in issue #28). The shipped
+   implementation uses `GreedyUnitCommitmentService` for UC and
+   `MeritOrderDispatchService` for economic dispatch. The `DispatchMode.LP`
+   path exists as a stub and will be wired to OR-Tools in issue #28.
