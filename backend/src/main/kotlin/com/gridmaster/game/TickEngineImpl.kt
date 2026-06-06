@@ -112,7 +112,7 @@ class TickEngineImpl(
                 runtime.clockState = ClockState.PAUSED
                 runtime.toStatus()
             }
-        triggerAutoSave(runtime)
+        runtime.pendingSave = true // Tick loop saves after current tick finishes
         log.info("Paused session {}", sessionId)
         return pausedStatus
     }
@@ -194,6 +194,10 @@ class TickEngineImpl(
             while (runtime.clockState != ClockState.STOPPED) {
                 when (runtime.clockState) {
                     ClockState.PAUSED -> {
+                        if (runtime.pendingSave) {
+                            runtime.pendingSave = false
+                            triggerAutoSave(runtime)
+                        }
                         delay(PAUSE_POLL_INTERVAL_MS)
                         continue
                     }
@@ -423,6 +427,10 @@ internal class SessionRuntime(
     /** Speed multiplier to restore when auto-slow clears. */
     @Volatile
     var autoSlowPreviousSpeed: Int? = null
+
+    /** Set by pause() to signal the tick loop to save once the current tick finishes. */
+    @Volatile
+    var pendingSave: Boolean = false
 
     /** Snapshot of the current state as an immutable [TickClockStatus]. Synchronized for consistency. */
     fun toStatus(): TickClockStatus =
