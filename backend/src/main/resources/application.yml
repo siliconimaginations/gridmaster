@@ -28,3 +28,8 @@ gridmaster:
   # Game clock: 1 real second = 10 grid-minutes at 1x speed
   tick-interval-ms: 1000
   grid-minutes-per-tick: 10
+  auth:
+    # INSECURE default — override via GRIDMASTER_AUTH_JWT_SECRET in any shared deployment.
+    # Must be at least 32 bytes for HMAC-SHA256.
+    jwt-secret: "gridmaster-local-dev-secret-key-change-in-prod-32bytes"
+    jwt-expiry-days: 30

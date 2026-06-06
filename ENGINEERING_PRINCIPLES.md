@@ -235,7 +235,7 @@ Future gates (Stage 7+):
 
 ## 8. Documentation Standards
 
-- Every public Kotlin function or class with non-obvious behaviour gets a KDoc comment.
+- Every public Kotlin symbol (class, interface, enum, function, or property) gets a KDoc comment. This includes simple DTOs, enums, and extension functions — not just non-obvious behaviour.
 - Every public TypeScript function or type gets a JSDoc comment.
 - REST endpoints are documented with examples in the engineering design doc — not in code comments.
 - The `docs/` folder is the canonical home for design and architecture docs. Don't scatter architecture decisions in Slack/chat; write them up and commit them.
