@@ -339,7 +339,6 @@ class EventEngineImpl : EventEngine {
         }
     }
 
-    // TODO: #71 — pre-compute busId→regionId map to avoid O(N*M) nested search
     private fun scaleLoadMutations(
         effect: EventEffect.ScaleLoad,
         snapshot: GridNetwork,
@@ -348,12 +347,10 @@ class EventEngineImpl : EventEngine {
             if (effect.regionIds.isNullOrEmpty()) {
                 snapshot.loads
             } else {
+                // Pre-compute O(M) map; load lookup is then O(1) per load. Closes #71.
+                val busRegion: Map<String, String?> = snapshot.buses.associate { it.id to it.regionId }
                 snapshot.loads.filter { load ->
-                    snapshot.buses
-                        .find { it.id == load.busId }
-                        ?.regionId
-                        ?.let { it in effect.regionIds }
-                        ?: false
+                    busRegion[load.busId]?.let { it in effect.regionIds } ?: false
                 }
             }
         return affectedLoads.map { load ->
@@ -375,8 +372,6 @@ class EventEngineImpl : EventEngine {
     ): Long = (-mean * ln(random.nextDouble().coerceAtLeast(1e-9))).toLong().coerceAtLeast(1L)
 
     companion object {
-        /** Minimum game-time offset before the first stochastic event fires (30 grid-minutes). */
-        private const val INITIAL_OFFSET_MINUTES = 30L
     }
 }
 
@@ -384,7 +379,9 @@ class EventEngineImpl : EventEngine {
 // Per-session event state
 // ─────────────────────────────────────────────────────────────────────────────
 
-// TODO: #73 — remove duplicate INITIAL_OFFSET_MINUTES from SessionEventState.Companion
+/** Minimum game-time offset before the first stochastic event fires (30 grid-minutes). */
+private const val INITIAL_OFFSET_MINUTES = 30L
+
 internal class SessionEventState(val config: EventConfig) {
     val random: Random =
         if (config.randomSeed != null) Random(config.randomSeed) else Random.Default
@@ -411,10 +408,6 @@ internal class SessionEventState(val config: EventConfig) {
 
     /** Ordered history of all fired events. */
     val log: MutableList<FiredEvent> = mutableListOf()
-
-    companion object {
-        private const val INITIAL_OFFSET_MINUTES = 30L
-    }
 }
 
 private fun EventConfig.meanFor(category: EventCategory): Int =
