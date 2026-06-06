@@ -105,6 +105,7 @@ class TickEngineImpl(
         userId: String,
     ) {
         val runtime = requireRuntime(sessionId)
+        check(runtime.userId == userId) { "User $userId does not own session $sessionId" }
         check(runtime.clockState in setOf(ClockState.RUNNING, ClockState.SLOW)) {
             "Cannot pause session $sessionId in state ${runtime.clockState}"
         }
@@ -121,6 +122,7 @@ class TickEngineImpl(
         userId: String,
     ) {
         val runtime = requireRuntime(sessionId)
+        check(runtime.userId == userId) { "User $userId does not own session $sessionId" }
         check(runtime.clockState == ClockState.PAUSED) {
             "Cannot resume session $sessionId in state ${runtime.clockState}"
         }
@@ -137,6 +139,7 @@ class TickEngineImpl(
             "Speed multiplier must be in 1–$MAX_SPEED_MULTIPLIER, got $multiplier"
         }
         val runtime = requireRuntime(sessionId)
+        check(runtime.userId == userId) { "User $userId does not own session $sessionId" }
         check(runtime.clockState != ClockState.STOPPED) {
             "Cannot change speed of stopped session $sessionId"
         }
@@ -157,6 +160,7 @@ class TickEngineImpl(
         userId: String,
     ) {
         val runtime = requireRuntime(sessionId)
+        check(runtime.userId == userId) { "User $userId does not own session $sessionId" }
         runtime.clockState = ClockState.STOPPED
         runtime.job?.cancel()
         sessions.remove(sessionId)
@@ -253,7 +257,7 @@ class TickEngineImpl(
         runtime.gameTimeMinutes += GRID_MINUTES_PER_TICK
 
         if (shouldSave) {
-            saveRuntime(runtime)
+            engineScope.launch(Dispatchers.IO) { saveRuntime(runtime) }
         }
 
         // Slip detection and pacing

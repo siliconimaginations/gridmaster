@@ -67,7 +67,7 @@ class TickEngineImplTest {
             PhysicsSession(sessionId, mockNetwork, mockSnapshot)
         every { gameSessionService.load(sessionId, userId) } returns buildGameSession()
         every { gameSessionService.save(any(), any(), any(), any(), any()) } returns buildGameSession()
-        every { powerFlowService.solve(any(), any()) } returns convergedResult()
+        every { powerFlowService.solve(any()) } returns convergedResult()
         justRun { contingencyAnalysisService.triggerAsync(any()) }
     }
 
@@ -192,7 +192,7 @@ class TickEngineImplTest {
     @Test
     fun `auto-slow activates on NETWORK_FAILURE and sets speed to 1`() {
         runBlocking {
-            every { powerFlowService.solve(any(), any()) } returns networkFailureResult()
+            every { powerFlowService.solve(any()) } returns networkFailureResult()
             // Start at 100× so ticks fire every 10ms
             every { gameSessionService.load(sessionId, userId) } returns buildGameSession(multiplier = 100)
             engine.start(sessionId, userId)
@@ -211,7 +211,7 @@ class TickEngineImplTest {
     fun `auto-slow clears when power flow recovers`() {
         runBlocking {
             val callCount = java.util.concurrent.atomic.AtomicInteger(0)
-            every { powerFlowService.solve(any(), any()) } answers {
+            every { powerFlowService.solve(any()) } answers {
                 // First tick: fail → auto-slow (drops to 1×). Second tick (~1s later): recover.
                 if (callCount.incrementAndGet() <= 1) networkFailureResult() else convergedResult()
             }
