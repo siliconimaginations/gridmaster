@@ -242,8 +242,9 @@ class TickEngineImpl(
                 powerFlowService.solve(physicsSession.iidmNetwork)
             } catch (e: Exception) {
                 log.error("Power flow solve failed for session {}, tick {}", runtime.sessionId, ctx.tickNumber, e)
-                // TODO: #64 — transition to PAUSED instead of STOPPED so the player can inspect and resume
-                synchronized(runtime) { runtime.clockState = ClockState.STOPPED }
+                // Pause (not stop) so the player can inspect the grid and potentially resume. Closes #64.
+                synchronized(runtime) { runtime.clockState = ClockState.PAUSED }
+                triggerAutoSave(runtime)
                 return
             }
 
