@@ -197,6 +197,8 @@ class PhysicsController(
         @PathVariable sessionId: String,
     ): ResponseEntity<Void> {
         val session = sessionStore.get(sessionId)
+        // TODO: #38 — NetworkSerDe round-trip is correct but O(network size); investigate
+        //   a PowSyBl-native deep-copy for better performance in larger networks.
         // Produce an isolated network snapshot via IIDM XML round-trip under the session lock.
         // This ensures the async analysis works on a frozen copy; subsequent mutations on
         // session.iidmNetwork will not corrupt the in-flight solve.
@@ -227,18 +229,21 @@ class PhysicsController(
         @Valid @RequestBody request: DispatchRequest,
     ): DispatchResult {
         val session = sessionStore.get(sessionId)
-        val generators = session.latestSnapshot.toDispatchableGenerators()
-        val params = request.toDomain()
-
-        val result =
-            try {
-                dispatchService.economicDispatch(generators, request.totalLoadMw, params)
-            } catch (ex: Exception) {
-                throw PhysicsServiceException(sessionId, "Dispatch failed: ${ex.message}", ex)
-            }
-
-        synchronized(session) { session.latestDispatchResult = result }
-        return result
+        // Hold the lock for the full read-solve-write cycle so that latestSnapshot
+        // cannot be replaced by a concurrent power flow run mid-dispatch.
+        // Module 06 (Session Model) will own session serialisation at a higher level.
+        return synchronized(session) {
+            val generators = session.latestSnapshot.toDispatchableGenerators()
+            val params = request.toDomain()
+            val result =
+                try {
+                    dispatchService.economicDispatch(generators, request.totalLoadMw, params)
+                } catch (ex: Exception) {
+                    throw PhysicsServiceException(sessionId, "Dispatch failed: ${ex.message}", ex)
+                }
+            session.latestDispatchResult = result
+            result
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -258,23 +263,24 @@ class PhysicsController(
         @Valid @RequestBody request: UnitCommitmentRequest,
     ): UcResult {
         val session = sessionStore.get(sessionId)
-        val generators = session.latestSnapshot.toDispatchableGenerators()
-        val forecast =
-            LoadForecast(
-                hourlyLoadMw = request.hourlyForecastMw,
-                startHour = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.HOURS),
-            )
-        val params = DispatchParameters(reserveMarginFraction = request.reserveMarginFraction)
-
-        val result =
-            try {
-                unitCommitmentService.commit(generators, forecast, params)
-            } catch (ex: Exception) {
-                throw PhysicsServiceException(sessionId, "Unit commitment failed: ${ex.message}", ex)
-            }
-
-        synchronized(session) { session.latestUcResult = result }
-        return result
+        // Hold the lock for the full read-solve-write cycle (same rationale as runDispatch).
+        return synchronized(session) {
+            val generators = session.latestSnapshot.toDispatchableGenerators()
+            val forecast =
+                LoadForecast(
+                    hourlyLoadMw = request.hourlyForecastMw,
+                    startHour = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.HOURS),
+                )
+            val params = DispatchParameters(reserveMarginFraction = request.reserveMarginFraction)
+            val result =
+                try {
+                    unitCommitmentService.commit(generators, forecast, params)
+                } catch (ex: Exception) {
+                    throw PhysicsServiceException(sessionId, "Unit commitment failed: ${ex.message}", ex)
+                }
+            session.latestUcResult = result
+            result
+        }
     }
 }
 
