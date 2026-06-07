@@ -55,19 +55,27 @@ function definedFields<T extends object>(obj: Partial<T>): Partial<T> {
 
 // ── Store ─────────────────────────────────────────────────────────────────────
 
+// ── Initial state ────────────────────────────────────────────────────────────
+
+const INITIAL_GAME_STATE = {
+  network: null,
+  powerFlowStatus: null,
+  violations: [] as ViolationDto[],
+  tickNumber: 0,
+  gameTimeMinutes: 0,
+  clockState: 'STOPPED' as ClockState,
+  clockSpeedMultiplier: 1,
+  alerts: [] as AlertDto[],
+  pendingEventCards: [] as EventCardDto[],
+} as const satisfies Partial<GameStore>
+
+// ── Store ─────────────────────────────────────────────────────────────────────
+
 let wsClient: WsClient | null = null
 
 export const useGameStore = create<GameStore>((set, get) => ({
   // Initial state
-  network: null,
-  powerFlowStatus: null,
-  violations: [],
-  tickNumber: 0,
-  gameTimeMinutes: 0,
-  clockState: 'STOPPED',
-  clockSpeedMultiplier: 1,
-  alerts: [],
-  pendingEventCards: [],
+  ...INITIAL_GAME_STATE,
   connectionStatus: 'disconnected',
   sessionId: null,
 
@@ -121,21 +129,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   disconnect: () => {
     wsClient?.disconnect()
     wsClient = null
-    // Reset all game state so a future session starts clean
-    // TODO: #102 extract initial state as constant to keep create() and this reset in sync
-    set({
-      connectionStatus: 'disconnected',
-      sessionId: null,
-      network: null,
-      powerFlowStatus: null,
-      violations: [],
-      tickNumber: 0,
-      gameTimeMinutes: 0,
-      clockState: 'STOPPED',
-      clockSpeedMultiplier: 1,
-      alerts: [],
-      pendingEventCards: [],
-    })
+    // Resets all game state to initial values so a future session starts clean
+    set({ ...INITIAL_GAME_STATE, connectionStatus: 'disconnected', sessionId: null })
   },
 
   // ── sendCommand ──────────────────────────────────────────────────────────────

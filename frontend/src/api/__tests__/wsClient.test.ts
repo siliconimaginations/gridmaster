@@ -10,6 +10,7 @@ const mockDeactivate = vi.fn().mockResolvedValue(undefined)
 let capturedOnConnect: (() => void) | null = null
 
 let capturedMessageHandler: ((frame: { body: string }) => void) | null = null
+let capturedMockInstance: { connectHeaders: Record<string, string> } | null = null
 
 vi.mock('@stomp/stompjs', () => ({
   Client: vi.fn().mockImplementation((config: {
@@ -18,8 +19,8 @@ vi.mock('@stomp/stompjs', () => ({
   }) => {
     capturedOnConnect = config.onConnect
 
-    return {
-      connectHeaders: {},
+    const instance = {
+      connectHeaders: {} as Record<string, string>,
       connected: true,
       activate: mockActivate,
       deactivate: mockDeactivate,
@@ -29,6 +30,8 @@ vi.mock('@stomp/stompjs', () => ({
       },
       publish: mockPublish,
     }
+    capturedMockInstance = instance
+    return instance
   }),
 }))
 
@@ -45,6 +48,7 @@ describe('WsClient', () => {
     vi.clearAllMocks()
     capturedOnConnect = null
     capturedMessageHandler = null
+    capturedMockInstance = null
     onMessage = vi.fn()
     onStatus = vi.fn()
     client = new WsClient(onMessage, onStatus)
@@ -58,11 +62,7 @@ describe('WsClient', () => {
 
   it('sets Authorization header from token', () => {
     client.connect('sess1', 'mytoken')
-    // connectHeaders is mutated on the instance before activate() is called;
-    // we verify by checking what activate received via the mock
-    expect(mockActivate).toHaveBeenCalledOnce()
-    // The header is verified indirectly: if connect didn't set it, the server
-    // would reject authentication. Direct assertion covered in integration tests.
+    expect(capturedMockInstance?.connectHeaders).toEqual({ Authorization: 'Bearer mytoken' })
   })
 
   it('subscribes to the correct topic on STOMP connect', () => {
