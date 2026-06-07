@@ -119,7 +119,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
   disconnect: () => {
     wsClient?.disconnect()
     wsClient = null
-    set({ connectionStatus: 'disconnected', sessionId: null })
+    // Reset all game state so a future session starts clean
+    set({
+      connectionStatus: 'disconnected',
+      sessionId: null,
+      network: null,
+      powerFlowStatus: null,
+      violations: [],
+      tickNumber: 0,
+      gameTimeMinutes: 0,
+      clockState: 'STOPPED',
+      clockSpeedMultiplier: 1,
+      alerts: [],
+      pendingEventCards: [],
+    })
   },
 
   // ── sendCommand ──────────────────────────────────────────────────────────────

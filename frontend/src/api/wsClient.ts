@@ -62,12 +62,14 @@ export class WsClient {
   }
 
   /** Disconnect and clean up. */
-  disconnect(): void {
+  async disconnect(): Promise<void> {
     this.sessionId = null
     this.commandQueue = []
-    this.client.deactivate().catch(() => {
+    try {
+      await this.client.deactivate()
+    } catch {
       // deactivate rejects only if already inactive — safe to ignore
-    })
+    }
   }
 
   // ── Private ────────────────────────────────────────────────────────────────
