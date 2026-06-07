@@ -33,6 +33,7 @@ export function BottomHud() {
     })))
 
   const disabled = !sessionId
+  const networkReady = network !== null
   const isRunning = clockState === 'RUNNING'
 
   function handlePlayPause() {
@@ -93,7 +94,7 @@ export function BottomHud() {
         <button
           className={styles.actionBtn}
           onClick={handleDispatch}
-          disabled={disabled}
+          disabled={disabled || !networkReady}
           data-testid="btn-dispatch"
         >
           Run Dispatch

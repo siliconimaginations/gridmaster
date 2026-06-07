@@ -102,6 +102,12 @@ describe('BottomHud', () => {
     expect(screen.getByTestId('btn-dispatch')).toBeDisabled()
   })
 
+  it('dispatch button disabled when network is null', () => {
+    mockStore({ network: null })
+    render(<BottomHud />)
+    expect(screen.getByTestId('btn-dispatch')).toBeDisabled()
+  })
+
   it('event button not shown when no pending events', () => {
     render(<BottomHud />)
     expect(screen.queryByTestId('btn-event')).not.toBeInTheDocument()
