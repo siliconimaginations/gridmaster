@@ -55,6 +55,7 @@ export function updateSubstationStatus(
   status: SubstationStatus,
 ): void {
   if (ring.material) {
-    (ring.material as ReturnType<typeof createToonMaterial>).diffuseColor // TODO: #125 use StandardMaterial cast = STATUS_COLOURS[status]
+    // TODO: #125 use StandardMaterial cast
+    (ring.material as ReturnType<typeof createToonMaterial>).diffuseColor = STATUS_COLOURS[status]
   }
 }
