@@ -1,8 +1,10 @@
 import { create } from 'zustand'
 import { WsClient } from '../api/wsClient'
+import { getNetwork } from '../api/restClient'
 import type {
   AlertDto,
   ClockState,
+  CommandAck,
   ConnectionStatus,
   EventCardDto,
   GameStateUpdate,
@@ -39,6 +41,19 @@ interface GameStore {
   connect: (sessionId: string, token: string) => void
   disconnect: () => void
   sendCommand: (msg: PlayerCommandMessage) => void
+  /**
+   * Sends a command over WebSocket and immediately applies `optimisticFn`
+   * to the store (if provided). If the server returns a failed `CommandAck`,
+   * the store is refreshed from the REST API to restore authoritative state.
+   *
+   * Use for commands where the likely outcome is known (e.g. CommitGenerator,
+   * DecommitGenerator, SetGeneratorOutput). Omit `optimisticFn` for commands
+   * whose outcome is uncertain.
+   */
+  sendCommandOptimistic: (
+    msg: PlayerCommandMessage,
+    optimisticFn?: (prev: GridNetworkDto) => GridNetworkDto,
+  ) => void
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -53,9 +68,7 @@ function definedFields<T extends object>(obj: Partial<T>): Partial<T> {
   ) as Partial<T>
 }
 
-// ── Store ─────────────────────────────────────────────────────────────────────
-
-// ── Initial state ────────────────────────────────────────────────────────────
+// ── Initial state ─────────────────────────────────────────────────────────────
 
 const INITIAL_GAME_STATE = {
   network: null,
@@ -121,6 +134,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     wsClient = new WsClient(
       (update) => get().applyUpdate(update),
       (status) => set({ connectionStatus: status }),
+      (ack: CommandAck) => _handleAck(ack, get),
     )
     wsClient.connect(sessionId, token)
   },
@@ -142,4 +156,56 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
     wsClient?.send(msg)
   },
+
+  // ── sendCommandOptimistic ────────────────────────────────────────────────────
+  sendCommandOptimistic: (
+    msg: PlayerCommandMessage,
+    optimisticFn?: (prev: GridNetworkDto) => GridNetworkDto,
+  ) => {
+    const { sessionId, network } = get()
+    if (!sessionId) {
+      console.warn('[useGameStore] sendCommandOptimistic called without an active session')
+      return
+    }
+
+    // Apply the optimistic update immediately so the UI feels responsive.
+    if (optimisticFn && network) {
+      set({ network: optimisticFn(network) })
+    }
+
+    wsClient?.send(msg)
+  },
 }))
+
+// ── CommandAck handler ────────────────────────────────────────────────────────
+
+/**
+ * Called when a CommandAck arrives on /user/queue/session/{id}/ack.
+ *
+ * On failure: fetches authoritative network state from REST to roll back any
+ * optimistic update applied in `sendCommandOptimistic`. A full GameStateUpdate
+ * from the server will also arrive soon (the server publishes one after every
+ * successful command), so we only need to repair failures.
+ */
+function _handleAck(ack: CommandAck, get: () => GameStore): void {
+  if (ack.success) return
+
+  console.warn(
+    `[useGameStore] Command ${ack.commandType} rejected at tick ${ack.appliedAtTick}: ${ack.rejectionReason}`,
+  )
+
+  const { sessionId } = get()
+  if (!sessionId) return
+
+  // Fetch authoritative network state to roll back any optimistic change.
+  getNetwork(sessionId)
+    .then((network) => {
+      // Only apply if the session hasn't changed while the fetch was in flight.
+      if (get().sessionId === sessionId) {
+        useGameStore.setState({ network })
+      }
+    })
+    .catch((err) => {
+      console.error('[useGameStore] Failed to refresh network after rejected command', err)
+    })
+}
