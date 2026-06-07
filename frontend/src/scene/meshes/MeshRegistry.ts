@@ -16,7 +16,7 @@ import type { AbstractMesh, ParticleSystem } from '@babylonjs/core'
 import type { GridNetworkDto, ViolationDto } from '../../api/types'
 import { layoutBuses } from '../layout/busLayout'
 import { createGeneratorMesh, generatorStatus, updateGeneratorStatus } from './generatorMesh'
-import { createSubstationMesh } from './substationMesh'
+import { createSubstationMesh, substationStatus, updateSubstationStatus } from './substationMesh'
 import { createCityMesh, cityTier, TIER_CONFIG } from './cityMesh'
 import { createLineMesh, lineColour } from './lineMesh'
 import { createFlowParticles, updateFlowParticles, resetDotTexture } from './particleFlow'
@@ -99,13 +99,19 @@ export class MeshRegistry {
     for (const bus of network.buses) {
       if (!bus.substationId || seenSubs.has(bus.substationId)) continue
       seenSubs.add(bus.substationId)
+      const busIds = new Set(subBusIds.get(bus.substationId) ?? [])
+      // Only pass violations relevant to buses in this substation
+      const subViolations = violations.filter((v) => busIds.has(v.elementId))
       if (!this.substations.has(bus.substationId)) {
         const pos = positions.get(bus.id) ?? { x: 0, z: 0 }
-        const busIds = new Set(subBusIds.get(bus.substationId) ?? [])
-        // Only pass violations relevant to buses in this substation
-        const subViolations = violations.filter((v) => busIds.has(v.elementId))
         this.substations.set(bus.substationId,
           createSubstationMesh(this.scene, new Vector3(pos.x, 0, pos.z), bus.substationId, subViolations))
+      } else {
+        // Update status ring colour — violations may have changed since initial creation
+        updateSubstationStatus(
+          this.substations.get(bus.substationId)!.ring,
+          substationStatus(subViolations),
+        )
       }
     }
 

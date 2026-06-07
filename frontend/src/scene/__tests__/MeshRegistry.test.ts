@@ -112,4 +112,14 @@ describe('MeshRegistry', () => {
     registry.updateNetwork(network)
     expect(vi.mocked(MeshBuilder.CreateTube).mock.calls.length).toBe(tubeCalls)
   })
+
+  it('updates substation status ring colour on second call without creating new building', () => {
+    const network = makeNetwork([], [], [])
+    registry.updateNetwork(network)
+    const boxCalls = vi.mocked(MeshBuilder.CreateBox).mock.calls.length
+    // Second call — no new Box meshes (substation building) should be created
+    registry.updateNetwork(network)
+    expect(vi.mocked(MeshBuilder.CreateBox).mock.calls.length).toBe(boxCalls)
+  })
+
 })

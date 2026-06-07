@@ -45,3 +45,16 @@ export function createSubstationMesh(scene: Scene, position: Vector3, substation
 
   return { building, ring }
 }
+
+/**
+ * Updates the status ring colour of an existing substation mesh.
+ * Call this on each `updateNetwork` tick to reflect new violation state.
+ */
+export function updateSubstationStatus(
+  ring: ReturnType<typeof createSubstationMesh>['ring'],
+  status: SubstationStatus,
+): void {
+  if (ring.material) {
+    (ring.material as ReturnType<typeof createToonMaterial>).diffuseColor = STATUS_COLOURS[status]
+  }
+}
