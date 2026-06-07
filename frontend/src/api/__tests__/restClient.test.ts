@@ -49,7 +49,7 @@ describe('auth token storage', () => {
 
 describe('issueToken', () => {
   beforeEach(() => clearStoredAuth())
-  afterEach(() => vi.restoreAllMocks())
+  afterEach(() => { vi.restoreAllMocks() })
 
   it('POSTs to /api/auth/token with empty body on first launch', async () => {
     const fetchMock = mockFetch(200, { token: 't', userId: 'u1', expiresInDays: 30 })
@@ -93,7 +93,7 @@ describe('issueToken', () => {
 
 describe('apiFetch — auth header + 401 retry', () => {
   beforeEach(() => clearStoredAuth())
-  afterEach(() => vi.restoreAllMocks())
+  afterEach(() => { vi.restoreAllMocks() })
 
   it('attaches Bearer token when stored', async () => {
     setStoredAuth('my-token', 'uid')
@@ -147,7 +147,7 @@ describe('apiFetch — auth header + 401 retry', () => {
 // ── Session endpoints ─────────────────────────────────────────────────────────
 
 describe('createSession', () => {
-  afterEach(() => vi.restoreAllMocks())
+  afterEach(() => { vi.restoreAllMocks() })
 
   it('POSTs to /api/sessions', async () => {
     const detail = { id: 's1', userId: 'u1', mode: 'TUTORIAL', displayName: 'Test' }
@@ -166,7 +166,7 @@ describe('createSession', () => {
 })
 
 describe('deleteSession', () => {
-  afterEach(() => vi.restoreAllMocks())
+  afterEach(() => { vi.restoreAllMocks() })
 
   it('DELETEs the session and returns undefined for 204', async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 204 } as Response)
@@ -183,7 +183,7 @@ describe('deleteSession', () => {
 // ── Clock endpoints ───────────────────────────────────────────────────────────
 
 describe('clock endpoints', () => {
-  afterEach(() => vi.restoreAllMocks())
+  afterEach(() => { vi.restoreAllMocks() })
 
   const clockStatus = { clockState: 'RUNNING', speedMultiplier: 1, gameTimeMinutes: 0, tickCount: 0, autoSlowed: false }
 
