@@ -32,18 +32,19 @@ GEMINI_MODEL = "gemini-2.5-pro"
 # Hard cap on diff characters sent to Gemini (~25 k tokens, well within context).
 MAX_DIFF_CHARS = 90_000
 
-# File extensions to skip — config, lockfiles, binary assets, generated files.
-# Note: .md is intentionally NOT skipped — documentation PRs should be reviewed
-# for accuracy, completeness, and consistency with the codebase.
-SKIP_EXTENSIONS = {
-    ".txt", ".xml", ".xiidm",
-    ".yml", ".yaml",
-    ".json",
-    ".png", ".jpg", ".jpeg", ".svg", ".ico",
-    ".gitignore", ".gitattributes",
+# Allowlist of extensions to send to Gemini for review.
+# Only these types are reviewed; everything else (config, lockfiles, binaries,
+# generated files) is automatically skipped. Add extensions here when new
+# reviewable file types are introduced.
+REVIEW_EXTENSIONS = {
+    ".kt",    # Kotlin backend
+    ".ts",    # TypeScript frontend
+    ".tsx",   # TypeScript JSX
+    ".py",    # Python scripts (including CI scripts)
+    ".md",    # Documentation — reviewed for accuracy and completeness
 }
 
-# Exact filenames to skip regardless of extension.
+# Exact filenames to skip even when their extension is in REVIEW_EXTENSIONS.
 SKIP_FILES = {"gradlew", "gradlew.bat", "package-lock.json"}
 
 REVIEW_HEADER = "## Gemini Code Review 🤖"
@@ -105,7 +106,7 @@ Be concise. No padding or filler.
 def _should_review(filename: str) -> bool:
     ext = os.path.splitext(filename)[1].lower()
     basename = os.path.basename(filename)
-    return ext not in SKIP_EXTENSIONS and basename not in SKIP_FILES
+    return ext in REVIEW_EXTENSIONS and basename not in SKIP_FILES
 
 
 def get_filtered_diff(base_sha: str, head_sha: str) -> tuple[str, bool]:
