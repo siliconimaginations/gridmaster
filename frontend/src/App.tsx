@@ -11,19 +11,16 @@ import { SceneManager } from './scene/SceneManager'
  */
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const managerRef = useRef<SceneManager | null>(null)
 
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
 
     const manager = new SceneManager(canvas)
-    managerRef.current = manager
     manager.start()
 
     return () => {
       manager.dispose()
-      managerRef.current = null
     }
   }, [])
 
