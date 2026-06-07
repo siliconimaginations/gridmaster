@@ -18,7 +18,7 @@ export function createGround(scene: Scene) {
   ground.material = mat
 
   ground.receiveShadows = true
-  ground.castShadows = false // explicit: ground does not cast shadows onto itself
+  // Shadow casting is not a mesh property — exclusion from ShadowGenerators is the correct approach (no generator yet)
 
   return ground
 }
