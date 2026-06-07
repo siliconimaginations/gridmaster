@@ -106,6 +106,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   // ── connect ──────────────────────────────────────────────────────────────────
   connect: (sessionId: string, token: string) => {
+    // Disconnect any existing client to prevent orphaned connections
+    wsClient?.disconnect()
     set({ sessionId, connectionStatus: 'connecting' })
 
     wsClient = new WsClient(
@@ -120,6 +122,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     wsClient?.disconnect()
     wsClient = null
     // Reset all game state so a future session starts clean
+    // TODO: #102 extract initial state as constant to keep create() and this reset in sync
     set({
       connectionStatus: 'disconnected',
       sessionId: null,
