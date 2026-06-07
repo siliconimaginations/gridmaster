@@ -51,6 +51,7 @@ REVIEW_EXTENSIONS = {
 
     # Tooling / scripts
     ".py",    # Python CI scripts
+    ".sh",    # Shell scripts (scripts/lint.sh)
 
     # Documentation
     ".md",    # Markdown docs — reviewed for accuracy and completeness
