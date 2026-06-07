@@ -33,18 +33,39 @@ GEMINI_MODEL = "gemini-2.5-pro"
 MAX_DIFF_CHARS = 90_000
 
 # Allowlist of extensions to send to Gemini for review.
-# Only these types are reviewed; everything else (config, lockfiles, binaries,
-# generated files) is automatically skipped. Add extensions here when new
-# reviewable file types are introduced.
+# Only these types are reviewed; binary blobs, lock files (package-lock.json),
+# and generated wrappers (gradlew.bat) are excluded via SKIP_FILES.
+# Add extensions here when new reviewable file types are introduced.
+#
+# Surveyed from `git ls-files` — covers all hand-authored source in this repo:
 REVIEW_EXTENSIONS = {
-    ".kt",    # Kotlin backend
-    ".ts",    # TypeScript frontend
+    # Backend
+    ".kt",          # Kotlin source
+    ".kts",         # Kotlin Gradle build scripts (build.gradle.kts, settings.gradle.kts)
+    ".properties",  # Gradle / Spring Boot properties files
+
+    # Frontend
+    ".ts",    # TypeScript
     ".tsx",   # TypeScript JSX
-    ".py",    # Python scripts (including CI scripts)
-    ".md",    # Documentation — reviewed for accuracy and completeness
+    ".css",   # CSS / CSS Modules
+    ".html",  # HTML template
+    ".json",  # package.json, tsconfig.json — deps and compiler config
+
+    # CI / config
+    ".yml",   # GitHub Actions workflows, docker-compose
+    ".yaml",  # YAML variant
+
+    # Tooling / scripts
+    ".py",    # Python CI scripts
+    ".sh",    # Shell scripts (scripts/lint.sh)
+
+    # Documentation
+    ".md",    # Markdown docs
 }
 
 # Exact filenames to skip even when their extension is in REVIEW_EXTENSIONS.
+# Exact filenames excluded even when their extension is in REVIEW_EXTENSIONS.
+# gradlew / gradlew.bat are generated Gradle wrappers; package-lock.json is a lockfile.
 SKIP_FILES = {"gradlew", "gradlew.bat", "package-lock.json"}
 
 REVIEW_HEADER = "## Gemini Code Review 🤖"
