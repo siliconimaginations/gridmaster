@@ -19,7 +19,7 @@ import { createGeneratorMesh, generatorStatus, updateGeneratorStatus } from './g
 import { createSubstationMesh } from './substationMesh'
 import { createCityMesh, cityTier, TIER_CONFIG } from './cityMesh'
 import { createLineMesh, lineColour } from './lineMesh'
-import { createFlowParticles, resetDotTexture } from './particleFlow'
+import { createFlowParticles, updateFlowParticles, resetDotTexture } from './particleFlow'
 
 type GeneratorMeshes = ReturnType<typeof createGeneratorMesh>
 type SubstationMeshes = ReturnType<typeof createSubstationMesh>
@@ -141,11 +141,16 @@ export class MeshRegistry {
         this.lines.set(branch.id, createLineMesh(this.scene, from, to, branch))
       }
 
-      // Always recreate particle system so flow rate/direction stays current
-      this.particles.get(branch.id)?.dispose()
-      this.particles.delete(branch.id)
-      const ps = createFlowParticles(this.scene, from, to, branch)
-      if (ps) { ps.start(); this.particles.set(branch.id, ps) }
+      // Update existing particle system in-place (avoids GC on each tick).
+      // Only create/destroy when flow state actually changes.
+      const existingPs = this.particles.get(branch.id)
+      if (existingPs) {
+        const stillActive = updateFlowParticles(existingPs, from, to, branch)
+        if (!stillActive) { existingPs.dispose(); this.particles.delete(branch.id) }
+      } else {
+        const ps = createFlowParticles(this.scene, from, to, branch)
+        if (ps) { ps.start(); this.particles.set(branch.id, ps) }
+      }
     }
   }
 

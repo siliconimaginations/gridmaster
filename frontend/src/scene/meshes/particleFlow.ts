@@ -59,6 +59,33 @@ export function createFlowParticles(scene: Scene, from: Vector3, to: Vector3, dt
   return ps
 }
 
+/**
+ * Updates an existing `ParticleSystem` in-place with new branch flow data.
+ * Avoids the GC pressure of dispose+recreate on every tick.
+ *
+ * Returns `false` if the branch is now zero/disconnected and the system
+ * should be disposed by the caller.
+ */
+export function updateFlowParticles(
+  ps: ParticleSystem,
+  from: Vector3,
+  to: Vector3,
+  dto: BranchDto,
+): boolean {
+  if (!dto.connected || dto.activePowerMw === 0) return false
+
+  const direction = to.subtract(from).normalize()
+  const speed = Math.abs(dto.activePowerMw) / 200 + BASE_SPEED
+  const flowDir = dto.activePowerMw >= 0 ? direction : direction.negate()
+
+  ps.emitRate = Math.max(1, Math.abs(dto.activePowerMw) / MW_PER_PARTICLE)
+  ps.minLifeTime = ps.maxLifeTime = Vector3.Distance(from, to) / speed / 60
+  ps.minEmitPower = ps.maxEmitPower = speed
+  ps.direction1 = ps.direction2 = flowDir
+
+  return true
+}
+
 /** Resets the cached dot texture (call when scene is disposed). */
 export function resetDotTexture(): void {
   _dotTexture = null
