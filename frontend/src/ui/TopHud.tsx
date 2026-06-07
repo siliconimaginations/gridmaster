@@ -21,6 +21,7 @@ export function TopHud() {
     violations: s.violations,
   })))
 
+  // TODO: #115 consider useMemo for gridHealthStatus + totalLoadMw if profiling shows TopHud hot
   const health = gridHealthStatus(violations)
 
   const severityClass: Record<HealthSeverity, string> = {
