@@ -47,10 +47,10 @@ export function createFlowParticles(scene: Scene, from: Vector3, to: Vector3, dt
 
   const ps = new ParticleSystem(`flow_${dto.id}`, 50, scene)
   ps.particleTexture = getDotTexture(scene)
-  ps.emitter = from.clone() as unknown as Vector3
+  ps.emitter = from.clone()
   ps.minSize = ps.maxSize = PARTICLE_SIZE
   ps.emitRate = Math.max(1, Math.abs(dto.activePowerMw) / MW_PER_PARTICLE)
-  ps.minLifeTime = ps.maxLifeTime = Vector3.Distance(from, to) / speed / 60
+  ps.minLifeTime = ps.maxLifeTime = Vector3.Distance(from, to) / speed
   ps.minEmitPower = ps.maxEmitPower = speed
   ps.direction1 = ps.direction2 = flowDir
   ps.color1 = new Color4(1, 0.98, 0.76, 1)   // soft yellow
@@ -79,7 +79,7 @@ export function updateFlowParticles(
   const flowDir = dto.activePowerMw >= 0 ? direction : direction.negate()
 
   ps.emitRate = Math.max(1, Math.abs(dto.activePowerMw) / MW_PER_PARTICLE)
-  ps.minLifeTime = ps.maxLifeTime = Vector3.Distance(from, to) / speed / 60
+  ps.minLifeTime = ps.maxLifeTime = Vector3.Distance(from, to) / speed
   ps.minEmitPower = ps.maxEmitPower = speed
   ps.direction1 = ps.direction2 = flowDir
 

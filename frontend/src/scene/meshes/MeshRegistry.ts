@@ -66,7 +66,7 @@ export class MeshRegistry {
     // ── Remove ghost elements ────────────────────────────────────────────────
     pruneMap(this.generators, new Set(network.generators.map((g) => g.id)),
       ({ tower, ring }) => { tower.dispose(); ring.dispose() })
-    pruneMap(this.substations, new Set(network.buses.map((b) => b.substationId).filter(Boolean) as string[]),
+    pruneMap(this.substations, new Set(network.buses.map((b) => b.substationId).filter((id): id is string => !!id)),
       ({ building, ring }) => { building.dispose(); ring.dispose() })
     pruneMap(this.cities, new Set(network.loads.map((l) => l.id)),
       (meshes) => disposeAll(meshes))

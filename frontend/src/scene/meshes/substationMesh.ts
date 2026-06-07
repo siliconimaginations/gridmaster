@@ -20,10 +20,9 @@ const STATUS_COLOURS = {
 
 export type SubstationStatus = keyof typeof STATUS_COLOURS
 
-export function substationStatus(substationId: string, violations: readonly ViolationDto[]): SubstationStatus {
-  const relevant = violations.filter((v) => v.elementId === substationId || v.elementType === 'BUS')
-  if (relevant.some((v) => v.value > v.limit * 1.1)) return 'fault'
-  if (relevant.length > 0) return 'warning'
+export function substationStatus(violations: readonly ViolationDto[]): SubstationStatus {
+  if (violations.some((v) => v.value > v.limit * 1.1)) return 'fault'
+  if (violations.length > 0) return 'warning'
   return 'ok'
 }
 
@@ -41,7 +40,7 @@ export function createSubstationMesh(scene: Scene, position: Vector3, substation
 
   building.material = createToonMaterial(scene, BUILDING_COLOUR, `sub_mat_${substationId}`)
 
-  const status = substationStatus(substationId, violations)
+  const status = substationStatus(violations)
   ring.material = createToonMaterial(scene, STATUS_COLOURS[status], `sub_ring_mat_${substationId}`)
 
   return { building, ring }
