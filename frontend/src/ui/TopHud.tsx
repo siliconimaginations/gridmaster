@@ -1,4 +1,5 @@
 import { useGameStore } from '../state/useGameStore'
+import { useShallow } from 'zustand/react/shallow'
 import { formatGameTime, gridHealthStatus, totalLoadMw } from './hud'
 import type { HealthSeverity } from './hud'
 import styles from './TopHud.module.css'
@@ -14,11 +15,11 @@ import styles from './TopHud.module.css'
  * @see docs/engineering/13-hud.md
  */
 export function TopHud() {
-  const { gameTimeMinutes, network, violations } = useGameStore((s) => ({
+  const { gameTimeMinutes, network, violations } = useGameStore(useShallow((s) => ({
     gameTimeMinutes: s.gameTimeMinutes,
     network: s.network,
     violations: s.violations,
-  }))
+  })))
 
   const health = gridHealthStatus(violations)
 

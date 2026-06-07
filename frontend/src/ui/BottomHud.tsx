@@ -1,4 +1,5 @@
 import { useGameStore } from '../state/useGameStore'
+import { useShallow } from 'zustand/react/shallow'
 import { SPEED_STEPS } from './hud'
 import type { SpeedStep } from './hud'
 import styles from './BottomHud.module.css'
@@ -22,14 +23,14 @@ import styles from './BottomHud.module.css'
  */
 export function BottomHud() {
   const { clockState, clockSpeedMultiplier, sessionId, network, pendingEventCards, sendCommandOptimistic } =
-    useGameStore((s) => ({
+    useGameStore(useShallow((s) => ({
       clockState: s.clockState,
       clockSpeedMultiplier: s.clockSpeedMultiplier,
       sessionId: s.sessionId,
       network: s.network,
       pendingEventCards: s.pendingEventCards,
       sendCommandOptimistic: s.sendCommandOptimistic,
-    }))
+    })))
 
   const disabled = !sessionId
   const isRunning = clockState === 'RUNNING'

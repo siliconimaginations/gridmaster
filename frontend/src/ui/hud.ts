@@ -57,8 +57,9 @@ export interface GridHealth {
  * - Any OVERLOAD violation on a line/transformer, or any bus voltage
  *   violation above the critical threshold → Failure (critical)
  *
- * For the MVP, "critical" is defined as any violation present at all
- * (conservative). A future refinement can weight by violation type.
+ * "Critical" is triggered by any OVERLOAD violation exceeding 110% of the
+ * element limit. All other violations map to "warning". A future refinement
+ * can weight by violation type and severity.
  */
 export function gridHealthStatus(violations: ViolationDto[]): GridHealth {
   if (violations.length === 0) {
