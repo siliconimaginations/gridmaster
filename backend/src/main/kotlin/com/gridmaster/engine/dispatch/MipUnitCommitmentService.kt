@@ -89,7 +89,7 @@ class MipUnitCommitmentService(
         log.info("MipUC: solving {}-generator 24-hour UC via SCIP", g)
 
         var solveTimeMs = 0L
-        lateinit var result: UcResult
+        lateinit var result: UcResult // TODO: #91 refactor to result-returning measureTimeMillis block
 
         measureTimeMillis {
             val solver =
@@ -184,6 +184,7 @@ class MipUnitCommitmentService(
                     }
 
                     // ── Min down time ─────────────────────────────────────────
+                    // TODO: #92 align comment with KDoc formulation
                     // Constraint: D * (1 + y[hi] - y[hi-1]) >= Σ_{t=hi}^{endH} y[t]
                     // For hi=0 the initial committed state substitutes for y[hi-1].
                     if (gen.minDownTimeHours > 1) {
