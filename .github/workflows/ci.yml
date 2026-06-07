@@ -226,3 +226,15 @@ jobs:
           json-summary-path: frontend/coverage/coverage-summary.json
           json-final-path: frontend/coverage/coverage-final.json
           vite-config-path: frontend/vite.config.ts
+
+      - name: Generate frontend coverage badge
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: python3 scripts/gen_vitest_badge.py
+
+      - name: Commit frontend coverage badge
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: EndBug/add-and-commit@v9
+        with:
+          add: .github/badges/vitest.svg
+          message: 'ci: update frontend coverage badge [skip ci]'
+          default_author: github_actions
