@@ -194,7 +194,7 @@ jobs:
     name: Frontend test (TypeScript)
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write        # push coverage badge on main
       pull-requests: write
     defaults:
       run:
