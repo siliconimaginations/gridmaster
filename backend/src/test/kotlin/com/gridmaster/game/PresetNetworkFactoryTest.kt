@@ -70,6 +70,33 @@ class PresetNetworkFactoryTest {
         assertThat(result.violations).isEmpty()
     }
 
+    @Test
+    fun `ieee14 network has expected IEEE 14-bus topology`() {
+        val network = PresetNetworkFactory.create("ieee14")
+
+        // IEEE 14-bus: 14 buses, 5 generators (buses 1,2,3,6,8), 11 loads, 20 branches (15 lines + 5 transformers)
+        assertThat(network.busView.buses.count()).isEqualTo(14)
+        assertThat(network.generatorCount).isEqualTo(5)
+        assertThat(network.loadCount).isGreaterThanOrEqualTo(9) // 11 load buses in standard case
+    }
+
+    @Test
+    @Tag("integration")
+    fun `ieee14 preset network converges under AC power flow`() {
+        assumeTrue(
+            nativeAvailable,
+            "Skipping: powsybl-math-native not available on " +
+                "${System.getProperty("os.name")} ${System.getProperty("os.arch")}",
+        )
+
+        val network = PresetNetworkFactory.create("ieee14")
+        val service = PowSyBlPowerFlowService(IidmNetworkMapperImpl(), ViolationScanner())
+
+        val result = service.solve(network)
+
+        assertThat(result.status).isEqualTo(ConvergenceStatus.CONVERGED)
+    }
+
     companion object {
         /** True when the powsybl-math-native shared library loaded successfully. */
         val nativeAvailable: Boolean by lazy {

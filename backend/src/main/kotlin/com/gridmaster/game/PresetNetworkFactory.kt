@@ -1,5 +1,6 @@
 package com.gridmaster.game
 
+import com.powsybl.ieeecdf.converter.IeeeCdfNetworkFactory
 import com.powsybl.iidm.network.Network
 import com.powsybl.iidm.network.NetworkFactory
 import com.powsybl.iidm.network.TopologyKind
@@ -11,7 +12,7 @@ import com.powsybl.iidm.network.TopologyKind
  * Module 07+ will replace these stubs with proper tutorial/free-play networks as
  * the game curriculum is built out.
  *
- * Topology (shared across presets; complexity grows in later modules):
+ * Topology (tutorial preset; see [IeeeCdfNetworkFactory.create14Solved] for the ieee14 preset):
  *
  *   G1 (gas, 100 MW)                G2 (coal, 200 MW)
  *      |                                  |
@@ -35,7 +36,7 @@ object PresetNetworkFactory {
     fun create(networkPreset: String): Network =
         when (networkPreset) {
             "tutorial" -> buildTutorialNetwork()
-            "ieee14" -> buildTutorialNetwork() // TODO: #46 replace with proper IEEE 14-bus XIIDM
+            "ieee14" -> IeeeCdfNetworkFactory.create14Solved() // #46
             "freeplay50" -> buildTutorialNetwork() // TODO: #47 replace with 50-bus free-play seed
             else -> throw IllegalArgumentException(
                 "Unknown network preset: '$networkPreset'. " +
