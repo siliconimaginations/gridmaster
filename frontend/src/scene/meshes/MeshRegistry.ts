@@ -52,6 +52,8 @@ export class MeshRegistry {
   private generators = new Map<string, GeneratorMeshes>()
   private substations = new Map<string, SubstationMeshes>()
   private cities = new Map<string, ReturnType<typeof createCityMesh>>()
+  /** Tracks last-known bus centre for each city so we can detect position changes. */
+  private cityPositions = new Map<string, { x: number; z: number }>()
   private lines = new Map<string, LineMeshes>()
   private particles = new Map<string, ParticleSystem>()
 
@@ -128,18 +130,18 @@ export class MeshRegistry {
       const existing = this.cities.get(load.id)
       const newTier = cityTier(load.activePowerMw)
       if (existing) {
-        if (existing.length !== TIER_CONFIG[newTier].count) {
+        const lastPos = this.cityPositions.get(load.id)
+        const posChanged = !lastPos || lastPos.x !== pos.x || lastPos.z !== pos.z
+        if (existing.length !== TIER_CONFIG[newTier].count || posChanged) {
+          // Recreate when tier or bus position changes (buildings can't be individually
+          // repositioned without knowing their offsets from centre)
           disposeAll(existing)
           this.cities.set(load.id, createCityMesh(this.scene, new Vector3(pos.x, 0, pos.z), load))
-        } else {
-          // Keep meshes in sync with bus position (bus layout may change)
-          for (const mesh of existing) {
-            mesh.position.x = pos.x
-            mesh.position.z = pos.z
-          }
+          this.cityPositions.set(load.id, { x: pos.x, z: pos.z })
         }
       } else {
         this.cities.set(load.id, createCityMesh(this.scene, new Vector3(pos.x, 0, pos.z), load))
+        this.cityPositions.set(load.id, { x: pos.x, z: pos.z })
       }
     }
 
@@ -184,6 +186,7 @@ export class MeshRegistry {
     this.substations.clear()
     this.cities.forEach((ms) => disposeAll(ms))
     this.cities.clear()
+    this.cityPositions.clear()
     this.lines.forEach(({ tube, pylons }) => { tube.dispose(); disposeAll(pylons) })
     this.lines.clear()
     this.particles.forEach((ps) => ps.dispose())
