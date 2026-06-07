@@ -80,6 +80,11 @@ export class MeshRegistry {
       const pos = positions.get(gen.busId) ?? { x: 0, z: 0 }
       const existing = this.generators.get(gen.id)
       if (existing) {
+        // Keep mesh in sync with bus position (bus layout may change)
+        existing.tower.position.x = pos.x
+        existing.tower.position.z = pos.z
+        existing.ring.position.x = pos.x
+        existing.ring.position.z = pos.z
         updateGeneratorStatus(existing.ring, generatorStatus(gen, violations))
       } else {
         this.generators.set(gen.id, createGeneratorMesh(this.scene, new Vector3(pos.x, 0, pos.z), gen, violations))
@@ -102,16 +107,18 @@ export class MeshRegistry {
       const busIds = new Set(subBusIds.get(bus.substationId) ?? [])
       // Only pass violations relevant to buses in this substation
       const subViolations = violations.filter((v) => busIds.has(v.elementId))
+      const pos = positions.get(bus.id) ?? { x: 0, z: 0 }
       if (!this.substations.has(bus.substationId)) {
-        const pos = positions.get(bus.id) ?? { x: 0, z: 0 }
         this.substations.set(bus.substationId,
           createSubstationMesh(this.scene, new Vector3(pos.x, 0, pos.z), bus.substationId, subViolations))
       } else {
-        // Update status ring colour — violations may have changed since initial creation
-        updateSubstationStatus(
-          this.substations.get(bus.substationId)!.ring,
-          substationStatus(subViolations),
-        )
+        // Keep mesh in sync with bus position and update status ring colour
+        const existingSub = this.substations.get(bus.substationId)!
+        existingSub.building.position.x = pos.x
+        existingSub.building.position.z = pos.z
+        existingSub.ring.position.x = pos.x
+        existingSub.ring.position.z = pos.z
+        updateSubstationStatus(existingSub.ring, substationStatus(subViolations))
       }
     }
 
@@ -124,6 +131,12 @@ export class MeshRegistry {
         if (existing.length !== TIER_CONFIG[newTier].count) {
           disposeAll(existing)
           this.cities.set(load.id, createCityMesh(this.scene, new Vector3(pos.x, 0, pos.z), load))
+        } else {
+          // Keep meshes in sync with bus position (bus layout may change)
+          for (const mesh of existing) {
+            mesh.position.x = pos.x
+            mesh.position.z = pos.z
+          }
         }
       } else {
         this.cities.set(load.id, createCityMesh(this.scene, new Vector3(pos.x, 0, pos.z), load))
@@ -141,6 +154,9 @@ export class MeshRegistry {
       const existingLine = this.lines.get(branch.id)
       if (existingLine) {
         // Update line tube colour to reflect new loadingPercent / connected state
+        // TODO: #125 use StandardMaterial cast here
+        // TODO: line geometry (tube path + pylon positions) is not updated when bus layout changes;
+        //       CreateTube does not support in-place path updates — tracked in #125
         const mat = existingLine.tube.material as { diffuseColor: unknown } | null
         if (mat) mat.diffuseColor = lineColour(branch)
       } else {
