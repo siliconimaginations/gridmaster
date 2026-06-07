@@ -219,6 +219,25 @@ describe('useGameStore — sendCommandOptimistic', () => {
     await vi.waitFor(() => expect(useGameStore.getState().network).toEqual(authoritative))
   })
 
+  it('sets network to null when rollback fetch fails', async () => {
+    vi.mocked(getNetwork).mockRejectedValue(new Error('network error'))
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    useGameStore.getState().connect('sess1', 'token')
+    useGameStore.setState({ network: makeNetwork('optimistic'), sessionId: 'sess1' })
+
+    const failedAck: CommandAck = {
+      commandType: 'CommitGenerator',
+      success: false,
+      rejectionReason: 'Rejected',
+      appliedAtTick: 5,
+    }
+    capturedOnAck?.(failedAck)
+
+    await vi.waitFor(() => expect(getNetwork).toHaveBeenCalledWith('sess1'))
+    await vi.waitFor(() => expect(useGameStore.getState().network).toBeNull())
+  })
+
   it('does not fetch network on successful ack', () => {
     useGameStore.getState().connect('sess1', 'token')
     useGameStore.setState({ network: makeNetwork(), sessionId: 'sess1' })

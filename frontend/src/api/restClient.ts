@@ -87,7 +87,7 @@ async function apiFetch<T>(path: string, options: RequestInit = {}, retry = true
   const res = await fetch(`${BASE_URL}${path}`, { ...options, headers })
 
   if (res.status === 401 && retry) {
-    const refreshed = await issueToken({ userId: getStoredUserId() ?? undefined })
+    const refreshed = await issueToken({ userId: getStoredUserId() || undefined })
     setStoredAuth(refreshed.token, refreshed.userId)
     return apiFetch<T>(path, options, false)
   }

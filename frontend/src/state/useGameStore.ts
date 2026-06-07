@@ -207,5 +207,10 @@ function _handleAck(ack: CommandAck, get: () => GameStore): void {
     })
     .catch((err) => {
       console.error('[useGameStore] Failed to refresh network after rejected command', err)
+      // Clear stale optimistic state so the UI shows "no data" rather than
+      // incorrect data. The next GameStateUpdate tick will repopulate it.
+      if (get().sessionId === sessionId) {
+        useGameStore.setState({ network: null })
+      }
     })
 }
