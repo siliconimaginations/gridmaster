@@ -98,7 +98,8 @@ describe('WsClient', () => {
 
   it('publishes to the correct destination on send()', () => {
     client.connect('sess1', 'token')
-    client.send('sess1', { commandType: 'PauseClock', payload: {} })
+    capturedOnConnect?.()
+    client.send({ commandType: 'PauseClock', payload: {} })
     expect(mockPublish).toHaveBeenCalledWith({
       destination: '/app/session/sess1/command',
       body: JSON.stringify({ commandType: 'PauseClock', payload: {} }),

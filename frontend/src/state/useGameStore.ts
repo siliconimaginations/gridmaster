@@ -142,6 +142,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
       console.warn('[useGameStore] sendCommand called without an active session')
       return
     }
-    wsClient?.send(sessionId, msg)
+    wsClient?.send(msg)
   },
 }))

@@ -17,7 +17,7 @@ const MAX_QUEUE_SIZE = 10
 export class WsClient {
   private client: Client
   private sessionId: string | null = null
-  private commandQueue: Array<{ sessionId: string; msg: PlayerCommandMessage }> = []
+  private commandQueue: PlayerCommandMessage[] = []
 
   constructor(
     private readonly onMessage: (update: GameStateUpdate) => void,
@@ -46,17 +46,17 @@ export class WsClient {
   }
 
   /** Send a command to the server. Queues if not yet connected. */
-  // TODO: #100 remove sessionId param — use this.sessionId internally
-  send(sessionId: string, msg: PlayerCommandMessage): void {
+  send(msg: PlayerCommandMessage): void {
+    if (!this.sessionId) return
     if (this.client.connected) {
       this.client.publish({
-        destination: `/app/session/${sessionId}/command`,
+        destination: `/app/session/${this.sessionId}/command`,
         body: JSON.stringify(msg),
       })
     } else {
       // Queue command; flush on reconnect
       if (this.commandQueue.length < MAX_QUEUE_SIZE) {
-        this.commandQueue.push({ sessionId, msg })
+        this.commandQueue.push(msg)
       }
     }
   }
@@ -92,8 +92,8 @@ export class WsClient {
 
   private _flushQueue(): void {
     const queued = this.commandQueue.splice(0)
-    for (const { sessionId, msg } of queued) {
-      this.send(sessionId, msg)
+    for (const msg of queued) {
+      this.send(msg)
     }
   }
 }
