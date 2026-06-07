@@ -38,6 +38,7 @@ export default function App() {
     const manager = new SceneManager(canvas)
     manager.start()
 
+    // TODO: #128 merge these two subscriptions into one selector to avoid double-update on full GameStateUpdate
     // Subscribe network slice → update all meshes
     const unsubNetwork = useGameStore.subscribe(
       (state) => state.network,

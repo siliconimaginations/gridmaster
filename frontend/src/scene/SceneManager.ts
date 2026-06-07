@@ -78,6 +78,7 @@ export class SceneManager {
    * Push updated violations to the scene without a full network refresh.
    * Re-renders status rings for generators and substations.
    */
+  // TODO: #129 add dedicated MeshRegistry.updateViolations() to only re-run status-ring logic
   updateViolations(violations: readonly ViolationDto[]): void {
     this.currentViolations = violations
     this.meshRegistry.updateNetwork(this.currentNetwork, violations)
