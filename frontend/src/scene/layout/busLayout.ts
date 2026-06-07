@@ -23,6 +23,7 @@ export type { BusPosition } from './ieee14Layout'
  * use the deterministic grid fallback.
  */
 export function layoutBuses(buses: readonly BusDto[]): Map<string, { x: number; z: number }> {
+  // TODO: #119 simplify to single-pass iteration
   const unmatched: BusDto[] = []
   for (const bus of buses) {
     if (!isIeee14Bus(bus.id)) unmatched.push(bus)
