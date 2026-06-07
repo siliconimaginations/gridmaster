@@ -32,9 +32,11 @@ GEMINI_MODEL = "gemini-2.5-pro"
 # Hard cap on diff characters sent to Gemini (~25 k tokens, well within context).
 MAX_DIFF_CHARS = 90_000
 
-# File extensions to skip — docs, config, lockfiles, generated files.
+# File extensions to skip — config, lockfiles, binary assets, generated files.
+# Note: .md is intentionally NOT skipped — documentation PRs should be reviewed
+# for accuracy, completeness, and consistency with the codebase.
 SKIP_EXTENSIONS = {
-    ".md", ".txt", ".xml", ".xiidm",
+    ".txt", ".xml", ".xiidm",
     ".yml", ".yaml",
     ".json",
     ".png", ".jpg", ".jpeg", ".svg", ".ico",
@@ -64,6 +66,12 @@ Focus on:
 - Code quality, naming, and maintainability
 - Kotlin idioms (null safety, coroutines, sealed classes)
 - TypeScript strictness and React patterns
+
+For documentation files (.md):
+- Technical accuracy — does the doc match the actual code/API?
+- Completeness — are important scenarios, edge cases, or decisions missing?
+- Consistency — does it align with ENGINEERING_PRINCIPLES.md and other design docs?
+- Clarity — are examples concrete? Are interfaces/types shown correctly?
 
 Format your response exactly as follows:
 
