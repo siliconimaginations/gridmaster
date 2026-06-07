@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { subscribeWithSelector } from 'zustand/middleware'
 import { WsClient } from '../api/wsClient'
 import { getNetwork } from '../api/restClient'
 import type {
@@ -86,7 +87,7 @@ const INITIAL_GAME_STATE = {
 
 let wsClient: WsClient | null = null
 
-export const useGameStore = create<GameStore>((set, get) => ({
+export const useGameStore = create<GameStore>()(subscribeWithSelector((set, get) => ({
   // Initial state
   ...INITIAL_GAME_STATE,
   connectionStatus: 'disconnected',
@@ -175,7 +176,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     wsClient?.send(msg)
   },
-}))
+})))
 
 // ── CommandAck handler ────────────────────────────────────────────────────────
 

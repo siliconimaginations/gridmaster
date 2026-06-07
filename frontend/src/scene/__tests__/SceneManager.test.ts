@@ -43,7 +43,7 @@ const makeNetwork = (): GridNetworkDto => ({
 })
 
 const makeViolation = (): ViolationDto => ({
-  elementId: 'b1', type: 'VOLTAGE_HIGH', value: 1.15, limit: 1.05,
+  elementId: 'b1', elementType: 'BUS', violationType: 'VOLTAGE_HIGH', value: 1.15, limit: 1.05,
 })
 
 // ── tests ─────────────────────────────────────────────────────────────────────
