@@ -43,6 +43,8 @@ dependencies {
     implementation("com.powsybl:powsybl-security-analysis-api")
     implementation("com.powsybl:powsybl-contingency-api")
     implementation("com.powsybl:powsybl-iidm-serde")
+    // IEEE CDF network factory — not in powsybl-dependencies BOM, pinned to core version
+    implementation("com.powsybl:powsybl-ieee-cdf-converter:6.7.2")
 
     // Coroutines — NetworkRepository methods are suspend; IO wrapping in SqliteNetworkRepository
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
