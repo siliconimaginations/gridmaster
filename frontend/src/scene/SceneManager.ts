@@ -68,8 +68,10 @@ export class SceneManager {
    */
   updateNetwork(network: GridNetworkDto | null, violations = this.currentViolations): void {
     this.currentNetwork = network
-    this.currentViolations = violations
-    this.meshRegistry.updateNetwork(network, violations)
+    // Clear violations when the network is cleared — no network means no violations
+    const finalViolations = network ? violations : []
+    this.currentViolations = finalViolations
+    this.meshRegistry.updateNetwork(network, finalViolations)
   }
 
   /**

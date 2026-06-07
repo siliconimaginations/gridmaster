@@ -86,9 +86,21 @@ describe('SceneManager', () => {
     expect(mockUpdateNetwork).toHaveBeenCalledWith(network, violations)
   })
 
-  it('updateNetwork(null) passes null to MeshRegistry', () => {
+  it('updateNetwork(null) passes null + empty violations to MeshRegistry', () => {
+    // Prime with some violations first
+    manager.updateViolations([makeViolation()])
+    vi.clearAllMocks()
     manager.updateNetwork(null)
     expect(mockUpdateNetwork).toHaveBeenCalledWith(null, [])
+  })
+
+  it('updateNetwork(null) clears cached violations', () => {
+    manager.updateViolations([makeViolation()])
+    manager.updateNetwork(null)
+    vi.clearAllMocks()
+    // Now update with a real network — violations should be empty (cleared by null)
+    manager.updateNetwork(makeNetwork())
+    expect(mockUpdateNetwork).toHaveBeenCalledWith(expect.anything(), [])
   })
 
   it('dispose calls meshRegistry.disposeAll before scene and engine disposal', () => {
