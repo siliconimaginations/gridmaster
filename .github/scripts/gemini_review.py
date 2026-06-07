@@ -33,15 +33,27 @@ GEMINI_MODEL = "gemini-2.5-pro"
 MAX_DIFF_CHARS = 90_000
 
 # Allowlist of extensions to send to Gemini for review.
-# Only these types are reviewed; everything else (config, lockfiles, binaries,
-# generated files) is automatically skipped. Add extensions here when new
-# reviewable file types are introduced.
+# Only these types are reviewed; everything else (binary assets, lock files,
+# generated files, environment configs) is automatically skipped.
+# Add extensions here when new reviewable file types are introduced.
+#
+# Surveyed from `git ls-files` — covers all hand-authored source in this repo:
 REVIEW_EXTENSIONS = {
-    ".kt",    # Kotlin backend
-    ".ts",    # TypeScript frontend
+    # Backend
+    ".kt",    # Kotlin source
+    ".kts",   # Kotlin Gradle build scripts (build.gradle.kts, settings.gradle.kts)
+
+    # Frontend
+    ".ts",    # TypeScript
     ".tsx",   # TypeScript JSX
-    ".py",    # Python scripts (including CI scripts)
-    ".md",    # Documentation — reviewed for accuracy and completeness
+    ".css",   # CSS / CSS Modules (index.css, *.module.css)
+    ".html",  # HTML template (index.html)
+
+    # Tooling / scripts
+    ".py",    # Python CI scripts
+
+    # Documentation
+    ".md",    # Markdown docs — reviewed for accuracy and completeness
 }
 
 # Exact filenames to skip even when their extension is in REVIEW_EXTENSIONS.
