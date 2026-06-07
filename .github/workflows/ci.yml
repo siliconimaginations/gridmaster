@@ -54,7 +54,7 @@ jobs:
     name: Backend test (Kotlin)
     runs-on: ubuntu-latest
     permissions:
-      contents: write        # push coverage badge on main
+      contents: read         # read-only — badge commit is in backend-badge job
       pull-requests: write   # post JaCoCo coverage comment
     defaults:
       run:
@@ -119,22 +119,13 @@ jobs:
           min-coverage-overall: 60
           min-coverage-changed-files: 70
 
-      - name: Generate coverage badge
-        uses: cicirello/jacoco-badge-generator@v2
+      - name: Upload JaCoCo CSV (consumed by backend-badge)
+        uses: actions/upload-artifact@v4
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         with:
-          jacoco-csv-file: backend/build/reports/jacoco/test/jacocoTestReport.csv
-          badges-directory: .github/badges
-          generate-coverage-badge: true
-          coverage-badge-filename: jacoco.svg
-
-      - name: Commit coverage badge
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: EndBug/add-and-commit@v9
-        with:
-          add: .github/badges/jacoco.svg
-          message: 'ci: update coverage badge [skip ci]'
-          default_author: github_actions
+          name: backend-jacoco-csv
+          path: backend/build/reports/jacoco/test/jacocoTestReport.csv
+          retention-days: 1
 
   # ─────────────────────────────────────────────────────────────────────────
   # Backend — integration tests (tagged "integration", uses real PowSyBl solver)
@@ -194,7 +185,7 @@ jobs:
     name: Frontend test (TypeScript)
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: read         # read-only — badge commit is in frontend-badge job
       pull-requests: write
     defaults:
       run:
@@ -227,14 +218,73 @@ jobs:
           json-final-path: frontend/coverage/coverage-final.json
           vite-config-path: frontend/vite.config.ts
 
-      - name: Generate frontend coverage badge
+      - name: Upload coverage summary (consumed by frontend-badge)
+        uses: actions/upload-artifact@v4
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        with:
+          name: frontend-coverage-summary
+          path: frontend/coverage/coverage-summary.json
+          retention-days: 1
+
+  # Isolated job: write access for badge commit, only runs on push to main.
+  # Keeping contents:write out of frontend-test prevents fork PRs from
+  # obtaining write permission via a compromised dependency.
+  frontend-badge:
+    name: Frontend badge update
+    needs: frontend-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download coverage summary
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-coverage-summary
+          path: frontend/coverage
+
+      - name: Generate frontend coverage badge
+        working-directory: frontend
         run: python3 scripts/gen_vitest_badge.py
 
       - name: Commit frontend coverage badge
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: EndBug/add-and-commit@v9
         with:
           add: .github/badges/vitest.svg
           message: 'ci: update frontend coverage badge [skip ci]'
+          default_author: github_actions
+
+  # Isolated job: write access for badge commit, only runs on push to main.
+  # Mirrors the same isolation applied to frontend-badge.
+  backend-badge:
+    name: Backend badge update
+    needs: backend-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download JaCoCo CSV
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-jacoco-csv
+          path: backend/build/reports/jacoco/test
+
+      - name: Generate coverage badge
+        uses: cicirello/jacoco-badge-generator@v2
+        with:
+          jacoco-csv-file: backend/build/reports/jacoco/test/jacocoTestReport.csv
+          badges-directory: .github/badges
+          generate-coverage-badge: true
+          coverage-badge-filename: jacoco.svg
+
+      - name: Commit coverage badge
+        uses: EndBug/add-and-commit@v9
+        with:
+          add: .github/badges/jacoco.svg
+          message: 'ci: update coverage badge [skip ci]'
           default_author: github_actions
