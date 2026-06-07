@@ -17,7 +17,7 @@ import type { GridNetworkDto, ViolationDto } from '../../api/types'
 import { layoutBuses } from '../layout/busLayout'
 import { createGeneratorMesh, generatorStatus, updateGeneratorStatus } from './generatorMesh'
 import { createSubstationMesh } from './substationMesh'
-import { createCityMesh, cityTier } from './cityMesh'
+import { createCityMesh, cityTier, TIER_CONFIG } from './cityMesh'
 import { createLineMesh, lineColour } from './lineMesh'
 import { createFlowParticles, resetDotTexture } from './particleFlow'
 
@@ -87,14 +87,25 @@ export class MeshRegistry {
     }
 
     // ── Substations ───────────────────────────────────────────────────────────
+    // Build a map of substationId → [busId, ...] so violation filtering is accurate.
+    const subBusIds = new Map<string, string[]>()
+    for (const bus of network.buses) {
+      if (!bus.substationId) continue
+      const list = subBusIds.get(bus.substationId) ?? []
+      list.push(bus.id)
+      subBusIds.set(bus.substationId, list)
+    }
     const seenSubs = new Set<string>()
     for (const bus of network.buses) {
       if (!bus.substationId || seenSubs.has(bus.substationId)) continue
       seenSubs.add(bus.substationId)
       if (!this.substations.has(bus.substationId)) {
         const pos = positions.get(bus.id) ?? { x: 0, z: 0 }
+        const busIds = new Set(subBusIds.get(bus.substationId) ?? [])
+        // Only pass violations relevant to buses in this substation
+        const subViolations = violations.filter((v) => busIds.has(v.elementId))
         this.substations.set(bus.substationId,
-          createSubstationMesh(this.scene, new Vector3(pos.x, 0, pos.z), bus.substationId, violations))
+          createSubstationMesh(this.scene, new Vector3(pos.x, 0, pos.z), bus.substationId, subViolations))
       }
     }
 
@@ -103,9 +114,8 @@ export class MeshRegistry {
       const pos = positions.get(load.busId) ?? { x: 0, z: 0 }
       const existing = this.cities.get(load.id)
       const newTier = cityTier(load.activePowerMw)
-      const tierCounts: Record<string, number> = { village: 3, town: 5, city: 6 }
       if (existing) {
-        if (existing.length !== tierCounts[newTier]) {
+        if (existing.length !== TIER_CONFIG[newTier].count) {
           disposeAll(existing)
           this.cities.set(load.id, createCityMesh(this.scene, new Vector3(pos.x, 0, pos.z), load))
         }
@@ -131,11 +141,11 @@ export class MeshRegistry {
         this.lines.set(branch.id, createLineMesh(this.scene, from, to, branch))
       }
 
-      // Recreate particle system if flow state changed
-      if (!this.particles.has(branch.id)) {
-        const ps = createFlowParticles(this.scene, from, to, branch)
-        if (ps) { ps.start(); this.particles.set(branch.id, ps) }
-      }
+      // Always recreate particle system so flow rate/direction stays current
+      this.particles.get(branch.id)?.dispose()
+      this.particles.delete(branch.id)
+      const ps = createFlowParticles(this.scene, from, to, branch)
+      if (ps) { ps.start(); this.particles.set(branch.id, ps) }
     }
   }
 

@@ -22,7 +22,7 @@ export function cityTier(activePowerMw: number): CityTier {
   return 'city'
 }
 
-const TIER_CONFIG: Record<CityTier, { count: number; heights: number[] }> = {
+export const TIER_CONFIG: Record<CityTier, { count: number; heights: number[] }> = {
   village: { count: 3, heights: [1.5, 1.2, 1.8] },
   town:    { count: 5, heights: [2.5, 2.0, 3.0, 2.2, 1.8] },
   city:    { count: 6, heights: [5.0, 4.0, 6.0, 3.5, 4.5, 5.5] },
