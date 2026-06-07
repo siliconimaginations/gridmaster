@@ -21,11 +21,12 @@ import styles from './BottomHud.module.css'
  * @see docs/engineering/13-hud.md
  */
 export function BottomHud() {
-  const { clockState, clockSpeedMultiplier, sessionId, pendingEventCards, sendCommandOptimistic } =
+  const { clockState, clockSpeedMultiplier, sessionId, network, pendingEventCards, sendCommandOptimistic } =
     useGameStore((s) => ({
       clockState: s.clockState,
       clockSpeedMultiplier: s.clockSpeedMultiplier,
       sessionId: s.sessionId,
+      network: s.network,
       pendingEventCards: s.pendingEventCards,
       sendCommandOptimistic: s.sendCommandOptimistic,
     }))
@@ -50,7 +51,8 @@ export function BottomHud() {
 
   function handleDispatch() {
     // TODO: open dispatch panel (#88) — for now triggers dispatch command directly
-    sendCommandOptimistic({ commandType: 'RunEconomicDispatch', payload: { totalLoadMw: 0 } })
+    const totalLoadMw = network?.loads.reduce((sum, l) => sum + l.activePowerMw, 0) ?? 0
+    sendCommandOptimistic({ commandType: 'RunEconomicDispatch', payload: { totalLoadMw } })
   }
 
   const firstEvent = pendingEventCards[0]

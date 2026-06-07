@@ -1,5 +1,6 @@
 import { useGameStore } from '../state/useGameStore'
 import { formatGameTime, gridHealthStatus, totalLoadMw } from './hud'
+import type { HealthSeverity } from './hud'
 import styles from './TopHud.module.css'
 
 /**
@@ -21,7 +22,7 @@ export function TopHud() {
 
   const health = gridHealthStatus(violations)
 
-  const severityClass: Record<typeof health.severity, string> = {
+  const severityClass: Record<HealthSeverity, string> = {
     ok: styles.severityOk,
     warning: styles.severityWarning,
     critical: styles.severityCritical,

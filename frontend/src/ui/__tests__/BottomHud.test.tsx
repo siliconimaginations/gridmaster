@@ -17,6 +17,7 @@ function mockStore(overrides: Record<string, unknown> = {}) {
       clockState: 'PAUSED',
       clockSpeedMultiplier: 1,
       sessionId: 'sess1',
+      network: { buses: [], branches: [], generators: [], loads: [{ id: 'l1', busId: 'b1', name: 'Load1', activePowerMw: 800, reactivePowerMvar: 0 }] },
       pendingEventCards: [],
       sendCommandOptimistic: mockSendCommand,
       ...overrides,
@@ -73,6 +74,15 @@ describe('BottomHud', () => {
     render(<BottomHud />)
     await userEvent.click(screen.getByTestId('btn-play-pause'))
     expect(mockSendCommand).toHaveBeenCalledWith({ commandType: 'PauseClock', payload: {} })
+  })
+
+  it('clicking Run Dispatch sends current total load', async () => {
+    render(<BottomHud />)
+    await userEvent.click(screen.getByTestId('btn-dispatch'))
+    expect(mockSendCommand).toHaveBeenCalledWith({
+      commandType: 'RunEconomicDispatch',
+      payload: { totalLoadMw: 800 },
+    })
   })
 
   it('clicking a speed button dispatches SetClockSpeed', async () => {
