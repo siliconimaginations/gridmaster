@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react'
+import { shallow } from 'zustand/shallow'
 import { SceneManager } from './scene/SceneManager'
+import { useGameStore } from './state/useGameStore'
 import { TopHud } from './ui/TopHud'
 import { BottomHud } from './ui/BottomHud'
 
@@ -20,6 +22,11 @@ import { BottomHud } from './ui/BottomHud'
  *
  * All HUD components read state from the Zustand store directly.
  * See docs/engineering/13-hud.md for the full overlay architecture rationale.
+ *
+ * Store → scene sync:
+ * Two `useGameStore.subscribe` selectors (network + violations) push state
+ * changes into SceneManager without going through React render cycles.
+ * See docs/engineering/14-scene-meshes.md §Store→Scene sync.
  */
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -31,7 +38,23 @@ export default function App() {
     const manager = new SceneManager(canvas)
     manager.start()
 
+    // Subscribe network slice → update all meshes
+    const unsubNetwork = useGameStore.subscribe(
+      (state) => state.network,
+      (network) => manager.updateNetwork(network),
+      { equalityFn: shallow, fireImmediately: true },
+    )
+
+    // Subscribe violations slice → re-colour status rings only
+    const unsubViolations = useGameStore.subscribe(
+      (state) => state.violations,
+      (violations) => manager.updateViolations(violations),
+      { equalityFn: shallow, fireImmediately: true },
+    )
+
     return () => {
+      unsubNetwork()
+      unsubViolations()
       manager.dispose()
     }
   }, [])
