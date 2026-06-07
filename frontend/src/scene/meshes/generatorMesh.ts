@@ -53,6 +53,6 @@ export function createGeneratorMesh(scene: Scene, position: Vector3, dto: Genera
 /** Updates only the status ring colour without recreating the mesh. */
 export function updateGeneratorStatus(ring: ReturnType<typeof createGeneratorMesh>['ring'], status: GeneratorStatus): void {
   if (ring.material) {
-    ;(ring.material as ReturnType<typeof createToonMaterial>).diffuseColor = STATUS[status]
+    (ring.material as ReturnType<typeof createToonMaterial>).diffuseColor = STATUS[status]
   }
 }
