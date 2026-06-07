@@ -77,7 +77,7 @@ class PresetNetworkFactoryTest {
         // IEEE 14-bus: 14 buses, 5 generators (buses 1,2,3,6,8), 11 loads, 20 branches (15 lines + 5 transformers)
         assertThat(network.busView.buses.count()).isEqualTo(14)
         assertThat(network.generatorCount).isEqualTo(5)
-        assertThat(network.loadCount).isGreaterThanOrEqualTo(9) // 11 load buses in standard case
+        assertThat(network.loadCount).isEqualTo(11)
     }
 
     @Test
