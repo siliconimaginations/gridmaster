@@ -2,14 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // ── Mock @stomp/stompjs ────────────────────────────────────────────────────
 
-const mockSubscribe = vi.fn()
 const mockPublish = vi.fn()
 const mockActivate = vi.fn()
 const mockDeactivate = vi.fn().mockResolvedValue(undefined)
 
 let capturedOnConnect: (() => void) | null = null
-
-let capturedMessageHandler: ((frame: { body: string }) => void) | null = null
+/** topic → handler map so tests can trigger any subscription. */
+const capturedSubscribers = new Map<string, (frame: { body: string }) => void>()
 let capturedMockInstance: { connectHeaders: Record<string, string> } | null = null
 
 vi.mock('@stomp/stompjs', () => ({
@@ -25,8 +24,8 @@ vi.mock('@stomp/stompjs', () => ({
       activate: mockActivate,
       deactivate: mockDeactivate,
       subscribe: (dest: string, handler: (frame: { body: string }) => void) => {
-        capturedMessageHandler = handler
-        return mockSubscribe(dest, handler)
+        capturedSubscribers.set(dest, handler)
+        // TODO: #109 return { unsubscribe: vi.fn() } once WsClient manages subscriptions
       },
       publish: mockPublish,
     }
@@ -42,16 +41,18 @@ import { WsClient } from '../wsClient'
 describe('WsClient', () => {
   let onMessage: ReturnType<typeof vi.fn>
   let onStatus: ReturnType<typeof vi.fn>
+  let onAck: ReturnType<typeof vi.fn>
   let client: WsClient
 
   beforeEach(() => {
     vi.clearAllMocks()
     capturedOnConnect = null
-    capturedMessageHandler = null
+    capturedSubscribers.clear()
     capturedMockInstance = null
     onMessage = vi.fn()
     onStatus = vi.fn()
-    client = new WsClient(onMessage, onStatus)
+    onAck = vi.fn()
+    client = new WsClient(onMessage, onStatus, onAck)
   })
 
   it('calls activate and sets status to "connecting" on connect()', () => {
@@ -65,13 +66,16 @@ describe('WsClient', () => {
     expect(capturedMockInstance?.connectHeaders).toEqual({ Authorization: 'Bearer mytoken' })
   })
 
-  it('subscribes to the correct topic on STOMP connect', () => {
+  it('subscribes to state topic on STOMP connect', () => {
     client.connect('sess1', 'token123')
     capturedOnConnect?.()
-    expect(mockSubscribe).toHaveBeenCalledWith(
-      '/topic/session/sess1/state',
-      expect.any(Function),
-    )
+    expect(capturedSubscribers.has('/topic/session/sess1/state')).toBe(true)
+  })
+
+  it('subscribes to ack queue on STOMP connect', () => {
+    client.connect('sess1', 'token123')
+    capturedOnConnect?.()
+    expect(capturedSubscribers.has('/user/queue/session/sess1/ack')).toBe(true)
   })
 
   it('calls onStatus("connected") after STOMP connect', () => {
@@ -84,16 +88,32 @@ describe('WsClient', () => {
     const update = { type: 'FULL', sessionId: 'sess1', tickNumber: 1, gameTimeMinutes: 0, clockState: 'RUNNING', clockSpeedMultiplier: 1 }
     client.connect('sess1', 'token')
     capturedOnConnect?.()
-    capturedMessageHandler?.({ body: JSON.stringify(update) })
+    capturedSubscribers.get('/topic/session/sess1/state')?.({ body: JSON.stringify(update) })
     expect(onMessage).toHaveBeenCalledWith(update)
+  })
+
+  it('forwards parsed CommandAck to onAck', () => {
+    const ack = { commandType: 'CommitGenerator', success: true, rejectionReason: null, appliedAtTick: 7 }
+    client.connect('sess1', 'token')
+    capturedOnConnect?.()
+    capturedSubscribers.get('/user/queue/session/sess1/ack')?.({ body: JSON.stringify(ack) })
+    expect(onAck).toHaveBeenCalledWith(ack)
   })
 
   it('does not call onMessage on malformed JSON', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     client.connect('sess1', 'token')
     capturedOnConnect?.()
-    capturedMessageHandler?.({ body: 'not-json' })
+    capturedSubscribers.get('/topic/session/sess1/state')?.({ body: 'not-json' })
     expect(onMessage).not.toHaveBeenCalled()
+  })
+
+  it('does not call onAck on malformed JSON', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    client.connect('sess1', 'token')
+    capturedOnConnect?.()
+    capturedSubscribers.get('/user/queue/session/sess1/ack')?.({ body: 'bad' })
+    expect(onAck).not.toHaveBeenCalled()
   })
 
   it('publishes to the correct destination on send()', () => {
