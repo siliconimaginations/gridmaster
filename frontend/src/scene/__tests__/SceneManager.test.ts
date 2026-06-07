@@ -22,11 +22,13 @@ vi.mock('../ground', () => ({ createGround: vi.fn() }))
 vi.mock('../lighting', () => ({ createSceneLighting: vi.fn() }))
 
 const mockUpdateNetwork = vi.fn()
+const mockUpdateViolations = vi.fn()
 const mockDisposeAll = vi.fn()
 
 vi.mock('../meshes/MeshRegistry', () => ({
   MeshRegistry: vi.fn().mockImplementation(() => ({
     updateNetwork: mockUpdateNetwork,
+    updateViolations: mockUpdateViolations,
     disposeAll: mockDisposeAll,
   })),
 }))
@@ -76,14 +78,11 @@ describe('SceneManager', () => {
     expect(mockUpdateNetwork).toHaveBeenCalledWith(network, violations)
   })
 
-  it('updateViolations re-calls MeshRegistry.updateNetwork with cached network', () => {
-    const network = makeNetwork()
-    manager.updateNetwork(network)            // cache network
-    vi.clearAllMocks()
-
+  it('updateViolations calls MeshRegistry.updateViolations (fast path)', () => {
     const violations = [makeViolation()]
     manager.updateViolations(violations)
-    expect(mockUpdateNetwork).toHaveBeenCalledWith(network, violations)
+    expect(mockUpdateViolations).toHaveBeenCalledWith(violations)
+    expect(mockUpdateNetwork).not.toHaveBeenCalled()
   })
 
   it('updateNetwork(null) passes null + empty violations to MeshRegistry', () => {

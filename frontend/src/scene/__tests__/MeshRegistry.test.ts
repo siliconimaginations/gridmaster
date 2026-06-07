@@ -44,7 +44,7 @@ vi.mock('@babylonjs/core', () => {
 })
 
 import { MeshBuilder } from '@babylonjs/core'
-import type { BranchDto, BusDto, GeneratorDto, GridNetworkDto, LoadDto } from '../../api/types'
+import type { BranchDto, BusDto, GeneratorDto, GridNetworkDto, LoadDto, ViolationDto } from '../../api/types'
 import { MeshRegistry } from '../meshes/MeshRegistry'
 
 const mockScene = {} as never
@@ -122,4 +122,21 @@ describe('MeshRegistry', () => {
     expect(vi.mocked(MeshBuilder.CreateBox).mock.calls.length).toBe(boxCalls)
   })
 
+  it('updateViolations does not create new meshes', () => {
+    // Prime registry so caches are populated
+    registry.updateNetwork(makeNetwork(['g1'], [], []))
+    const torusCalls = vi.mocked(MeshBuilder.CreateTorus).mock.calls.length
+    const boxCalls = vi.mocked(MeshBuilder.CreateBox).mock.calls.length
+
+    // Violation-only update should not create new geometry
+    const v: ViolationDto = { elementId: 'g1', elementType: 'BUS', violationType: 'VOLTAGE_HIGH', value: 1.15, limit: 1.05 }
+    registry.updateViolations([v])
+
+    expect(vi.mocked(MeshBuilder.CreateTorus).mock.calls.length).toBe(torusCalls)
+    expect(vi.mocked(MeshBuilder.CreateBox).mock.calls.length).toBe(boxCalls)
+  })
+
+  it('updateViolations before updateNetwork does not throw (empty caches)', () => {
+    expect(() => registry.updateViolations([])).not.toThrow()
+  })
 })

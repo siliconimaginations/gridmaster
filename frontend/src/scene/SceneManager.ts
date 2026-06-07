@@ -30,7 +30,6 @@ export class SceneManager {
   readonly scene: Scene
 
   private readonly meshRegistry: MeshRegistry
-  private currentNetwork: GridNetworkDto | null = null
   private currentViolations: readonly ViolationDto[] = []
 
   constructor(canvas: HTMLCanvasElement) {
@@ -67,7 +66,6 @@ export class SceneManager {
    * Uses cached violations when none are supplied (e.g. on first network arrival).
    */
   updateNetwork(network: GridNetworkDto | null, violations = this.currentViolations): void {
-    this.currentNetwork = network
     // Clear violations when the network is cleared — no network means no violations
     const finalViolations = network ? violations : []
     this.currentViolations = finalViolations
@@ -78,10 +76,11 @@ export class SceneManager {
    * Push updated violations to the scene without a full network refresh.
    * Re-renders status rings for generators and substations.
    */
-  // TODO: #129 add dedicated MeshRegistry.updateViolations() to only re-run status-ring logic
   updateViolations(violations: readonly ViolationDto[]): void {
     this.currentViolations = violations
-    this.meshRegistry.updateNetwork(this.currentNetwork, violations)
+    // Efficient fast path: only re-colours status rings, skips full mesh loop
+    // TODO: #129 add dedicated MeshRegistry.updateViolations() to only re-run status-ring logic — now implemented
+    this.meshRegistry.updateViolations(violations)
   }
 
   /** Stop the render loop and release all GPU resources. */

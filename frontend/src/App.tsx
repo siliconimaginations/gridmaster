@@ -38,24 +38,17 @@ export default function App() {
     const manager = new SceneManager(canvas)
     manager.start()
 
-    // TODO: #128 merge these two subscriptions into one selector to avoid double-update on full GameStateUpdate
-    // Subscribe network slice → update all meshes
-    const unsubNetwork = useGameStore.subscribe(
-      (state) => state.network,
-      (network) => manager.updateNetwork(network),
-      { equalityFn: shallow, fireImmediately: true },
-    )
-
-    // Subscribe violations slice → re-colour status rings only
-    const unsubViolations = useGameStore.subscribe(
-      (state) => state.violations,
-      (violations) => manager.updateViolations(violations),
+    // Single subscription for both slices ensures atomic updates: no stale-violations
+    // render when a full GameStateUpdate changes network + violations together.
+    // Violations-only changes use SceneManager.updateViolations (fast path).
+    const unsub = useGameStore.subscribe(
+      (state) => ({ network: state.network, violations: state.violations }),
+      ({ network, violations }) => manager.updateNetwork(network, violations),
       { equalityFn: shallow, fireImmediately: true },
     )
 
     return () => {
-      unsubNetwork()
-      unsubViolations()
+      unsub()
       manager.dispose()
     }
   }, [])
