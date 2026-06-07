@@ -39,17 +39,10 @@ vi.mock('@babylonjs/core', () => {
     }
   }
 
-  // Minimal AbstractMesh stand-in — real mesh has many more members
-  class AbstractMesh {
-    enableEdgesRendering = vi.fn()
-    edgesWidth = 0
-    edgesColor: Color4 = new Color4()
-  }
-
-  return { AbstractMesh, Color3, Color4, Scene: class {}, StandardMaterial }
+  return { AbstractMesh: class {}, Color3, Color4, Scene: class {}, StandardMaterial }
 })
 
-import { AbstractMesh, Color3, Color4 } from '@babylonjs/core'
+import { Color3, Color4 } from '@babylonjs/core'
 import { applyOutline, createToonMaterial } from '../materials/ToonMaterial'
 
 describe('createToonMaterial', () => {
@@ -79,28 +72,37 @@ describe('createToonMaterial', () => {
   })
 })
 
+/** Creates a minimal mesh stub compatible with applyOutline's AbstractMesh parameter. */
+function makeMeshStub() {
+  return {
+    enableEdgesRendering: vi.fn(),
+    edgesWidth: 0,
+    edgesColor: new Color4(),
+  }
+}
+
 describe('applyOutline', () => {
   it('calls enableEdgesRendering on the mesh', () => {
-    const mesh = new AbstractMesh()
+    const mesh = makeMeshStub()
     applyOutline(mesh as never)
     expect(mesh.enableEdgesRendering).toHaveBeenCalledOnce()
   })
 
   it('sets edgesWidth to the supplied width', () => {
-    const mesh = new AbstractMesh()
+    const mesh = makeMeshStub()
     applyOutline(mesh as never, 6)
     expect(mesh.edgesWidth).toBe(6)
   })
 
   it('sets edgesColor to the supplied Color4', () => {
-    const mesh = new AbstractMesh()
+    const mesh = makeMeshStub()
     const color = new Color4(1, 0, 0, 1)
     applyOutline(mesh as never, 4, color as never)
     expect(mesh.edgesColor).toBe(color)
   })
 
   it('defaults to opaque black outline', () => {
-    const mesh = new AbstractMesh()
+    const mesh = makeMeshStub()
     applyOutline(mesh as never)
     expect(mesh.edgesColor.r).toBe(0)
     expect(mesh.edgesColor.g).toBe(0)

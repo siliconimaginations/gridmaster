@@ -29,8 +29,8 @@ export function createIsometricCamera(scene: Scene, canvas: HTMLCanvasElement): 
   camera.lowerRadiusLimit = ZOOM_MIN
   camera.upperRadiusLimit = ZOOM_MAX
 
-  // Pan on the XZ ground plane; high sensitivity keeps drag feeling 1:1
-  camera.panningSensibility = 60
+  // Pan on the XZ ground plane; higher value = more sensitive (Babylon default is 1000)
+  camera.panningSensibility = 1000
   camera.panningInertia = 0.85
   camera.panningAxis = new Vector3(1, 0, 1)
 

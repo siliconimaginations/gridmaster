@@ -17,8 +17,8 @@ export function createGround(scene: Scene) {
   const mat = createToonMaterial(scene, new Color3(0.52, 0.72, 0.38), 'groundMat') // grass green
   ground.material = mat
 
-  // Ensure the ground receives but does not cast hard shadows
   ground.receiveShadows = true
+  ground.castShadows = false // explicit: ground does not cast shadows onto itself
 
   return ground
 }
