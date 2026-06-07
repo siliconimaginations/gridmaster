@@ -109,6 +109,7 @@ export interface GameStateUpdate {
   pendingEventCards?: EventCardDto[]
 }
 
+// TODO: #99 replace with discriminated union per commandType for compile-time payload safety
 export interface PlayerCommandMessage {
   commandType: string
   payload: Record<string, unknown>

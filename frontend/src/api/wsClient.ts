@@ -46,6 +46,7 @@ export class WsClient {
   }
 
   /** Send a command to the server. Queues if not yet connected. */
+  // TODO: #100 remove sessionId param — use this.sessionId internally
   send(sessionId: string, msg: PlayerCommandMessage): void {
     if (this.client.connected) {
       this.client.publish({

@@ -88,6 +88,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       })
     } else {
       // DELTA: merge only the fields present in the update
+      // TODO: #101 separate always-present clock fields from optional network/alert fields
       const delta = definedFields({
         tickNumber: update.tickNumber,
         gameTimeMinutes: update.gameTimeMinutes,
