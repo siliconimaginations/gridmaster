@@ -40,10 +40,20 @@ export default function App() {
 
     // Single subscription for both slices ensures atomic updates: no stale-violations
     // render when a full GameStateUpdate changes network + violations together.
-    // Violations-only changes use SceneManager.updateViolations (fast path).
+    // Routes to updateNetwork on network change, updateViolations (fast path) otherwise.
+    let initialized = false
     const unsub = useGameStore.subscribe(
       (state) => ({ network: state.network, violations: state.violations }),
-      ({ network, violations }) => manager.updateNetwork(network, violations),
+      ({ network, violations }, prev) => {
+        if (!initialized || network !== prev.network) {
+          // Full update: network changed, or initial fire (fireImmediately with current===prev)
+          initialized = true
+          manager.updateNetwork(network, violations)
+        } else {
+          // Violations-only change — fast path skips full mesh loop
+          manager.updateViolations(violations)
+        }
+      },
       { equalityFn: shallow, fireImmediately: true },
     )
 
