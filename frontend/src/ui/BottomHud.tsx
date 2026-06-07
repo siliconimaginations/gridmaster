@@ -1,6 +1,6 @@
 import { useGameStore } from '../state/useGameStore'
 import { useShallow } from 'zustand/react/shallow'
-import { SPEED_STEPS } from './hud'
+import { calculateTotalLoadMw, SPEED_STEPS } from './hud'
 import type { SpeedStep } from './hud'
 import styles from './BottomHud.module.css'
 
@@ -52,7 +52,7 @@ export function BottomHud() {
 
   function handleDispatch() {
     // TODO: open dispatch panel (#88) — for now triggers dispatch command directly
-    const totalLoadMw = network?.loads.reduce((sum, l) => sum + l.activePowerMw, 0) ?? 0
+    const totalLoadMw = calculateTotalLoadMw(network)
     sendCommandOptimistic({ commandType: 'RunEconomicDispatch', payload: { totalLoadMw } })
   }
 

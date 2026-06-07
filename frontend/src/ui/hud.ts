@@ -31,13 +31,21 @@ export function formatGameTime(gameTimeMinutes: number): string {
 // ── Load calculation ──────────────────────────────────────────────────────────
 
 /**
- * Sums `activePowerMw` across all loads in the network.
+ * Returns the raw total active power in MW across all loads.
+ * Returns 0 when `network` is null.
+ */
+export function calculateTotalLoadMw(network: GridNetworkDto | null): number {
+  if (!network) return 0
+  return network.loads.reduce((sum, l) => sum + l.activePowerMw, 0)
+}
+
+/**
+ * Sums `activePowerMw` across all loads in the network and formats as a string.
  * Returns `"— MW"` when `network` is null (no session or no data yet).
  */
 export function totalLoadMw(network: GridNetworkDto | null): string {
   if (!network) return '— MW'
-  const total = network.loads.reduce((sum, l) => sum + l.activePowerMw, 0)
-  return `${total.toFixed(0)} MW`
+  return `${calculateTotalLoadMw(network).toFixed(0)} MW`
 }
 
 // ── Grid health ───────────────────────────────────────────────────────────────

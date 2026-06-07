@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { GridNetworkDto, ViolationDto } from '../../api/types'
-import { formatGameTime, gridHealthStatus, totalLoadMw } from '../hud'
+import { calculateTotalLoadMw, formatGameTime, gridHealthStatus, totalLoadMw } from '../hud'
 
 // ── formatGameTime ────────────────────────────────────────────────────────────
 
@@ -41,6 +41,20 @@ const makeNetwork = (loadsMw: number[]): GridNetworkDto => ({
   })),
 })
 
+describe('calculateTotalLoadMw', () => {
+  it('returns 0 when network is null', () => {
+    expect(calculateTotalLoadMw(null)).toBe(0)
+  })
+
+  it('returns 0 for empty loads', () => {
+    expect(calculateTotalLoadMw(makeNetwork([]))).toBe(0)
+  })
+
+  it('sums all load active powers as a number', () => {
+    expect(calculateTotalLoadMw(makeNetwork([100, 200, 531.4]))).toBeCloseTo(831.4)
+  })
+})
+
 describe('totalLoadMw', () => {
   it('returns "— MW" when network is null', () => {
     expect(totalLoadMw(null)).toBe('— MW')
@@ -50,7 +64,7 @@ describe('totalLoadMw', () => {
     expect(totalLoadMw(makeNetwork([]))).toBe('0 MW')
   })
 
-  it('sums all load active powers', () => {
+  it('formats sum via calculateTotalLoadMw (rounds to integer)', () => {
     expect(totalLoadMw(makeNetwork([100, 200, 531.4]))).toBe('831 MW')
   })
 })
