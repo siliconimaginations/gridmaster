@@ -3,11 +3,10 @@ import { describe, expect, it, vi } from 'vitest'
 /**
  * Unit tests for {@link createToonMaterial} and {@link applyOutline}.
  *
- * Babylon.js `StandardMaterial` calls WebGL under the hood, so we mock
- * the Scene dependency and assert on the properties we set.
+ * Babylon.js `StandardMaterial` requires a real WebGL context, so we mock
+ * `@babylonjs/core` and assert on the properties set by the factory functions.
  */
 
-// Mock @babylonjs/core so tests run in jsdom without a real WebGL context
 vi.mock('@babylonjs/core', () => {
   class Color3 {
     constructor(
@@ -18,6 +17,15 @@ vi.mock('@babylonjs/core', () => {
     static Black() {
       return new Color3(0, 0, 0)
     }
+  }
+
+  class Color4 {
+    constructor(
+      public r = 0,
+      public g = 0,
+      public b = 0,
+      public a = 1,
+    ) {}
   }
 
   class StandardMaterial {
@@ -31,10 +39,17 @@ vi.mock('@babylonjs/core', () => {
     }
   }
 
-  return { Color3, Scene: class {}, StandardMaterial, Texture: class {} }
+  // Minimal AbstractMesh stand-in — real mesh has many more members
+  class AbstractMesh {
+    enableEdgesRendering = vi.fn()
+    edgesWidth = 0
+    edgesColor: Color4 = new Color4()
+  }
+
+  return { AbstractMesh, Color3, Color4, Scene: class {}, StandardMaterial }
 })
 
-import { Color3 } from '@babylonjs/core'
+import { AbstractMesh, Color3, Color4 } from '@babylonjs/core'
 import { applyOutline, createToonMaterial } from '../materials/ToonMaterial'
 
 describe('createToonMaterial', () => {
@@ -56,7 +71,7 @@ describe('createToonMaterial', () => {
     expect(mat.diffuseColor).toBe(color)
   })
 
-  it('disables specular highlight (specularColor = black)', () => {
+  it('disables specular (specularColor = black)', () => {
     const mat = createToonMaterial(mockScene as never, new Color3(1, 1, 1))
     expect(mat.specularColor?.r).toBe(0)
     expect(mat.specularColor?.g).toBe(0)
@@ -66,34 +81,30 @@ describe('createToonMaterial', () => {
 
 describe('applyOutline', () => {
   it('calls enableEdgesRendering on the mesh', () => {
-    const mesh = {
-      enableEdgesRendering: vi.fn(),
-      edgesWidth: 0,
-      edgesColor: { r: 0, g: 0, b: 0, a: 0 },
-    }
-    applyOutline(mesh)
+    const mesh = new AbstractMesh()
+    applyOutline(mesh as never)
     expect(mesh.enableEdgesRendering).toHaveBeenCalledOnce()
   })
 
   it('sets edgesWidth to the supplied width', () => {
-    const mesh = {
-      enableEdgesRendering: vi.fn(),
-      edgesWidth: 0,
-      edgesColor: { r: 0, g: 0, b: 0, a: 0 },
-    }
-    applyOutline(mesh, 6)
+    const mesh = new AbstractMesh()
+    applyOutline(mesh as never, 6)
     expect(mesh.edgesWidth).toBe(6)
   })
 
-  it('defaults to black outline', () => {
-    const mesh = {
-      enableEdgesRendering: vi.fn(),
-      edgesWidth: 0,
-      edgesColor: { r: 1, g: 1, b: 1, a: 1 },
-    }
-    applyOutline(mesh)
+  it('sets edgesColor to the supplied Color4', () => {
+    const mesh = new AbstractMesh()
+    const color = new Color4(1, 0, 0, 1)
+    applyOutline(mesh as never, 4, color as never)
+    expect(mesh.edgesColor).toBe(color)
+  })
+
+  it('defaults to opaque black outline', () => {
+    const mesh = new AbstractMesh()
+    applyOutline(mesh as never)
     expect(mesh.edgesColor.r).toBe(0)
     expect(mesh.edgesColor.g).toBe(0)
     expect(mesh.edgesColor.b).toBe(0)
+    expect(mesh.edgesColor.a).toBe(1)
   })
 })
