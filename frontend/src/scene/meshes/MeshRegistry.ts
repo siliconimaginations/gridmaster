@@ -13,7 +13,7 @@
 
 import { Scene, Vector3 } from '@babylonjs/core'
 import type { AbstractMesh, ParticleSystem } from '@babylonjs/core'
-import type { GridNetworkDto, ViolationDto } from '../../api/types'
+import type { GeneratorDto, GridNetworkDto, ViolationDto } from '../../api/types'
 import { layoutBuses } from '../layout/busLayout'
 import { createGeneratorMesh, generatorStatus, updateGeneratorStatus } from './generatorMesh'
 import { createSubstationMesh, substationStatus, updateSubstationStatus } from './substationMesh'
@@ -54,6 +54,10 @@ export class MeshRegistry {
   private cities = new Map<string, ReturnType<typeof createCityMesh>>()
   /** Tracks last-known bus centre for each city so we can detect position changes. */
   private cityPositions = new Map<string, { x: number; z: number }>()
+  /** Cached generator DTOs for violation-only ring updates (avoids full updateNetwork). */
+  private generatorDtos = new Map<string, GeneratorDto>()
+  /** Cached substation→busId mapping for violation-only ring updates. */
+  private subBusIdSets = new Map<string, Set<string>>()
   private lines = new Map<string, LineMeshes>()
   private particles = new Map<string, ParticleSystem>()
 
@@ -81,6 +85,7 @@ export class MeshRegistry {
     for (const gen of network.generators) {
       const pos = positions.get(gen.busId) ?? { x: 0, z: 0 }
       const existing = this.generators.get(gen.id)
+      this.generatorDtos.set(gen.id, gen)
       if (existing) {
         // Keep mesh in sync with bus position (bus layout may change)
         existing.tower.position.x = pos.x
@@ -110,6 +115,7 @@ export class MeshRegistry {
       // Only pass violations relevant to buses in this substation
       const subViolations = violations.filter((v) => busIds.has(v.elementId))
       const pos = positions.get(bus.id) ?? { x: 0, z: 0 }
+      this.subBusIdSets.set(bus.substationId, busIds)
       if (!this.substations.has(bus.substationId)) {
         this.substations.set(bus.substationId,
           createSubstationMesh(this.scene, new Vector3(pos.x, 0, pos.z), bus.substationId, subViolations))
@@ -178,6 +184,22 @@ export class MeshRegistry {
     }
   }
 
+  /**
+   * Updates only generator and substation status ring colours.
+   * More efficient than a full `updateNetwork` when only violations change.
+   */
+  updateViolations(violations: readonly ViolationDto[]): void {
+    for (const [genId, meshes] of this.generators) {
+      const dto = this.generatorDtos.get(genId)
+      if (dto) updateGeneratorStatus(meshes.ring, generatorStatus(dto, violations))
+    }
+    for (const [subId, meshes] of this.substations) {
+      const busIds = this.subBusIdSets.get(subId) ?? new Set<string>()
+      const subViolations = violations.filter((v) => busIds.has(v.elementId))
+      updateSubstationStatus(meshes.ring, substationStatus(subViolations))
+    }
+  }
+
   /** Dispose all element meshes and particle systems. */
   disposeAll(): void {
     this.generators.forEach(({ tower, ring }) => { tower.dispose(); ring.dispose() })
@@ -187,6 +209,8 @@ export class MeshRegistry {
     this.cities.forEach((ms) => disposeAll(ms))
     this.cities.clear()
     this.cityPositions.clear()
+    this.generatorDtos.clear()
+    this.subBusIdSets.clear()
     this.lines.forEach(({ tube, pylons }) => { tube.dispose(); disposeAll(pylons) })
     this.lines.clear()
     this.particles.forEach((ps) => ps.dispose())
