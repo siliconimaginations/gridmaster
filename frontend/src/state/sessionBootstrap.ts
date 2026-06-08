@@ -68,11 +68,18 @@ export function useSessionBootstrap(): BootstrapResult {
         if (sessionId) {
           try {
             await getSession(sessionId)
-          } catch {
-            // Stored session no longer exists server-side (expired, deleted, or
-            // from a different backend instance) — fall through and create a new one.
-            clearStoredSessionId()
-            sessionId = null
+          } catch (err) {
+            // Only a 404 means the stored session is genuinely gone (expired,
+            // deleted, or from a different backend instance) — fall through and
+            // create a new one. Any other error (500, network failure, etc.) is
+            // a real problem and should surface via the outer catch rather than
+            // being silently papered over by minting a fresh session.
+            if (err instanceof ApiError && err.status === 404) {
+              clearStoredSessionId()
+              sessionId = null
+            } else {
+              throw err
+            }
           }
         }
 

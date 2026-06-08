@@ -123,6 +123,21 @@ describe('useSessionBootstrap', () => {
     expect(mockConnect).toHaveBeenCalledWith(SESSION.id, TOKEN.token)
   })
 
+  it('does not paper over non-404 errors when resuming a stored session', async () => {
+    mockGetStoredSessionId.mockReturnValue('sess-existing')
+    mockGetSession.mockRejectedValue(new ApiError(500, null, 'API 500: /api/sessions/sess-existing'))
+
+    const { result } = renderHook(() => useSessionBootstrap())
+    await waitFor(() => expect(result.current.status).toBe('error'))
+
+    // A 500 means something is genuinely wrong server-side — surface it rather
+    // than silently treating the session as stale and minting a new one.
+    expect(mockClearStoredSessionId).not.toHaveBeenCalled()
+    expect(mockCreateSession).not.toHaveBeenCalled()
+    expect(mockConnect).not.toHaveBeenCalled()
+    expect(result.current.error).toMatch(/API 500/)
+  })
+
   it('enters the error state with a friendly message when the backend is unreachable', async () => {
     mockIssueToken.mockRejectedValue(new TypeError('Failed to fetch'))
 
