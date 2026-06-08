@@ -28,6 +28,7 @@ const BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http:/
 
 const TOKEN_KEY = 'gridmaster_token'
 const USER_ID_KEY = 'gridmaster_user_id'
+const SESSION_ID_KEY = 'gridmaster_session_id'
 
 // ── Auth token helpers ────────────────────────────────────────────────────────
 
@@ -51,6 +52,21 @@ export function setStoredAuth(token: string, userId: string): void {
 export function clearStoredAuth(): void {
   localStorage.removeItem(TOKEN_KEY)
   localStorage.removeItem(USER_ID_KEY)
+}
+
+/** Returns the stored sessionId for dev-mode bootstrap resume, or null if none exists. */
+export function getStoredSessionId(): string | null {
+  return localStorage.getItem(SESSION_ID_KEY)
+}
+
+/** Persists the sessionId so a future app load can resume the same session. */
+export function setStoredSessionId(sessionId: string): void {
+  localStorage.setItem(SESSION_ID_KEY, sessionId)
+}
+
+/** Removes the stored sessionId — call when a resumed session no longer exists. */
+export function clearStoredSessionId(): void {
+  localStorage.removeItem(SESSION_ID_KEY)
 }
 
 // ── Error type ────────────────────────────────────────────────────────────────
