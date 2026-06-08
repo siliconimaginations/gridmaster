@@ -62,6 +62,7 @@ export function useSessionBootstrap(): BootstrapResult {
     async function run() {
       try {
         const tokenRes = await issueToken({ userId: getStoredUserId() ?? undefined })
+        if (cancelled) return
         setStoredAuth(tokenRes.token, tokenRes.userId)
 
         let sessionId = getStoredSessionId()
@@ -89,6 +90,7 @@ export function useSessionBootstrap(): BootstrapResult {
             mode: 'FREE_PLAY',
             networkPreset: DEV_NETWORK_PRESET,
           })
+          if (cancelled) return
           sessionId = session.id
           setStoredSessionId(sessionId)
         }
@@ -100,7 +102,7 @@ export function useSessionBootstrap(): BootstrapResult {
         if (cancelled) return
         const message =
           err instanceof ApiError
-            ? `API ${err.status}: failed to start session`
+            ? err.message
             : 'Could not reach the GridMaster server — is the backend running?'
         setError(message)
         setStatus('error')
