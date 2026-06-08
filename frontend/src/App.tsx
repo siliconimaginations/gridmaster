@@ -4,6 +4,8 @@ import { SceneManager } from './scene/SceneManager'
 import { useGameStore } from './state/useGameStore'
 import { TopHud } from './ui/TopHud'
 import { BottomHud } from './ui/BottomHud'
+import { BootstrapOverlay } from './ui/BootstrapOverlay'
+import { useSessionBootstrap } from './state/sessionBootstrap'
 
 /**
  * Root component. Renders a full-screen Babylon.js canvas with React HUD
@@ -30,6 +32,7 @@ import { BottomHud } from './ui/BottomHud'
  */
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const { status: bootstrapStatus, error: bootstrapError, retry: retryBootstrap } = useSessionBootstrap()
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -79,6 +82,7 @@ export default function App() {
         <TopHud />
         <BottomHud />
       </div>
+      <BootstrapOverlay status={bootstrapStatus} error={bootstrapError} onRetry={retryBootstrap} />
     </div>
   )
 }
