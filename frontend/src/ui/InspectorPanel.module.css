@@ -1,0 +1,107 @@
+/* ── Backdrop (click-away target) ──────────────────────────────────────────── */
+
+.backdrop {
+  position: absolute;
+  inset: 0;
+  /* transparent — just catches clicks */
+  pointer-events: all;
+  z-index: 19;
+}
+
+/* ── Panel card ────────────────────────────────────────────────────────────── */
+
+.panel {
+  position: absolute;
+  /* Default position: top-left quadrant; scene click handler can reposition in future */
+  top: 60px;
+  left: 16px;
+  width: 220px;
+  border-radius: 10px;
+  background: rgba(10, 14, 26, 0.92);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 3px solid rgba(74, 222, 128, 0.6); /* green — healthy default */
+  font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  font-size: 13px;
+  color: #e8eaf0;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  pointer-events: all;
+  z-index: 20;
+}
+
+.panelViolation {
+  border-top-color: #f87171; /* red when element has a violation */
+}
+
+/* ── Header ────────────────────────────────────────────────────────────────── */
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.title {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.75);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.closeBtn {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 18px;
+  line-height: 1;
+  padding: 0 0 0 8px;
+  cursor: pointer;
+}
+
+.closeBtn:hover {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* ── Metric rows ───────────────────────────────────────────────────────────── */
+
+.body {
+  padding: 8px 0 10px;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 4px 12px;
+  gap: 8px;
+}
+
+.rowLabel {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+
+.rowValue {
+  font-weight: 500;
+  text-align: right;
+}
+
+/* ── Value severity tints ──────────────────────────────────────────────────── */
+
+.valueWarning {
+  color: #fbbf24;
+}
+
+.valueCritical {
+  color: #f87171;
+}
