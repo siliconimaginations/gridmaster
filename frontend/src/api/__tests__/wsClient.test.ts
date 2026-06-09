@@ -25,7 +25,7 @@ vi.mock('@stomp/stompjs', () => ({
       deactivate: mockDeactivate,
       subscribe: (dest: string, handler: (frame: { body: string }) => void) => {
         capturedSubscribers.set(dest, handler)
-        // TODO: #109 return { unsubscribe: vi.fn() } once WsClient manages subscriptions
+        return { unsubscribe: vi.fn() }
       },
       publish: mockPublish,
     }
