@@ -6,6 +6,7 @@ import { TopHud } from './ui/TopHud'
 import { BottomHud } from './ui/BottomHud'
 import { BootstrapOverlay } from './ui/BootstrapOverlay'
 import { useSessionBootstrap } from './state/sessionBootstrap'
+import { AlertToastContainer } from './ui/AlertToast'
 
 /**
  * Root component. Renders a full-screen Babylon.js canvas with React HUD
@@ -81,6 +82,7 @@ export default function App() {
       >
         <TopHud />
         <BottomHud />
+        <AlertToastContainer />
       </div>
       <BootstrapOverlay status={bootstrapStatus} error={bootstrapError} onRetry={retryBootstrap} />
     </div>
