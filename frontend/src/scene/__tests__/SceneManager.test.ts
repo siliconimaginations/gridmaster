@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // ── Babylon.js mock ───────────────────────────────────────────────────────────
+let capturedPointerHandler: ((pi: { type: number }) => void) | null = null
+
 vi.mock('@babylonjs/core', () => {
   class Engine {
     runRenderLoop = vi.fn()
@@ -11,9 +13,13 @@ vi.mock('@babylonjs/core', () => {
   class Scene {
     render = vi.fn()
     dispose = vi.fn()
+    pointerX = 10
+    pointerY = 20
+    onPointerObservable = { add: vi.fn((fn: (pi: { type: number }) => void) => { capturedPointerHandler = fn }) }
+    pick = vi.fn().mockReturnValue({ pickedMesh: null })
     constructor(_engine: unknown) {}
   }
-  return { Engine, Scene }
+  return { Engine, Scene, PointerEventTypes: { POINTERUP: 4 } }
 })
 
 // ── Sub-module mocks (no GPU needed) ─────────────────────────────────────────
@@ -108,5 +114,25 @@ describe('SceneManager', () => {
     manager.dispose()
     expect(mockDisposeAll).toHaveBeenCalledOnce()
     expect(callOrder[0]).toBe('meshRegistry')
+  })
+
+  it('calls onElementSelected with mesh metadata on POINTERUP', () => {
+    const onElementSelected = vi.fn()
+    const canvas = makeCanvas()
+    const m = new SceneManager(canvas, onElementSelected)
+    const meta = { elementType: 'GENERATOR', elementId: 'g1' }
+    // Simulate the scene returning a picked mesh with metadata
+    ;(m.scene.pick as ReturnType<typeof vi.fn>).mockReturnValue({ pickedMesh: { metadata: meta } })
+    capturedPointerHandler?.({ type: 4 }) // POINTERUP = 4
+    expect(onElementSelected).toHaveBeenCalledWith(meta)
+  })
+
+  it('calls onElementSelected with null when no mesh is picked', () => {
+    const onElementSelected = vi.fn()
+    const canvas = makeCanvas()
+    new SceneManager(canvas, onElementSelected)
+    // pick returns no mesh
+    capturedPointerHandler?.({ type: 4 })
+    expect(onElementSelected).toHaveBeenCalledWith(null)
   })
 })

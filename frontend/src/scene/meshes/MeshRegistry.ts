@@ -94,7 +94,9 @@ export class MeshRegistry {
         existing.ring.position.z = pos.z
         updateGeneratorStatus(existing.ring, generatorStatus(gen, violations))
       } else {
-        this.generators.set(gen.id, createGeneratorMesh(this.scene, new Vector3(pos.x, 0, pos.z), gen, violations))
+        const genMeshes = createGeneratorMesh(this.scene, new Vector3(pos.x, 0, pos.z), gen, violations)
+        genMeshes.tower.metadata = { elementType: 'GENERATOR', elementId: gen.id }
+        this.generators.set(gen.id, genMeshes)
       }
     }
 
@@ -117,8 +119,9 @@ export class MeshRegistry {
       const pos = positions.get(bus.id) ?? { x: 0, z: 0 }
       this.subBusIdSets.set(bus.substationId, busIds)
       if (!this.substations.has(bus.substationId)) {
-        this.substations.set(bus.substationId,
-          createSubstationMesh(this.scene, new Vector3(pos.x, 0, pos.z), bus.substationId, subViolations))
+        const subMeshes = createSubstationMesh(this.scene, new Vector3(pos.x, 0, pos.z), bus.substationId, subViolations)
+        subMeshes.building.metadata = { elementType: 'BUS', elementId: bus.substationId }
+        this.substations.set(bus.substationId, subMeshes)
       } else {
         // Keep mesh in sync with bus position and update status ring colour
         const existingSub = this.substations.get(bus.substationId)!
@@ -142,11 +145,15 @@ export class MeshRegistry {
           // Recreate when tier or bus position changes (buildings can't be individually
           // repositioned without knowing their offsets from centre)
           disposeAll(existing)
-          this.cities.set(load.id, createCityMesh(this.scene, new Vector3(pos.x, 0, pos.z), load))
+          const rebuilt = createCityMesh(this.scene, new Vector3(pos.x, 0, pos.z), load)
+          for (const m of rebuilt) m.metadata = { elementType: 'LOAD', elementId: load.id }
+          this.cities.set(load.id, rebuilt)
           this.cityPositions.set(load.id, { x: pos.x, z: pos.z })
         }
       } else {
-        this.cities.set(load.id, createCityMesh(this.scene, new Vector3(pos.x, 0, pos.z), load))
+        const newCity = createCityMesh(this.scene, new Vector3(pos.x, 0, pos.z), load)
+        for (const m of newCity) m.metadata = { elementType: 'LOAD', elementId: load.id }
+        this.cities.set(load.id, newCity)
         this.cityPositions.set(load.id, { x: pos.x, z: pos.z })
       }
     }
@@ -168,7 +175,9 @@ export class MeshRegistry {
         const mat = existingLine.tube.material as { diffuseColor: unknown } | null
         if (mat) mat.diffuseColor = lineColour(branch)
       } else {
-        this.lines.set(branch.id, createLineMesh(this.scene, from, to, branch))
+        const lineMeshes = createLineMesh(this.scene, from, to, branch)
+        lineMeshes.tube.metadata = { elementType: 'LINE', elementId: branch.id }
+        this.lines.set(branch.id, lineMeshes)
       }
 
       // Update existing particle system in-place (avoids GC on each tick).

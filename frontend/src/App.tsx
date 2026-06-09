@@ -39,7 +39,7 @@ export default function App() {
     const canvas = canvasRef.current
     if (!canvas) return
 
-    const manager = new SceneManager(canvas)
+    const manager = new SceneManager(canvas, (info) => useGameStore.getState().selectElement(info))
     manager.start()
 
     // Single subscription for both slices ensures atomic updates: no stale-violations
