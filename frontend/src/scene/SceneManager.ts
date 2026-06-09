@@ -1,5 +1,5 @@
-import { Engine, Scene } from '@babylonjs/core'
-import type { GridNetworkDto, ViolationDto } from '../api/types'
+import { Engine, PointerEventTypes, Scene } from '@babylonjs/core'
+import type { GridNetworkDto, SelectedElementInfo, ViolationDto } from '../api/types'
 import { createIsometricCamera } from './camera'
 import { createGround } from './ground'
 import { createSceneLighting } from './lighting'
@@ -32,7 +32,10 @@ export class SceneManager {
   private readonly meshRegistry: MeshRegistry
   private currentViolations: readonly ViolationDto[] = []
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(
+    canvas: HTMLCanvasElement,
+    private readonly onElementSelected?: (info: SelectedElementInfo | null) => void,
+  ) {
     if (!canvas) throw new Error('SceneManager: canvas element is null')
 
     // MSAA 4× anti-aliasing via the Engine antialias flag
@@ -49,6 +52,14 @@ export class SceneManager {
     createGround(this.scene)
 
     this.meshRegistry = new MeshRegistry(this.scene)
+
+    // Click picking — resolve the clicked mesh's metadata and fire the selection callback
+    this.scene.onPointerObservable.add((pi) => {
+      if (pi.type !== PointerEventTypes.POINTERUP) return
+      const hit = this.scene.pick(this.scene.pointerX, this.scene.pointerY)
+      const meta = hit?.pickedMesh?.metadata as SelectedElementInfo | null | undefined
+      this.onElementSelected?.(meta ?? null)
+    })
 
     // Resize handler — keeps canvas pixel dimensions in sync with CSS layout
     window.addEventListener('resize', this._onResize)

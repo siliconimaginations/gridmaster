@@ -196,6 +196,17 @@ export interface NetworkMutationDto {
   parameters?: Record<string, unknown>
 }
 
+
+// ── Scene element selection ───────────────────────────────────────────────────
+
+/** Identifies the type of a grid element displayed in the 3D scene. */
+export type SceneElementType = 'GENERATOR' | 'LINE' | 'BUS' | 'LOAD'
+
+/** Payload set on Babylon.js mesh `metadata` and stored in the Zustand store when a scene element is selected. */
+export interface SelectedElementInfo {
+  elementType: SceneElementType
+  elementId: string
+}
 // ── REST: Dispatch ────────────────────────────────────────────────────────────
 
 export interface DispatchRequest {

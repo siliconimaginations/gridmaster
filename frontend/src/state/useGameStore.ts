@@ -12,6 +12,7 @@ import type {
   GridNetworkDto,
   PlayerCommandMessage,
   PowerFlowStatus,
+  SelectedElementInfo,
   ViolationDto,
 } from '../api/types'
 
@@ -36,6 +37,10 @@ interface GameStore {
   // Connection slice
   connectionStatus: ConnectionStatus
   sessionId: string | null
+
+  // Selection slice
+  selectedElement: SelectedElementInfo | null
+  selectElement: (info: SelectedElementInfo | null) => void
 
   // Actions
   applyUpdate: (update: GameStateUpdate) => void
@@ -92,6 +97,7 @@ export const useGameStore = create<GameStore>()(subscribeWithSelector((set, get)
   ...INITIAL_GAME_STATE,
   connectionStatus: 'disconnected',
   sessionId: null,
+  selectedElement: null,
 
   // ── applyUpdate ─────────────────────────────────────────────────────────────
   applyUpdate: (update: GameStateUpdate) => {
@@ -145,7 +151,12 @@ export const useGameStore = create<GameStore>()(subscribeWithSelector((set, get)
     wsClient?.disconnect()
     wsClient = null
     // Resets all game state to initial values so a future session starts clean
-    set({ ...INITIAL_GAME_STATE, connectionStatus: 'disconnected', sessionId: null })
+    set({ ...INITIAL_GAME_STATE, connectionStatus: 'disconnected', sessionId: null, selectedElement: null })
+  },
+
+  // ── selectElement ────────────────────────────────────────────────────────────
+  selectElement: (info: SelectedElementInfo | null) => {
+    set({ selectedElement: info })
   },
 
   // ── sendCommand ──────────────────────────────────────────────────────────────
