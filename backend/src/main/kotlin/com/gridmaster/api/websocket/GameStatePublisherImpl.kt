@@ -220,16 +220,17 @@ class GameStatePublisherImpl(
         val totalGen = snapshot.generators.filter { it.connected }.sumOf { it.targetActivePowerMw }
         val smc = sessionStore.find(sessionId)?.latestDispatchResult?.systemMarginalCostPerMwh
 
-        val buses = snapshot.buses.map { bus ->
-            BusWsDto(
-                id = bus.id,
-                name = bus.name,
-                substationId = bus.regionId,
-                voltageKv = bus.nominalVoltageKv,
-                voltagePu = bus.voltageMagnitudePu ?: 1.0,
-                angleRad = bus.voltageAngleDeg?.let { it * PI / 180.0 } ?: 0.0,
-            )
-        }
+        val buses =
+            snapshot.buses.map { bus ->
+                BusWsDto(
+                    id = bus.id,
+                    name = bus.name,
+                    substationId = bus.regionId,
+                    voltageKv = bus.nominalVoltageKv,
+                    voltagePu = bus.voltageMagnitudePu ?: 1.0,
+                    angleRad = bus.voltageAngleDeg?.let { it * PI / 180.0 } ?: 0.0,
+                )
+            }
 
         val branches: List<BranchWsDto> =
             snapshot.lines.map { line ->
@@ -242,7 +243,8 @@ class GameStatePublisherImpl(
                     loadingPercent = lineLoadingPercent(line),
                     connected = line.connected,
                 )
-            } + snapshot.twoWindingsTransformers.map { twt ->
+            } +
+            snapshot.twoWindingsTransformers.map { twt ->
                 BranchWsDto(
                     id = twt.id,
                     fromBusId = twt.fromBusId,
@@ -254,27 +256,29 @@ class GameStatePublisherImpl(
                 )
             }
 
-        val generators = snapshot.generators.map { gen ->
-            GeneratorWsDto(
-                id = gen.id,
-                busId = gen.busId,
-                name = gen.name,
-                activePowerMw = gen.targetActivePowerMw,
-                maxActivePowerMw = gen.maxActivePowerMw,
-                committed = gen.connected,
-                fuelType = gen.fuelType.name,
-            )
-        }
+        val generators =
+            snapshot.generators.map { gen ->
+                GeneratorWsDto(
+                    id = gen.id,
+                    busId = gen.busId,
+                    name = gen.name,
+                    activePowerMw = gen.targetActivePowerMw,
+                    maxActivePowerMw = gen.maxActivePowerMw,
+                    committed = gen.connected,
+                    fuelType = gen.fuelType.name,
+                )
+            }
 
-        val loads = snapshot.loads.map { load ->
-            LoadWsDto(
-                id = load.id,
-                busId = load.busId,
-                name = load.name,
-                activePowerMw = load.activePowerMw,
-                reactivePowerMvar = load.reactivePowerMvar,
-            )
-        }
+        val loads =
+            snapshot.loads.map { load ->
+                LoadWsDto(
+                    id = load.id,
+                    busId = load.busId,
+                    name = load.name,
+                    activePowerMw = load.activePowerMw,
+                    reactivePowerMvar = load.reactivePowerMvar,
+                )
+            }
 
         return GridNetworkWsDto(
             buses = buses,
@@ -296,9 +300,10 @@ class GameStatePublisherImpl(
 
     private fun transformerLoadingPercent(twt: TwoWindingsTransformer): Double {
         // Prefer a direct current rating derived from ratingMva at the from-side voltage.
-        val ratingA = twt.ratingMva?.let { mva ->
-            if (twt.nominalVoltageFromKv > 0.0) mva * 1000.0 / (SQRT3 * twt.nominalVoltageFromKv) else null
-        } ?: return 0.0
+        val ratingA =
+            twt.ratingMva?.let { mva ->
+                if (twt.nominalVoltageFromKv > 0.0) mva * 1000.0 / (SQRT3 * twt.nominalVoltageFromKv) else null
+            } ?: return 0.0
         if (ratingA <= 0.0) return 0.0
         val maxCurrent = maxOf(twt.currentFromA ?: 0.0, twt.currentToA ?: 0.0)
         return maxCurrent / ratingA * 100.0
