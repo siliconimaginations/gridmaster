@@ -24,11 +24,11 @@ data class GameStateUpdate(
     val clockState: ClockState,
     val clockSpeedMultiplier: Int,
     /** Present on FULL; present on DELTA only if network state changed. */
-    val network: NetworkStateDto? = null,
+    val network: GridNetworkWsDto? = null,
     val powerFlowStatus: ConvergenceStatus? = null,
     val violations: List<ViolationDto>? = null,
-    /** New alerts generated this tick (append-only on the client). */
-    val newAlerts: List<AlertDto>? = null,
+    /** Alerts generated this tick (append-only on the client). */
+    val alerts: List<AlertDto>? = null,
     /** Non-null when pending event cards changed (new card arrived or card resolved). */
     val pendingEventCards: List<EventCardDto>? = null,
 )
@@ -36,20 +36,72 @@ data class GameStateUpdate(
 enum class UpdateType { FULL, DELTA }
 
 /**
- * Lightweight network state snapshot for the WebSocket message.
- * Only the fields the frontend HUD and map need — full detail available via REST.
+ * Full network snapshot sent over WebSocket each tick (or when changed on DELTA).
+ * Field names are intentionally aligned with the frontend [GridNetworkDto] interface.
  */
-data class NetworkStateDto(
+data class GridNetworkWsDto(
+    val buses: List<BusWsDto>,
+    val branches: List<BranchWsDto>,
+    val generators: List<GeneratorWsDto>,
+    val loads: List<LoadWsDto>,
+    /** Aggregate totals — pre-computed so the HUD doesn't have to sum arrays. */
     val totalLoadMw: Double,
     val totalGenerationMw: Double,
-    /** System marginal price (£/MWh) from the last dispatch run; null if none. */
     val systemMarginalCostPerMwh: Double?,
+)
+
+data class BusWsDto(
+    val id: String,
+    val name: String,
+    /** Corresponds to the game region; null for buses not assigned to a region. */
+    val substationId: String?,
+    /** Nominal voltage of the bus's voltage level (kV). */
+    val voltageKv: Double,
+    /** Per-unit voltage magnitude; 1.0 before first power flow. */
+    val voltagePu: Double,
+    /** Voltage angle in radians; 0.0 before first power flow. */
+    val angleRad: Double,
+)
+
+data class BranchWsDto(
+    val id: String,
+    val fromBusId: String,
+    val toBusId: String,
+    /** Active power entering from the from-terminal (MW); 0.0 before first power flow. */
+    val activePowerMw: Double,
+    /** Reactive power entering from the from-terminal (Mvar); 0.0 before first power flow. */
+    val reactivePowerMvar: Double,
+    /** Current loading as a percentage of the thermal rating; 0.0 if no rating is set. */
+    val loadingPercent: Double,
+    val connected: Boolean,
+)
+
+data class GeneratorWsDto(
+    val id: String,
+    val busId: String,
+    val name: String,
+    /** Active power setpoint (MW). */
+    val activePowerMw: Double,
+    val maxActivePowerMw: Double,
+    /** True when the generator terminal is connected (committed to the grid). */
+    val committed: Boolean,
+    val fuelType: String,
+)
+
+data class LoadWsDto(
+    val id: String,
+    val busId: String,
+    val name: String,
+    val activePowerMw: Double,
+    val reactivePowerMvar: Double,
 )
 
 data class ViolationDto(
     val elementId: String,
-    val type: String,
-    val severity: String,
+    /** "LINE", "TRANSFORMER", or "BUS". */
+    val elementType: String,
+    /** "OVERLOAD", "VOLTAGE_HIGH", or "VOLTAGE_LOW". */
+    val violationType: String,
     val value: Double,
     val limit: Double,
 )
