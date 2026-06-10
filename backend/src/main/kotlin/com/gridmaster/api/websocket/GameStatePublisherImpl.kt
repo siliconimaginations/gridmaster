@@ -1,6 +1,9 @@
 package com.gridmaster.api.websocket
 
 import com.gridmaster.api.PhysicsSessionStore
+import com.gridmaster.engine.model.Line
+import com.gridmaster.engine.model.TwoWindingsTransformer
+import com.gridmaster.engine.powerflow.EquipmentType
 import com.gridmaster.engine.powerflow.NetworkViolation
 import com.gridmaster.engine.powerflow.PowerFlowResult
 import com.gridmaster.game.ClockState
@@ -10,6 +13,8 @@ import org.slf4j.LoggerFactory
 import org.springframework.messaging.simp.SimpMessagingTemplate
 import org.springframework.stereotype.Component
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.PI
+import kotlin.math.sqrt
 
 /**
  * Default [GameStatePublisher] implementation.
@@ -129,7 +134,7 @@ class GameStatePublisherImpl(
                 network = networkDto,
                 powerFlowStatus = powerFlowResult.status,
                 violations = powerFlowResult.violations.map { it.toDto() },
-                newAlerts = newAlerts.map { AlertDto.from(it) },
+                alerts = newAlerts.map { AlertDto.from(it) },
                 pendingEventCards = pendingCards.map { it.toDto() },
             )
 
@@ -177,7 +182,7 @@ class GameStatePublisherImpl(
                 network = if (networkChanged) networkDto else null,
                 powerFlowStatus = if (networkChanged) powerFlowResult.status else null,
                 violations = if (violationsChanged) violations else null,
-                newAlerts = alertsToSend,
+                alerts = alertsToSend,
                 pendingEventCards = if (cardsChanged) cards else null,
             )
 
@@ -209,16 +214,103 @@ class GameStatePublisherImpl(
     private fun buildNetworkDto(
         sessionId: String,
         pfResult: PowerFlowResult,
-    ): NetworkStateDto {
+    ): GridNetworkWsDto {
         val snapshot = pfResult.snapshot
         val totalLoad = snapshot.loads.filter { it.connected }.sumOf { it.activePowerMw }
         val totalGen = snapshot.generators.filter { it.connected }.sumOf { it.targetActivePowerMw }
         val smc = sessionStore.find(sessionId)?.latestDispatchResult?.systemMarginalCostPerMwh
-        return NetworkStateDto(
+
+        val buses =
+            snapshot.buses.map { bus ->
+                BusWsDto(
+                    id = bus.id,
+                    name = bus.name,
+                    substationId = bus.regionId,
+                    voltageKv = bus.nominalVoltageKv,
+                    voltagePu = bus.voltageMagnitudePu ?: 1.0,
+                    angleRad = bus.voltageAngleDeg?.let { it * PI / 180.0 } ?: 0.0,
+                )
+            }
+
+        val branches: List<BranchWsDto> =
+            snapshot.lines.map { line ->
+                BranchWsDto(
+                    id = line.id,
+                    fromBusId = line.fromBusId,
+                    toBusId = line.toBusId,
+                    activePowerMw = line.activePowerFromMw ?: 0.0,
+                    reactivePowerMvar = line.reactivePowerFromMvar ?: 0.0,
+                    loadingPercent = lineLoadingPercent(line),
+                    connected = line.connected,
+                )
+            } +
+                snapshot.twoWindingsTransformers.map { twt ->
+                    BranchWsDto(
+                        id = twt.id,
+                        fromBusId = twt.fromBusId,
+                        toBusId = twt.toBusId,
+                        activePowerMw = twt.activePowerFromMw ?: 0.0,
+                        reactivePowerMvar = twt.reactivePowerFromMvar ?: 0.0,
+                        loadingPercent = transformerLoadingPercent(twt),
+                        connected = twt.connected,
+                    )
+                }
+
+        val generators =
+            snapshot.generators.map { gen ->
+                GeneratorWsDto(
+                    id = gen.id,
+                    busId = gen.busId,
+                    name = gen.name,
+                    activePowerMw = gen.targetActivePowerMw,
+                    maxActivePowerMw = gen.maxActivePowerMw,
+                    committed = gen.connected,
+                    fuelType = gen.fuelType.name,
+                )
+            }
+
+        val loads =
+            snapshot.loads.map { load ->
+                LoadWsDto(
+                    id = load.id,
+                    busId = load.busId,
+                    name = load.name,
+                    activePowerMw = load.activePowerMw,
+                    reactivePowerMvar = load.reactivePowerMvar,
+                )
+            }
+
+        return GridNetworkWsDto(
+            buses = buses,
+            branches = branches,
+            generators = generators,
+            loads = loads,
             totalLoadMw = totalLoad,
             totalGenerationMw = totalGen,
             systemMarginalCostPerMwh = smc,
         )
+    }
+
+    private fun lineLoadingPercent(line: Line): Double {
+        val rating = line.ratingA ?: return 0.0
+        if (rating <= 0.0) return 0.0
+        val maxCurrent = maxOf(line.currentFromA ?: 0.0, line.currentToA ?: 0.0)
+        return maxCurrent / rating * 100.0
+    }
+
+    private fun transformerLoadingPercent(twt: TwoWindingsTransformer): Double {
+        // Prefer a direct current rating derived from ratingMva at the from-side voltage.
+        val ratingA =
+            twt.ratingMva?.let { mva ->
+                if (twt.nominalVoltageFromKv > 0.0) mva * 1000.0 / (SQRT3 * twt.nominalVoltageFromKv) else null
+            } ?: return 0.0
+        if (ratingA <= 0.0) return 0.0
+        val maxCurrent = maxOf(twt.currentFromA ?: 0.0, twt.currentToA ?: 0.0)
+        return maxCurrent / ratingA * 100.0
+    }
+
+    companion object {
+        private val SQRT3 = sqrt(3.0)
     }
 }
 
@@ -241,16 +333,23 @@ private fun NetworkViolation.toDto(): ViolationDto =
         is NetworkViolation.VoltageViolation ->
             ViolationDto(
                 elementId = busId,
-                type = "VOLTAGE",
-                severity = "WARNING",
+                elementType = "BUS",
+                violationType = if (voltagePu < limitMinPu) "VOLTAGE_LOW" else "VOLTAGE_HIGH",
                 value = voltagePu,
                 limit = if (voltagePu < limitMinPu) limitMinPu else limitMaxPu,
             )
         is NetworkViolation.ThermalViolation ->
             ViolationDto(
                 elementId = equipmentId,
-                type = "THERMAL",
-                severity = severity.name,
+                elementType =
+                    when (equipmentType) {
+                        EquipmentType.LINE -> "LINE"
+                        EquipmentType.TWO_WINDINGS_TRANSFORMER,
+                        EquipmentType.THREE_WINDINGS_TRANSFORMER,
+                        -> "TRANSFORMER"
+                        EquipmentType.BUS -> "BUS"
+                    },
+                violationType = "OVERLOAD",
                 value = loadingPercent,
                 limit = 100.0,
             )

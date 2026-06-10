@@ -22,7 +22,8 @@ export interface BusDto {
   voltageKv: number
   voltagePu: number
   angleRad: number
-  substationId: string
+  /** Region/substation this bus belongs to; null for unassigned buses. */
+  substationId: string | null
 }
 
 export interface BranchDto {

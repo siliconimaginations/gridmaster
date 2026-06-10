@@ -117,8 +117,8 @@ class GameStatePublisherImplTest {
 
         val update = payloadSlot.captured as GameStateUpdate
         assertThat(update.type).isEqualTo(UpdateType.DELTA)
-        assertThat(update.newAlerts).hasSize(1)
-        assertThat(update.newAlerts!![0].elementId).isEqualTo("l1")
+        assertThat(update.alerts).hasSize(1)
+        assertThat(update.alerts!![0].elementId).isEqualTo("l1")
     }
 
     // ── publishFull ───────────────────────────────────────────────────────────
