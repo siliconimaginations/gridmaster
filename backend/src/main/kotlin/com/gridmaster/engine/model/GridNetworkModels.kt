@@ -60,6 +60,12 @@ data class Line(
     val ratingA: Double? = null,
     val currentFromA: Double? = null,
     val currentToA: Double? = null,
+    /** Active power injected at the from-terminal (MW); null before first power flow. */
+    val activePowerFromMw: Double? = null,
+    /** Reactive power injected at the from-terminal (Mvar); null before first power flow. */
+    val reactivePowerFromMvar: Double? = null,
+    /** True when both terminals are connected and the line is in service. */
+    val connected: Boolean = true,
     val resistanceOhm: Double,
     val reactanceOhm: Double,
     val shuntCapacitanceSiemens: Double,
@@ -78,6 +84,12 @@ data class TwoWindingsTransformer(
     val ratingMva: Double? = null,
     val currentFromA: Double? = null,
     val currentToA: Double? = null,
+    /** Active power injected at the from-terminal (MW); null before first power flow. */
+    val activePowerFromMw: Double? = null,
+    /** Reactive power injected at the from-terminal (Mvar); null before first power flow. */
+    val reactivePowerFromMvar: Double? = null,
+    /** True when both terminals are connected and the transformer is in service. */
+    val connected: Boolean = true,
     val resistanceOhm: Double,
     val reactanceOhm: Double,
     val ratioTapPosition: Int = 0,
