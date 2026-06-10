@@ -8,7 +8,7 @@ and posts the result as a PR comment (replacing any previous Gemini review).
 
 Environment variables (injected by the workflow):
   GITHUB_TOKEN       — for reading diff and posting comments
-  GEMINI_API_KEY     — Google AI Studio key
+  GEMINI_API_KEY     — Google AI Studio key (free tier supported)
   GITHUB_REPOSITORY  — owner/repo
   PR_NUMBER          — pull request number
   BASE_SHA           — base commit SHA of the PR
@@ -19,18 +19,26 @@ import os
 import re
 import subprocess
 import sys
+import time
 
 import google.generativeai as genai
+from google.api_core.exceptions import ResourceExhausted
 from github import Github
 
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 
-GEMINI_MODEL = "gemini-2.5-pro"
+# gemini-2.5-flash is available on the free tier (15 RPM, 1M TPD).
+GEMINI_MODEL = "gemini-2.5-flash"
 
-# Hard cap on diff characters sent to Gemini (~25 k tokens, well within context).
-MAX_DIFF_CHARS = 90_000
+# Hard cap on diff characters sent to Gemini.
+# Kept at 60k to stay comfortably within free-tier per-request token limits.
+MAX_DIFF_CHARS = 60_000
+
+# Retry settings for 429 / ResourceExhausted errors (free-tier rate limits).
+MAX_RETRIES = 4
+INITIAL_BACKOFF_SECONDS = 15  # doubles each retry: 15, 30, 60, 120
 
 # Allowlist of extensions to send to Gemini for review.
 # Only these types are reviewed; binary blobs, lock files (package-lock.json),
@@ -64,7 +72,6 @@ REVIEW_EXTENSIONS = {
 }
 
 # Exact filenames to skip even when their extension is in REVIEW_EXTENSIONS.
-# Exact filenames excluded even when their extension is in REVIEW_EXTENSIONS.
 # gradlew / gradlew.bat are generated Gradle wrappers; package-lock.json is a lockfile.
 SKIP_FILES = {"gradlew", "gradlew.bat", "package-lock.json"}
 
@@ -181,8 +188,23 @@ def call_gemini(diff: str, truncated: bool) -> str:
     )
 
     prompt = PROMPT_TEMPLATE.format(diff=diff) + notice
-    response = model.generate_content(prompt)
-    return response.text
+
+    backoff = INITIAL_BACKOFF_SECONDS
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            response = model.generate_content(prompt)
+            return response.text
+        except ResourceExhausted as exc:
+            if attempt < MAX_RETRIES:
+                print(
+                    f"Rate limit hit (attempt {attempt}/{MAX_RETRIES}). "
+                    f"Retrying in {backoff}s…",
+                    file=sys.stderr,
+                )
+                time.sleep(backoff)
+                backoff *= 2
+                continue
+            raise
 
 
 # ---------------------------------------------------------------------------
@@ -221,7 +243,22 @@ def main() -> None:
         return
 
     print(f"Sending {len(diff):,} chars to {GEMINI_MODEL}…")
-    review = call_gemini(diff, truncated)
+    try:
+        review = call_gemini(diff, truncated)
+    except ResourceExhausted:
+        # Post a soft notice rather than failing the job — quota exhaustion
+        # is an infra issue, not a code issue, and should not block merges.
+        gh = Github(os.environ["GITHUB_TOKEN"])
+        repo = gh.get_repo(os.environ["GITHUB_REPOSITORY"])
+        pr = repo.get_pull(int(os.environ["PR_NUMBER"]))
+        pr.create_issue_comment(
+            f"{REVIEW_HEADER}\n\n"
+            "> ⏸️ Gemini review skipped — free-tier quota exhausted. "
+            "No action required; this does not block merge."
+        )
+        print("Quota exhausted — soft notice posted, job exits 0.")
+        return
+
     post_or_update_comment(review)
 
 
