@@ -244,17 +244,17 @@ class GameStatePublisherImpl(
                     connected = line.connected,
                 )
             } +
-            snapshot.twoWindingsTransformers.map { twt ->
-                BranchWsDto(
-                    id = twt.id,
-                    fromBusId = twt.fromBusId,
-                    toBusId = twt.toBusId,
-                    activePowerMw = twt.activePowerFromMw ?: 0.0,
-                    reactivePowerMvar = twt.reactivePowerFromMvar ?: 0.0,
-                    loadingPercent = transformerLoadingPercent(twt),
-                    connected = twt.connected,
-                )
-            }
+                snapshot.twoWindingsTransformers.map { twt ->
+                    BranchWsDto(
+                        id = twt.id,
+                        fromBusId = twt.fromBusId,
+                        toBusId = twt.toBusId,
+                        activePowerMw = twt.activePowerFromMw ?: 0.0,
+                        reactivePowerMvar = twt.reactivePowerFromMvar ?: 0.0,
+                        loadingPercent = transformerLoadingPercent(twt),
+                        connected = twt.connected,
+                    )
+                }
 
         val generators =
             snapshot.generators.map { gen ->
