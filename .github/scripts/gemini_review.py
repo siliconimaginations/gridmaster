@@ -22,6 +22,7 @@ import sys
 import time
 
 import google.generativeai as genai
+from google.api_core.exceptions import ResourceExhausted
 from github import Github
 
 # ---------------------------------------------------------------------------
@@ -193,10 +194,8 @@ def call_gemini(diff: str, truncated: bool) -> str:
         try:
             response = model.generate_content(prompt)
             return response.text
-        except Exception as exc:
-            err = str(exc)
-            is_quota = "429" in err or "ResourceExhausted" in err or "quota" in err.lower()
-            if is_quota and attempt < MAX_RETRIES:
+        except ResourceExhausted as exc:
+            if attempt < MAX_RETRIES:
                 print(
                     f"Rate limit hit (attempt {attempt}/{MAX_RETRIES}). "
                     f"Retrying in {backoff}s…",
@@ -246,24 +245,19 @@ def main() -> None:
     print(f"Sending {len(diff):,} chars to {GEMINI_MODEL}…")
     try:
         review = call_gemini(diff, truncated)
-    except Exception as exc:
-        err = str(exc)
-        is_quota = "429" in err or "ResourceExhausted" in err or "quota" in err.lower()
-        if is_quota:
-            # Post a soft notice rather than failing the job — quota exhaustion
-            # is an infra issue, not a code issue, and should not block merges.
-            gh = Github(os.environ["GITHUB_TOKEN"])
-            repo = gh.get_repo(os.environ["GITHUB_REPOSITORY"])
-            pr = repo.get_pull(int(os.environ["PR_NUMBER"]))
-            pr.create_issue_comment(
-                f"{REVIEW_HEADER}\n\n"
-                "> ⏸️ Gemini review skipped — free-tier quota exhausted. "
-                "No action required; this does not block merge."
-            )
-            print("Quota exhausted — soft notice posted, job exits 0.")
-            return
-        raise
-
+    except ResourceExhausted:
+        # Post a soft notice rather than failing the job — quota exhaustion
+        # is an infra issue, not a code issue, and should not block merges.
+        gh = Github(os.environ["GITHUB_TOKEN"])
+        repo = gh.get_repo(os.environ["GITHUB_REPOSITORY"])
+        pr = repo.get_pull(int(os.environ["PR_NUMBER"]))
+        pr.create_issue_comment(
+            f"{REVIEW_HEADER}\n\n"
+            "> ⏸️ Gemini review skipped — free-tier quota exhausted. "
+            "No action required; this does not block merge."
+        )
+        print("Quota exhausted — soft notice posted, job exits 0.")
+        return
 
     post_or_update_comment(review)
 
