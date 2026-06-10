@@ -54,7 +54,7 @@ data class BusWsDto(
     val id: String,
     val name: String,
     /** Corresponds to the game region; null for buses not assigned to a region. */
-    val substationId: String?,
+    val substationId: String? = null,
     /** Nominal voltage of the bus's voltage level (kV). */
     val voltageKv: Double,
     /** Per-unit voltage magnitude; 1.0 before first power flow. */
