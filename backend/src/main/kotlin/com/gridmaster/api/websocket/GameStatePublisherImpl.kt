@@ -14,7 +14,6 @@ import org.springframework.messaging.simp.SimpMessagingTemplate
 import org.springframework.stereotype.Component
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.PI
-import kotlin.math.maxOf
 import kotlin.math.sqrt
 
 /**
@@ -337,13 +336,14 @@ private fun NetworkViolation.toDto(): ViolationDto =
         is NetworkViolation.ThermalViolation ->
             ViolationDto(
                 elementId = equipmentId,
-                elementType = when (equipmentType) {
-                    EquipmentType.LINE -> "LINE"
-                    EquipmentType.TWO_WINDINGS_TRANSFORMER,
-                    EquipmentType.THREE_WINDINGS_TRANSFORMER,
-                    -> "TRANSFORMER"
-                    EquipmentType.BUS -> "BUS"
-                },
+                elementType =
+                    when (equipmentType) {
+                        EquipmentType.LINE -> "LINE"
+                        EquipmentType.TWO_WINDINGS_TRANSFORMER,
+                        EquipmentType.THREE_WINDINGS_TRANSFORMER,
+                        -> "TRANSFORMER"
+                        EquipmentType.BUS -> "BUS"
+                    },
                 violationType = "OVERLOAD",
                 value = loadingPercent,
                 limit = 100.0,
