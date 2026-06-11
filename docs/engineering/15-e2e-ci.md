@@ -100,7 +100,7 @@ frontend/
       session.ts      ← createSession / teardown fixture
       page.ts         ← extended Page with __e2e helpers
     helpers/
-      ws.ts           ← waitForGameStateUpdate(page, predicate)
+      ws.ts           ← waitForStore(page, predicate)
       rest.ts         ← typed wrappers around fetch() for REST endpoints
     tests/
       sl.spec.ts      ← SL-01 … SL-04 (Session Lifecycle)
@@ -177,29 +177,49 @@ production bundle even if the `MODE` check were accidentally removed.
 
 ## Test Helpers
 
-### `waitForGameStateUpdate` (ws.ts)
+### `waitForStore` (ws.ts)
+
+Waits until a predicate on the Zustand store is satisfied. Uses
+`page.evaluate` (which resolves Promises returned from the page context)
+rather than `page.waitForFunction` (which expects a synchronous boolean
+and will always time out if given a Promise).
 
 ```ts
 /**
- * Resolves when a GameStateUpdate arrives over WebSocket
- * satisfying `predicate`. Uses the __e2e bridge rather than
- * intercepting WebSocket frames directly (more reliable with STOMP framing).
+ * Resolves when the __e2e bridge's waitFor Promise settles, i.e. when
+ * `predicate(store)` returns true. `page.evaluate` awaits the returned
+ * Promise, so this blocks the test until the condition holds or times out.
+ *
+ * Use `page.waitForFunction` with a direct inline lambda instead for
+ * simple synchronous predicates (e.g. tickNumber > 0) — it polls without
+ * needing the bridge's subscription machinery.
  */
 export async function waitForStore(
   page: Page,
-  predicate: string,  // serialisable JS expression string
+  predicate: (s: any) => boolean,
   timeoutMs = 10_000,
 ): Promise<void> {
-  await page.waitForFunction(
+  // Serialise the predicate to a string so it can cross the page boundary.
+  const predicateStr = predicate.toString()
+  await page.evaluate(
     ({ pred, ms }) => {
       const bridge = (window as any).__e2e
-      if (!bridge) return false
-      return bridge.waitFor(new Function('s', `return ${pred}`), ms)
+      if (!bridge) return Promise.reject(new Error('__e2e bridge not installed'))
+      return bridge.waitFor(new Function(`return (${pred})`)(), ms)
     },
-    { pred: predicate, ms: timeoutMs },
-    { timeout: timeoutMs + 2_000 },
+    { pred: predicateStr, ms: timeoutMs },
   )
 }
+```
+
+For simple synchronous checks prefer `page.waitForFunction` directly:
+
+```ts
+// Preferred for synchronous predicates — no bridge Promise overhead
+await page.waitForFunction(
+  () => (window as any).__e2e?.getStore().tickNumber > 0,
+  { timeout: 10_000 },
+)
 ```
 
 ### Session fixture (session.ts)
@@ -211,12 +231,15 @@ interface SessionFixtures {
 }
 
 export const test = base.extend<SessionFixtures>({
-  sessionId: async ({ request }, use) => {
-    // Issue token
-    const tokenRes = await request.post('/api/auth/token', { data: {} })
-    const { token, userId } = await tokenRes.json()
+  // token is declared first so sessionId can depend on it
+  token: async ({ request }, use) => {
+    const res = await request.post('/api/auth/token', { data: {} })
+    const { token } = await res.json()
+    await use(token)
+  },
 
-    // Create session
+  // sessionId depends on token — no second token request needed
+  sessionId: async ({ request, token }, use) => {
     const sessionRes = await request.post('/api/sessions', {
       data: { displayName: 'E2E Session', mode: 'FREE_PLAY', networkPreset: 'ieee14' },
       headers: { Authorization: `Bearer ${token}` },
@@ -225,15 +248,11 @@ export const test = base.extend<SessionFixtures>({
 
     await use(id)
 
-    // Teardown
+    // Teardown — delete the session so the clock is stopped and the
+    // row is removed, keeping the test database clean between runs.
     await request.delete(`/api/sessions/${id}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
-  },
-  token: async ({ request }, use) => {
-    const res = await request.post('/api/auth/token', { data: {} })
-    const { token } = await res.json()
-    await use(token)
   },
 })
 ```
@@ -318,38 +337,65 @@ test('GC-02 pause stops tick counter', async ({ page }) => {
 
 ### CM-01 / CM-02 — Toggle generator off/on
 
+Generator IDs in the ieee14 preset are assigned by PowSyBl's
+`IeeeCdfNetworkFactory.create14Solved()` at runtime (e.g. `BUS-1-GEN-1`).
+Rather than hardcoding IDs that may change with PowSyBl version bumps, the
+test discovers them via a REST call in `beforeAll` once per file. All five
+ieee14 generators start committed, so the first one in the list is always
+a valid decommit target.
+
 ```ts
+// cm.spec.ts
+let committedGenId: string
+let decommittedGenId: string
+
+test.beforeAll(async ({ request, token }) => {
+  // Create a bootstrap session just to discover the network structure.
+  // The per-test session fixture creates its own independent sessions.
+  const sessionRes = await request.post('/api/sessions', {
+    data: { displayName: 'CM discovery', mode: 'FREE_PLAY', networkPreset: 'ieee14' },
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const { id } = await sessionRes.json()
+
+  const networkRes = await request.get(`/api/sessions/${id}/network`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const network = await networkRes.json()
+
+  committedGenId = network.generators.find((g: any) => g.committed)?.id
+  decommittedGenId = network.generators.find((g: any) => !g.committed)?.id
+    ?? network.generators[1]?.id  // fallback: all are committed at start — use index 1
+
+  await request.delete(`/api/sessions/${id}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  expect(committedGenId).toBeTruthy()
+})
+
 test('CM-01 toggle generator off → committed=false in next update', async ({ page }) => {
   await page.goto('/')
   await page.waitForSelector('[data-testid="bootstrap-overlay"]', { state: 'hidden', timeout: 15_000 })
 
-  // Pick the first committed generator
-  const genId = await page.evaluate(() => {
-    const { network } = (window as any).__e2e.getStore()
-    return network?.generators.find((g: any) => g.committed)?.id
-  })
-  expect(genId).toBeTruthy()
-
-  // Send DecommitGenerator command via store
+  // The app's bootstrap session owns the live network; send the command through the store.
   await page.evaluate((id) => {
     const { sendCommand } = (window as any).__e2e.getStore()
     sendCommand({ commandType: 'DecommitGenerator', payload: { generatorId: id } })
-  }, genId)
+  }, committedGenId)
 
-  // Wait for state to reflect decommit
   await page.waitForFunction(
     (id) => {
       const { network } = (window as any).__e2e.getStore()
-      const gen = network?.generators.find((g: any) => g.id === id)
-      return gen && !gen.committed
+      return network?.generators.find((g: any) => g.id === id && !g.committed)
     },
-    genId,
+    committedGenId,
     { timeout: 10_000 },
   )
 })
 ```
 
-CM-02 is the mirror of CM-01 (CommitGenerator on a decommitted generator).
+CM-02 mirrors CM-01 using `CommitGenerator` on `decommittedGenId` (or on the
+generator just decommitted in CM-01 if tests run in order).
 
 ---
 
@@ -466,9 +512,9 @@ jobs:
         working-directory: frontend
         run: npx playwright install chromium --with-deps
 
-      - name: Build frontend (preview mode)
+      - name: Build frontend (e2e mode — includes __e2e bridge)
         working-directory: frontend
-        run: npm run build
+        run: npm run build:e2e
 
       - name: Start frontend preview server
         working-directory: frontend
@@ -522,7 +568,7 @@ build: {
 }
 ```
 
-CI runs `npm run build -- --mode test` (not `--mode production`) and
+CI runs `npm run build -- --mode e2e` (not `--mode production`) and
 `vite preview` serves the `test` build. The bridge is present; production
 users never receive it.
 
@@ -530,11 +576,11 @@ The `package.json` script is adjusted:
 
 ```json
 "build":    "tsc && vite build",
-"build:ci": "tsc && vite build --mode test",
-"e2e":      "playwright test"
+"build:e2e": "tsc && vite build --mode e2e",
+"e2e":       "playwright test"
 ```
 
-CI uses `build:ci`. Local dev uses `build` (production) or just `vite dev`
+CI uses `build:e2e`. Local dev uses `build` (production) or just `vite dev`
 (development), both of which already expose the bridge.
 
 ---
@@ -555,11 +601,11 @@ Running one backend per test run (not one per test) saves ~20 s of JVM startup
 per test. Sessions are cheap to create and delete via REST, so isolation is
 preserved without the cost of full process restarts.
 
-### 3. `vite preview` with `--mode test` instead of `vite dev`
+### 3. `vite preview` with `--mode e2e` instead of `vite dev`
 
 `vite dev` introduces HMR WebSocket traffic that Playwright's network layer
 must filter; `vite preview` is a simple HTTP server with no background
-connections. Using `--mode test` (not `--mode production`) is a deliberate
+connections. Using `--mode e2e` (not `--mode production`) is a deliberate
 middle ground: the bundle is production-optimised, but the E2E bridge is
 present.
 
@@ -584,7 +630,7 @@ scenario.
 
 | # | Question | Owner | Target |
 |---|----------|-------|--------|
-| 1 | Should `--mode test` be renamed to `--mode e2e` for clarity? | Claude | implementation PR |
+| 1 | ~~`--mode test` vs `--mode e2e`~~ — resolved: using `--mode e2e` | — | closed |
 | 2 | SL-04 (page reload reconnects): needs a reliable way to assert reconnect vs fresh-connect — use `missedTicks > 0` from the RECONNECTED status? | Claude | implementation PR |
 | 3 | Should the E2E job post a comment on the triggering commit/PR with a pass/fail summary? | Rick | Stage 5 |
 | 4 | Add `e2e-failure` auto-issue creation (referenced in `e2e-qa-workflow.md §CI Failure Handling`) now or in Stage 7? | Rick | Stage 5 planning |
