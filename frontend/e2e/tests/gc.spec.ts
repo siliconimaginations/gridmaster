@@ -1,0 +1,58 @@
+import { test, expect } from '@playwright/test'
+
+/**
+ * GC — Game Clock
+ *
+ * GC-01: Tick counter increments over time (clock advancing at ≥1×)
+ * GC-02: Pause halts the tick stream; resume restarts it
+ *
+ * @see docs/engineering/15-e2e-ci.md §GC-01–02
+ */
+
+test('GC-01 tick counter increments', async ({ page }) => {
+  await page.goto('/')
+  await page.waitForSelector('[data-testid="bootstrap-overlay"]', {
+    state: 'hidden',
+    timeout: 15_000,
+  })
+
+  const tick1 = await page.evaluate(
+    () => (window as { __e2e: { getStore: () => { tickNumber: number } } }).__e2e.getStore().tickNumber,
+  )
+
+  // Wait 6 s — at least two 3-s game ticks at 1× speed
+  await page.waitForTimeout(6_000)
+
+  const tick2 = await page.evaluate(
+    () => (window as { __e2e: { getStore: () => { tickNumber: number } } }).__e2e.getStore().tickNumber,
+  )
+
+  expect(tick2).toBeGreaterThan(tick1)
+  await expect(page.getByTestId('hud-tick-number')).not.toHaveText(String(tick1))
+})
+
+test('GC-02 pause stops tick counter', async ({ page }) => {
+  await page.goto('/')
+  await page.waitForSelector('[data-testid="bootstrap-overlay"]', {
+    state: 'hidden',
+    timeout: 15_000,
+  })
+
+  // Pause the clock via HUD button
+  await page.getByTestId('hud-playpause-btn').click()
+
+  await expect(page.getByTestId('hud-clock-state')).toHaveText('PAUSED', { timeout: 5_000 })
+
+  const tickAtPause = await page.evaluate(
+    () => (window as { __e2e: { getStore: () => { tickNumber: number } } }).__e2e.getStore().tickNumber,
+  )
+
+  // Wait 5 s — no ticks should arrive while paused
+  await page.waitForTimeout(5_000)
+
+  const tickAfterWait = await page.evaluate(
+    () => (window as { __e2e: { getStore: () => { tickNumber: number } } }).__e2e.getStore().tickNumber,
+  )
+
+  expect(tickAfterWait).toBe(tickAtPause)
+})
