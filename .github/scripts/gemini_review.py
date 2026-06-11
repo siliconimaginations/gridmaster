@@ -29,16 +29,17 @@ from github import Github
 # Configuration
 # ---------------------------------------------------------------------------
 
-# Models tried in order on ResourceExhausted. The first model with remaining
-# quota wins; the PR comment names which model was actually used.
+# Models tried in order. On ResourceExhausted (quota) OR any API error (e.g. model
+# not yet available), the outer loop falls through to the next candidate.
+# The PR comment names which model was actually used.
 # Free-tier RPD ceilings (approximate, checked 2026-06):
-#   gemini-2.5-flash-lite-preview-06-17 — 500 RPD  ← try first
-#   gemini-2.5-flash                    —  20 RPD
-#   gemma-3-27b-it                      — 1 440 RPD (Gemma, unlimited TPM)
+#   gemini-2.5-flash-lite —  500 RPD  ← try first (25× headroom over flash)
+#   gemini-2.5-flash      —   20 RPD  — proven baseline
+#   gemini-1.5-flash-8b   — 1500 RPD  — last resort (older but very high ceiling)
 MODELS = [
-    "gemini-2.5-flash-lite-preview-06-17",  # 500 RPD — highest free-tier ceiling
-    "gemini-2.5-flash",                     # 20 RPD  — proven baseline
-    "gemma-3-27b-it",                       # 1 440 RPD — Gemma fallback
+    "gemini-2.5-flash-lite",  # 500 RPD — highest free-tier ceiling for 2.5 family
+    "gemini-2.5-flash",       #  20 RPD — proven baseline
+    "gemini-1.5-flash-8b",    # 1500 RPD — last resort, very high ceiling
 ]
 
 # Hard cap on diff characters sent to Gemini.
@@ -188,8 +189,9 @@ def get_filtered_diff(base_sha: str, head_sha: str) -> tuple[str, bool]:
 
 
 def call_gemini(model_name: str, diff: str, truncated: bool) -> str:
-    """Call one specific model. Raises ResourceExhausted if quota is exhausted
-    after all retries so the caller can fall through to the next model."""
+    """Call one specific model. Raises on failure (quota or API error) so the
+    caller can fall through to the next model. ResourceExhausted is retried with
+    exponential backoff; other errors propagate immediately after one attempt."""
     genai.configure(api_key=os.environ["GEMINI_API_KEY"])
     model = genai.GenerativeModel(model_name)
 
@@ -268,6 +270,13 @@ def main() -> None:
         except ResourceExhausted:
             print(
                 f"[{model_name}] Quota exhausted after all retries — trying next model.",
+                file=sys.stderr,
+            )
+            continue
+        except Exception as exc:
+            # Non-quota error (e.g. model not found, auth issue) — skip to next model.
+            print(
+                f"[{model_name}] API error ({exc.__class__.__name__}: {exc}) — trying next model.",
                 file=sys.stderr,
             )
             continue
