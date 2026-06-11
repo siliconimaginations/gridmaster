@@ -7,8 +7,7 @@ import './index.css'
 // Dynamic import + MODE guard ensures the bridge module is never bundled
 // in production even if the guard were accidentally removed.
 if (import.meta.env.MODE !== 'production') {
-  // eslint-disable-next-line @typescript-eslint/no-floating-promises
-  import('./e2ebridge').then(({ installE2EBridge }) => installE2EBridge())
+  void import('./e2ebridge').then(({ installE2EBridge }) => installE2EBridge())
 }
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
