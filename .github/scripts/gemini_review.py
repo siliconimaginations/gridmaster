@@ -29,16 +29,27 @@ from github import Github
 # Configuration
 # ---------------------------------------------------------------------------
 
-# gemini-2.5-flash is available on the free tier (15 RPM, 1M TPD).
-GEMINI_MODEL = "gemini-2.5-flash"
+# Models tried in order on ResourceExhausted. The first model with remaining
+# quota wins; the PR comment names which model was actually used.
+# Free-tier RPD ceilings (approximate, checked 2026-06):
+#   gemini-2.5-flash-lite-preview-06-17 — 500 RPD  ← try first
+#   gemini-2.5-flash                    —  20 RPD
+#   gemma-3-27b-it                      — 1 440 RPD (Gemma, unlimited TPM)
+MODELS = [
+    "gemini-2.5-flash-lite-preview-06-17",  # 500 RPD — highest free-tier ceiling
+    "gemini-2.5-flash",                     # 20 RPD  — proven baseline
+    "gemma-3-27b-it",                       # 1 440 RPD — Gemma fallback
+]
 
 # Hard cap on diff characters sent to Gemini.
 # Kept at 60k to stay comfortably within free-tier per-request token limits.
 MAX_DIFF_CHARS = 60_000
 
 # Retry settings for 429 / ResourceExhausted errors (free-tier rate limits).
+# Applied per model; the outer loop advances to the next model only after all
+# retries on the current one are exhausted.
 MAX_RETRIES = 4
-INITIAL_BACKOFF_SECONDS = 60  # doubles each retry: 60, 120, 240, 480
+INITIAL_BACKOFF_SECONDS = 15  # doubles each retry: 15, 30, 60, 120
 
 # Allowlist of extensions to send to Gemini for review.
 # Only these types are reviewed; binary blobs, lock files (package-lock.json),
@@ -176,9 +187,11 @@ def get_filtered_diff(base_sha: str, head_sha: str) -> tuple[str, bool]:
 # ---------------------------------------------------------------------------
 
 
-def call_gemini(diff: str, truncated: bool) -> str:
+def call_gemini(model_name: str, diff: str, truncated: bool) -> str:
+    """Call one specific model. Raises ResourceExhausted if quota is exhausted
+    after all retries so the caller can fall through to the next model."""
     genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-    model = genai.GenerativeModel(GEMINI_MODEL)
+    model = genai.GenerativeModel(model_name)
 
     notice = (
         f"\n\n> ⚠️ Diff was truncated to {MAX_DIFF_CHARS:,} chars. "
@@ -197,13 +210,14 @@ def call_gemini(diff: str, truncated: bool) -> str:
         except ResourceExhausted as exc:
             if attempt < MAX_RETRIES:
                 print(
-                    f"Rate limit hit (attempt {attempt}/{MAX_RETRIES}). "
+                    f"[{model_name}] Rate limit hit (attempt {attempt}/{MAX_RETRIES}). "
                     f"Retrying in {backoff}s…",
                     file=sys.stderr,
                 )
                 time.sleep(backoff)
                 backoff *= 2
                 continue
+            # All retries exhausted for this model — let caller try next model.
             raise
 
 
@@ -242,24 +256,39 @@ def main() -> None:
         print("No reviewable changes in this diff (all changed files are excluded).")
         return
 
-    print(f"Sending {len(diff):,} chars to {GEMINI_MODEL}…")
-    try:
-        review = call_gemini(diff, truncated)
-    except ResourceExhausted:
-        # Post a soft notice rather than failing the job — quota exhaustion
-        # is an infra issue, not a code issue, and should not block merges.
+    print(f"Sending {len(diff):,} chars to Gemini (trying {len(MODELS)} model(s))…")
+
+    used_model: str | None = None
+    for model_name in MODELS:
+        print(f"Trying {model_name}…", file=sys.stderr)
+        try:
+            review = call_gemini(model_name, diff, truncated)
+            used_model = model_name
+            break
+        except ResourceExhausted:
+            print(
+                f"[{model_name}] Quota exhausted after all retries — trying next model.",
+                file=sys.stderr,
+            )
+            continue
+
+    if used_model is None:
+        # All models exhausted — post a soft notice rather than failing the job.
         gh = Github(os.environ["GITHUB_TOKEN"])
         repo = gh.get_repo(os.environ["GITHUB_REPOSITORY"])
         pr = repo.get_pull(int(os.environ["PR_NUMBER"]))
         pr.create_issue_comment(
             f"{REVIEW_HEADER}\n\n"
-            "> ⏸️ Gemini review skipped — free-tier quota exhausted. "
+            "> ⏸️ Gemini review skipped — free-tier quota exhausted on all models "
+            f"({', '.join(MODELS)}). "
             "No action required; this does not block merge."
         )
-        print("Quota exhausted — soft notice posted, job exits 0.")
+        print("All models quota-exhausted — soft notice posted, job exits 0.")
         return
 
-    post_or_update_comment(review)
+    # Append the model attribution footer to the review body.
+    review_with_attribution = review.rstrip() + f"\n\n---\n*Review by `{used_model}`*"
+    post_or_update_comment(review_with_attribution)
 
 
 if __name__ == "__main__":
