@@ -365,12 +365,13 @@ a valid decommit target.
 
 ```ts
 // cm.spec.ts
+// Discovery session: all five ieee14 generators start committed, so any
+// index is a valid decommit target. We only need one ID shared by both tests.
 let committedGenId: string
-let decommittedGenId: string
 
 test.beforeAll(async ({ request, token }) => {
-  // Create a bootstrap session just to discover the network structure.
-  // The per-test session fixture creates its own independent sessions.
+  // Create a throwaway session just to discover the network structure.
+  // Each test creates its own isolated session via the session fixture.
   const sessionRes = await request.post('/api/sessions', {
     data: { displayName: 'CM discovery', mode: 'FREE_PLAY', networkPreset: 'ieee14' },
     headers: { Authorization: `Bearer ${token}` },
@@ -381,10 +382,7 @@ test.beforeAll(async ({ request, token }) => {
     headers: { Authorization: `Bearer ${token}` },
   })
   const network = await networkRes.json()
-
   committedGenId = network.generators.find((g: any) => g.committed)?.id
-  decommittedGenId = network.generators.find((g: any) => !g.committed)?.id
-    ?? network.generators[1]?.id  // fallback: all are committed at start — use index 1
 
   await request.delete(`/api/sessions/${id}`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -549,9 +547,16 @@ jobs:
       - name: Start backend
         working-directory: backend
         run: |
-          ./gradlew bootRun --no-daemon &
-          echo "Waiting for backend…"
+          # Start bootRun in background; capture PID for diagnostics if startup fails.
+          ./gradlew bootRun --no-daemon > /tmp/backend.log 2>&1 &
+          BACKEND_PID=$!
+          echo "Backend PID: $BACKEND_PID"
+          echo "Waiting for /actuator/health…"
           for i in $(seq 1 30); do
+            if ! kill -0 $BACKEND_PID 2>/dev/null; then
+              echo "Backend process died. Last 50 lines:" && tail -50 /tmp/backend.log
+              exit 1
+            fi
             curl -sf http://localhost:8080/actuator/health && break
             sleep 2
           done
@@ -613,12 +618,11 @@ but `vite preview` serves a production build — it does **not** inject
 if (import.meta.env.MODE !== 'production') { … }
 ```
 
-```ts
-// vite.config.ts — add to the existing config
-build: {
-  // Allow overriding MODE via --mode flag or VITE_MODE env var
-}
-```
+No change to `vite.config.ts` is needed. Vite supports arbitrary `--mode`
+values out of the box — `vite build --mode e2e` sets `import.meta.env.MODE`
+to `'e2e'` without any config. The only constraint is that a corresponding
+`.env.e2e` file should not accidentally override variables; none is needed
+here.
 
 CI runs `npm run build:e2e` (`vite build --mode e2e`) and `vite preview`
 serves the `e2e` build. The bridge is present; production users never receive
