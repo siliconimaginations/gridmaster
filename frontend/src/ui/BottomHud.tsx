@@ -68,7 +68,7 @@ export function BottomHud() {
           onClick={handlePlayPause}
           disabled={disabled}
           aria-label={isRunning ? 'Pause' : 'Play'}
-          data-testid="btn-play-pause"
+          data-testid="hud-playpause-btn"
         >
           {isRunning ? '⏸' : '▶'}
         </button>

@@ -39,13 +39,13 @@ describe('BottomHud', () => {
 
   it('renders play button when clock is PAUSED', () => {
     render(<BottomHud />)
-    expect(screen.getByTestId('btn-play-pause')).toHaveTextContent('▶')
+    expect(screen.getByTestId('hud-playpause-btn')).toHaveTextContent('▶')
   })
 
   it('renders pause button when clock is RUNNING', () => {
     mockStore({ clockState: 'RUNNING' })
     render(<BottomHud />)
-    expect(screen.getByTestId('btn-play-pause')).toHaveTextContent('⏸')
+    expect(screen.getByTestId('hud-playpause-btn')).toHaveTextContent('⏸')
   })
 
   it('renders all four speed buttons', () => {
@@ -65,14 +65,14 @@ describe('BottomHud', () => {
 
   it('clicking play dispatches ResumeClock when paused', async () => {
     render(<BottomHud />)
-    await userEvent.click(screen.getByTestId('btn-play-pause'))
+    await userEvent.click(screen.getByTestId('hud-playpause-btn'))
     expect(mockSendCommand).toHaveBeenCalledWith({ commandType: 'ResumeClock', payload: {} })
   })
 
   it('clicking pause dispatches PauseClock when running', async () => {
     mockStore({ clockState: 'RUNNING' })
     render(<BottomHud />)
-    await userEvent.click(screen.getByTestId('btn-play-pause'))
+    await userEvent.click(screen.getByTestId('hud-playpause-btn'))
     expect(mockSendCommand).toHaveBeenCalledWith({ commandType: 'PauseClock', payload: {} })
   })
 
@@ -97,7 +97,7 @@ describe('BottomHud', () => {
   it('all buttons disabled when sessionId is null', () => {
     mockStore({ sessionId: null })
     render(<BottomHud />)
-    expect(screen.getByTestId('btn-play-pause')).toBeDisabled()
+    expect(screen.getByTestId('hud-playpause-btn')).toBeDisabled()
     expect(screen.getByTestId('btn-speed-1')).toBeDisabled()
     expect(screen.getByTestId('btn-dispatch')).toBeDisabled()
   })

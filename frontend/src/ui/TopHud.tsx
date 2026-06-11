@@ -15,8 +15,10 @@ import styles from './TopHud.module.css'
  * @see docs/engineering/13-hud.md
  */
 export function TopHud() {
-  const { gameTimeMinutes, network, violations } = useGameStore(useShallow((s) => ({
+  const { gameTimeMinutes, clockState, tickNumber, network, violations } = useGameStore(useShallow((s) => ({
     gameTimeMinutes: s.gameTimeMinutes,
+    clockState: s.clockState,
+    tickNumber: s.tickNumber,
     network: s.network,
     violations: s.violations,
   })))
@@ -36,12 +38,14 @@ export function TopHud() {
       <div className={styles.pill} data-testid="pill-clock">
         <span className={styles.label}>Time</span>
         {formatGameTime(gameTimeMinutes)}
+        <span data-testid="hud-clock-state" style={{ display: 'none' }}>{clockState}</span>
+        <span data-testid="hud-tick-number" style={{ display: 'none' }}>{tickNumber}</span>
       </div>
 
       {/* Load */}
       <div className={styles.pill} data-testid="pill-load">
         <span className={styles.label}>Load</span>
-        {totalLoadMw(network)}
+        <span data-testid="hud-total-load">{totalLoadMw(network)}</span>
       </div>
 
       {/* Price — deferred until backend sends systemMarginalPrice */}
@@ -57,7 +61,8 @@ export function TopHud() {
         data-testid="pill-health"
         data-severity={health.severity}
       >
-        {health.label}
+        <span data-testid="hud-grid-health">{health.severity.toUpperCase()}</span>
+        {' '}{health.label}
       </div>
     </div>
   )
