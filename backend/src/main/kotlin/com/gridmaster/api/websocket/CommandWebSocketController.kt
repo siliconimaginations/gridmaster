@@ -1,6 +1,7 @@
 package com.gridmaster.api.websocket
 
 import com.gridmaster.api.PhysicsSessionStore
+import com.gridmaster.api.SessionNotFoundException
 import com.gridmaster.engine.dispatch.DispatchMode
 import com.gridmaster.engine.powerflow.EquipmentType
 import com.gridmaster.game.ClockState
@@ -76,7 +77,24 @@ class CommandWebSocketController(
                 )
             }
 
-        val result = commandHandler.handle(command, userId)
+        val result =
+            try {
+                commandHandler.handle(command, userId)
+            } catch (ex: SessionNotFoundException) {
+                // TickEngine lost the session (e.g. backend restarted). Tell the
+                // client to re-bootstrap rather than letting the exception propagate.
+                log.warn("Session {} not found in TickEngine during command {}", sessionId, message.commandType)
+                messagingTemplate.convertAndSend(
+                    "/topic/session/$sessionId/state",
+                    ConnectionStatus(type = ConnectionStatusType.SESSION_NOT_FOUND, sessionId = sessionId),
+                )
+                return CommandAck(
+                    commandType = message.commandType,
+                    success = false,
+                    rejectionReason = "Session expired — please refresh",
+                    appliedAtTick = -1,
+                )
+            }
         val clockStatus = tickEngine.clockStatus(sessionId)
         val currentTick = clockStatus?.tickCount ?: 0L
         val currentGameTime = clockStatus?.gameTimeMinutes ?: 0L

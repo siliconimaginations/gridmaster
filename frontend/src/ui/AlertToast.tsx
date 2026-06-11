@@ -29,7 +29,8 @@ const MAX_VISIBLE = 3
  * The most recent alert per elementId is kept.
  * Alerts with `elementId === null` are never de-duplicated.
  */
-function dedupeByElementId(alerts: AlertDto[]): AlertDto[] {
+function dedupeByElementId(alerts: AlertDto[] | null | undefined): AlertDto[] {
+  if (!alerts) return []
   const seen = new Set<string>()
   const result: AlertDto[] = []
   // Iterate newest-first so the latest alert per elementId wins.

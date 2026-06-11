@@ -1,7 +1,8 @@
 import { create } from 'zustand'
 import { subscribeWithSelector } from 'zustand/middleware'
 import { WsClient } from '../api/wsClient'
-import { getNetwork } from '../api/restClient'
+import type { ServerStatusMessage } from '../api/wsClient'
+import { clearStoredSessionId, getNetwork } from '../api/restClient'
 import type {
   AlertDto,
   ClockState,
@@ -37,6 +38,8 @@ interface GameStore {
   // Connection slice
   connectionStatus: ConnectionStatus
   sessionId: string | null
+  /** Flipped to true when the server sends SESSION_NOT_FOUND; bootstrap re-runs on this. */
+  sessionInvalidated: boolean
 
   // Selection slice
   selectedElement: SelectedElementInfo | null
@@ -97,6 +100,7 @@ export const useGameStore = create<GameStore>()(subscribeWithSelector((set, get)
   ...INITIAL_GAME_STATE,
   connectionStatus: 'disconnected',
   sessionId: null,
+  sessionInvalidated: false,
   selectedElement: null,
 
   // ── applyUpdate ─────────────────────────────────────────────────────────────
@@ -115,18 +119,20 @@ export const useGameStore = create<GameStore>()(subscribeWithSelector((set, get)
         pendingEventCards: update.pendingEventCards ?? [],
       })
     } else {
-      // DELTA: merge only the fields present in the update
+      // DELTA: merge only the fields present in the update.
+      // Use ?? undefined so backend nulls are treated as "absent" and don't
+      // overwrite existing store arrays with null.
       // TODO: #101 separate always-present clock fields from optional network/alert fields
       const delta = definedFields({
         tickNumber: update.tickNumber,
         gameTimeMinutes: update.gameTimeMinutes,
         clockState: update.clockState,
         clockSpeedMultiplier: update.clockSpeedMultiplier,
-        network: update.network,
-        powerFlowStatus: update.powerFlowStatus,
-        violations: update.violations,
-        alerts: update.alerts,
-        pendingEventCards: update.pendingEventCards,
+        network: update.network ?? undefined,
+        powerFlowStatus: update.powerFlowStatus ?? undefined,
+        violations: update.violations ?? undefined,
+        alerts: update.alerts ?? undefined,
+        pendingEventCards: update.pendingEventCards ?? undefined,
       })
       set(delta)
     }
@@ -138,10 +144,19 @@ export const useGameStore = create<GameStore>()(subscribeWithSelector((set, get)
     wsClient?.disconnect()
     set({ sessionId, connectionStatus: 'connecting' })
 
+    // Hydrate network state immediately via REST so the scene renders even
+    // if the first WebSocket message is a DELTA (which omits unchanged fields).
+    getNetwork(sessionId).then((network) => {
+      if (useGameStore.getState().sessionId === sessionId) {
+        useGameStore.setState({ network })
+      }
+    }).catch(() => { /* session may not exist yet — WS updates will fill in */ })
+
     wsClient = new WsClient(
       (update) => get().applyUpdate(update),
       (status) => set({ connectionStatus: status }),
       (ack: CommandAck) => _handleAck(ack, get),
+      (msg: ServerStatusMessage) => _handleServerStatus(msg),
     )
     wsClient.connect(sessionId, token)
   },
@@ -151,7 +166,7 @@ export const useGameStore = create<GameStore>()(subscribeWithSelector((set, get)
     wsClient?.disconnect()
     wsClient = null
     // Resets all game state to initial values so a future session starts clean
-    set({ ...INITIAL_GAME_STATE, connectionStatus: 'disconnected', sessionId: null, selectedElement: null })
+    set({ ...INITIAL_GAME_STATE, connectionStatus: 'disconnected', sessionId: null, sessionInvalidated: false, selectedElement: null })
   },
 
   // ── selectElement ────────────────────────────────────────────────────────────
@@ -188,6 +203,25 @@ export const useGameStore = create<GameStore>()(subscribeWithSelector((set, get)
     wsClient?.send(msg)
   },
 })))
+
+// ── ServerStatus handler ──────────────────────────────────────────────────────
+
+/**
+ * Called when a server-initiated ConnectionStatus message arrives on the
+ * session state topic (e.g. SESSION_NOT_FOUND after a backend restart).
+ *
+ * On SESSION_NOT_FOUND: clears the stale stored session ID, disconnects, and
+ * sets `sessionInvalidated = true` so `useSessionBootstrap` re-runs and creates
+ * a fresh session automatically.
+ */
+function _handleServerStatus(msg: ServerStatusMessage): void {
+  if (msg.type === 'SESSION_NOT_FOUND') {
+    console.warn('[useGameStore] Server reported SESSION_NOT_FOUND — re-bootstrapping')
+    clearStoredSessionId()
+    useGameStore.getState().disconnect()
+    useGameStore.setState({ sessionInvalidated: true })
+  }
+}
 
 // ── CommandAck handler ────────────────────────────────────────────────────────
 

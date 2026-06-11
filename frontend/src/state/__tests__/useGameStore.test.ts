@@ -15,9 +15,10 @@ vi.mock('../../api/wsClient', () => ({
   ),
 }))
 
-// Mock getNetwork so rollback tests can verify it is called.
+// Mock restClient so tests don't need a real backend.
 vi.mock('../../api/restClient', () => ({
   getNetwork: vi.fn(),
+  clearStoredSessionId: vi.fn(),
 }))
 
 import { getNetwork } from '../../api/restClient'
@@ -144,6 +145,7 @@ describe('useGameStore — sendCommand', () => {
     resetStore()
     vi.clearAllMocks()
     capturedOnAck = null
+    vi.mocked(getNetwork).mockResolvedValue(makeNetwork())
   })
 
   it('warns when no session is active', () => {
@@ -162,6 +164,9 @@ describe('useGameStore — sendCommandOptimistic', () => {
     resetStore()
     vi.clearAllMocks()
     capturedOnAck = null
+    // connect() calls getNetwork() immediately; resolve it by default so tests
+    // that don't care about network hydration don't blow up with "undefined.then"
+    vi.mocked(getNetwork).mockResolvedValue(makeNetwork())
   })
 
   it('warns when no session is active', () => {
@@ -240,6 +245,9 @@ describe('useGameStore — sendCommandOptimistic', () => {
 
   it('does not fetch network on successful ack', () => {
     useGameStore.getState().connect('sess1', 'token')
+    // connect() calls getNetwork() once for hydration — clear the count so the
+    // assertion below only checks whether the successful ack triggers a fetch.
+    vi.mocked(getNetwork).mockClear()
     useGameStore.setState({ network: makeNetwork(), sessionId: 'sess1' })
 
     const successAck: CommandAck = {
