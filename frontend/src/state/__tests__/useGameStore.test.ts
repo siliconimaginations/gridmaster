@@ -245,6 +245,9 @@ describe('useGameStore — sendCommandOptimistic', () => {
 
   it('does not fetch network on successful ack', () => {
     useGameStore.getState().connect('sess1', 'token')
+    // connect() calls getNetwork() once for hydration — clear the count so the
+    // assertion below only checks whether the successful ack triggers a fetch.
+    vi.mocked(getNetwork).mockClear()
     useGameStore.setState({ network: makeNetwork(), sessionId: 'sess1' })
 
     const successAck: CommandAck = {
