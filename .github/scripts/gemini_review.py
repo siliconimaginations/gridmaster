@@ -38,7 +38,7 @@ MAX_DIFF_CHARS = 60_000
 
 # Retry settings for 429 / ResourceExhausted errors (free-tier rate limits).
 MAX_RETRIES = 4
-INITIAL_BACKOFF_SECONDS = 15  # doubles each retry: 15, 30, 60, 120
+INITIAL_BACKOFF_SECONDS = 60  # doubles each retry: 60, 120, 240, 480
 
 # Allowlist of extensions to send to Gemini for review.
 # Only these types are reviewed; binary blobs, lock files (package-lock.json),
