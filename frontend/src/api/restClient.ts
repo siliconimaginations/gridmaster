@@ -24,7 +24,9 @@ import type {
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
-const BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:8080'
+// Empty string → relative URLs (e.g. /api/...) so Vite's proxy forwards to
+// localhost:8080 in dev. Set VITE_API_URL for production deployments.
+const BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? ''
 
 const TOKEN_KEY = 'gridmaster_token'
 const USER_ID_KEY = 'gridmaster_user_id'

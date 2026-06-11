@@ -36,6 +36,7 @@ class SecurityConfig(private val jwtAuthFilter: JwtAuthFilter) {
                     .requestMatchers("/api/auth/**").permitAll()
                     .requestMatchers("/ws/**").permitAll() // WebSocket handshake (JWT validated by STOMP interceptor)
                     .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+                    .requestMatchers("/error").permitAll() // Spring Boot error dispatch must not be intercepted
                     .anyRequest().authenticated()
             }
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter::class.java)

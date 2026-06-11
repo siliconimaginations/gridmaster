@@ -2,7 +2,18 @@ import { Client, IMessage } from '@stomp/stompjs'
 import SockJS from 'sockjs-client'
 import type { CommandAck, ConnectionStatus, GameStateUpdate, PlayerCommandMessage } from './types'
 
-const WS_URL = (import.meta.env.VITE_WS_URL as string | undefined) ?? 'http://localhost:8080/ws'
+/** Server-initiated lifecycle message (distinct from the transport ConnectionStatus). */
+export interface ServerStatusMessage {
+  type: 'CONNECTED' | 'RECONNECTED' | 'SESSION_NOT_FOUND' | 'AUTH_FAILED'
+  sessionId?: string
+  missedTicks?: number
+}
+
+const SERVER_STATUS_TYPES = new Set(['CONNECTED', 'RECONNECTED', 'SESSION_NOT_FOUND', 'AUTH_FAILED'])
+
+// Relative /ws path lets Vite's proxy forward the WebSocket to localhost:8080 in dev.
+// Set VITE_WS_URL for production deployments.
+const WS_URL = (import.meta.env.VITE_WS_URL as string | undefined) ?? '/ws'
 
 /** Maximum number of commands queued while disconnected. */
 const MAX_QUEUE_SIZE = 10
@@ -27,6 +38,7 @@ export class WsClient {
     private readonly onMessage: (update: GameStateUpdate) => void,
     private readonly onStatus: (status: ConnectionStatus) => void,
     private readonly onAck: (ack: CommandAck) => void,
+    private readonly onServerStatus?: (msg: ServerStatusMessage) => void,
   ) {
     this.client = new Client({
       webSocketFactory: () => new SockJS(WS_URL) as WebSocket,
@@ -84,10 +96,14 @@ export class WsClient {
 
     this.client.subscribe(`/topic/session/${this.sessionId}/state`, (frame: IMessage) => {
       try {
-        const update = JSON.parse(frame.body) as GameStateUpdate
-        this.onMessage(update)
+        const msg = JSON.parse(frame.body) as { type: string }
+        if (SERVER_STATUS_TYPES.has(msg.type)) {
+          this.onServerStatus?.(msg as ServerStatusMessage)
+        } else {
+          this.onMessage(msg as GameStateUpdate)
+        }
       } catch (err) {
-        console.error('[WsClient] Failed to parse GameStateUpdate', err)
+        console.error('[WsClient] Failed to parse state message', err)
       }
     })
 

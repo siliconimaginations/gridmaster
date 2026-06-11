@@ -3,6 +3,7 @@ package com.gridmaster.api.websocket
 import com.gridmaster.engine.powerflow.ConvergenceStatus
 import com.gridmaster.game.ClockState
 import com.gridmaster.game.command.Alert
+import java.util.UUID
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Server → Client
@@ -107,16 +108,20 @@ data class ViolationDto(
 )
 
 data class AlertDto(
+    val id: String,
     val severity: String,
     val elementId: String,
     val message: String,
+    val timestampMs: Long,
 ) {
     companion object {
         fun from(alert: Alert): AlertDto =
             AlertDto(
+                id = UUID.randomUUID().toString(),
                 severity = alert.severity.name,
                 elementId = alert.elementId,
                 message = alert.message,
+                timestampMs = System.currentTimeMillis(),
             )
     }
 }
