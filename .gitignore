@@ -2,6 +2,7 @@
 backend/.gradle/
 backend/build/
 backend/out/
+backend/bin/
 backend/*.jar
 *.class
 .idea/

@@ -41,6 +41,18 @@ class GlobalExceptionHandler {
                 ),
             )
 
+    @ExceptionHandler(IllegalStateException::class)
+    fun handleIllegalState(ex: IllegalStateException): ResponseEntity<ApiErrorResponse> =
+        ResponseEntity
+            .status(HttpStatus.CONFLICT)
+            .body(
+                ApiErrorResponse(
+                    status = 409,
+                    error = "CONFLICT",
+                    message = ex.message ?: "Conflicting state",
+                ),
+            )
+
     @ExceptionHandler(IllegalArgumentException::class)
     fun handleIllegalArgument(ex: IllegalArgumentException): ResponseEntity<ApiErrorResponse> =
         ResponseEntity

@@ -9,6 +9,7 @@ import {
   issueToken,
   setStoredAuth,
   setStoredSessionId,
+  startClock,
 } from '../api/restClient'
 import { useGameStore } from './useGameStore'
 
@@ -53,6 +54,14 @@ export function useSessionBootstrap(): BootstrapResult {
   const [error, setError] = useState<string | null>(null)
   const [attempt, setAttempt] = useState(0)
   const connect = useGameStore((s) => s.connect)
+  const sessionInvalidated = useGameStore((s) => s.sessionInvalidated)
+
+  // Re-run bootstrap whenever the server invalidates our session
+  useEffect(() => {
+    if (sessionInvalidated) {
+      setAttempt((n) => n + 1)
+    }
+  }, [sessionInvalidated])
 
   useEffect(() => {
     let cancelled = false
@@ -93,6 +102,43 @@ export function useSessionBootstrap(): BootstrapResult {
           if (cancelled) return
           sessionId = session.id
           setStoredSessionId(sessionId)
+        }
+
+        // Guard against StrictMode Run 1 proceeding past getSession before cleanup fires.
+        if (cancelled) return
+
+        // Start the tick engine for this session (registers it in TickEngineImpl).
+        try {
+          await startClock(sessionId)
+        } catch (err) {
+          if (err instanceof ApiError) {
+            if (err.status === 401 || err.status === 403 || err.status === 404) {
+              // Session belongs to a different user or no longer exists.
+              // Drop it and fall through to create a fresh one below.
+              clearStoredSessionId()
+              sessionId = null
+            } else if (err.status === 409 || err.status === 500) {
+              // Clock already running — proceed as-is.
+            } else {
+              throw err
+            }
+          } else {
+            throw err
+          }
+        }
+
+        if (!sessionId) {
+          if (cancelled) return
+          const session = await createSession({
+            displayName: DEV_DISPLAY_NAME,
+            mode: 'FREE_PLAY',
+            networkPreset: DEV_NETWORK_PRESET,
+          })
+          if (cancelled) return
+          sessionId = session.id
+          setStoredSessionId(sessionId)
+          if (cancelled) return
+          await startClock(sessionId)
         }
 
         if (cancelled) return
