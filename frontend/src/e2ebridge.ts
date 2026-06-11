@@ -10,7 +10,7 @@ import { useGameStore } from './state/useGameStore'
  * @see docs/engineering/15-e2e-ci.md
  */
 export function installE2EBridge(): void {
-  ;(window as Window & { __e2e?: unknown }).__e2e = {
+  (window as Window & { __e2e?: unknown }).__e2e = {
     /** Returns a snapshot of the current Zustand store state. */
     getStore: () => useGameStore.getState(),
 
