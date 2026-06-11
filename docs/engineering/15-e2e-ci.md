@@ -193,33 +193,52 @@ and will always time out if given a Promise).
  * Use `page.waitForFunction` with a direct inline lambda instead for
  * simple synchronous predicates (e.g. tickNumber > 0) — it polls without
  * needing the bridge's subscription machinery.
+ *
+ * NOTE: Playwright's `page.evaluate` arg must be JSON-serializable — functions
+ * cannot be passed as `arg`. The predicate must therefore be inlined into the
+ * `pageFunction` string rather than passed as an argument. For this reason
+ * `waitForStore` is intentionally NOT a generic helper with a function
+ * parameter. Each call site inlines its predicate directly:
+ *
+ * ```ts
+ * // Waiting for a store condition via the bridge's Promise machinery:
+ * await page.evaluate(() =>
+ *   (window as any).__e2e.waitFor((s: any) => s.clockState === 'PAUSED')
+ * )
+ *
+ * // Simpler: page.waitForFunction for synchronous predicates (no Promise):
+ * await page.waitForFunction(
+ *   () => (window as any).__e2e?.getStore().tickNumber > 0,
+ *   { timeout: 10_000 },
+ * )
+ * ```
+ *
+ * Use `page.waitForFunction` for synchronous predicates (it polls efficiently).
+ * Use `page.evaluate` wrapping `__e2e.waitFor(...)` when the condition depends
+ * on a future Zustand subscription event (e.g. a WebSocket update).
  */
-export async function waitForStore(
-  page: Page,
-  predicate: (s: any) => boolean,
-  timeoutMs = 10_000,
-): Promise<void> {
-  // Serialise the predicate to a string so it can cross the page boundary.
-  const predicateStr = predicate.toString()
-  await page.evaluate(
-    ({ pred, ms }) => {
-      const bridge = (window as any).__e2e
-      if (!bridge) return Promise.reject(new Error('__e2e bridge not installed'))
-      return bridge.waitFor(new Function(`return (${pred})`)(), ms)
-    },
-    { pred: predicateStr, ms: timeoutMs },
-  )
-}
 ```
 
-For simple synchronous checks prefer `page.waitForFunction` directly:
+The `ws.ts` helper file therefore contains only typed wrappers over the two
+patterns above, not a generic function-argument helper. Example exports:
 
 ```ts
-// Preferred for synchronous predicates — no bridge Promise overhead
-await page.waitForFunction(
-  () => (window as any).__e2e?.getStore().tickNumber > 0,
-  { timeout: 10_000 },
-)
+// e2e/helpers/ws.ts
+
+/** Waits until clock state matches the expected value. */
+export const waitForClockState = (page: Page, state: string) =>
+  page.evaluate((s) =>
+    (window as any).__e2e.waitFor((store: any) => store.clockState === s),
+    state,
+  )
+
+/** Waits until tickNumber > baseline. */
+export const waitForTick = (page: Page, baseline: number) =>
+  page.waitForFunction(
+    (n) => (window as any).__e2e?.getStore().tickNumber > n,
+    baseline,
+    { timeout: 10_000 },
+  )
 ```
 
 ### Session fixture (session.ts)
@@ -394,8 +413,41 @@ test('CM-01 toggle generator off → committed=false in next update', async ({ p
 })
 ```
 
-CM-02 mirrors CM-01 using `CommitGenerator` on `decommittedGenId` (or on the
-generator just decommitted in CM-01 if tests run in order).
+CM-02 must not rely on `decommittedGenId` from the `beforeAll` block, because
+each test gets its own bootstrapped session whose generators all start
+committed. CM-02 controls its own precondition explicitly:
+
+```ts
+test('CM-02 toggle generator on → committed=true in next update', async ({ page }) => {
+  await page.goto('/')
+  await page.waitForSelector('[data-testid="bootstrap-overlay"]', { state: 'hidden', timeout: 15_000 })
+
+  // Step 1: Decommit a known generator to establish a clean baseline.
+  await page.evaluate((id) => {
+    (window as any).__e2e.getStore().sendCommand({ commandType: 'DecommitGenerator', payload: { generatorId: id } })
+  }, committedGenId)
+  await page.waitForFunction(
+    (id) => {
+      const { network } = (window as any).__e2e.getStore()
+      return network?.generators.find((g: any) => g.id === id && !g.committed)
+    },
+    committedGenId,
+    { timeout: 10_000 },
+  )
+
+  // Step 2: Commit it back and assert.
+  await page.evaluate((id) => {
+    (window as any).__e2e.getStore().sendCommand({ commandType: 'CommitGenerator', payload: { generatorId: id } })
+  }, committedGenId)
+  await page.waitForFunction(
+    (id) => {
+      const { network } = (window as any).__e2e.getStore()
+      return network?.generators.find((g: any) => g.id === id && g.committed)
+    },
+    committedGenId,
+    { timeout: 10_000 },
+  )
+})
 
 ---
 
@@ -568,20 +620,26 @@ build: {
 }
 ```
 
-CI runs `npm run build -- --mode e2e` (not `--mode production`) and
-`vite preview` serves the `test` build. The bridge is present; production
-users never receive it.
+CI runs `npm run build:e2e` (`vite build --mode e2e`) and `vite preview`
+serves the `e2e` build. The bridge is present; production users never receive
+it.
 
-The `package.json` script is adjusted:
+The `package.json` scripts:
 
 ```json
-"build":    "tsc && vite build",
+"build":     "tsc && vite build",
 "build:e2e": "tsc && vite build --mode e2e",
 "e2e":       "playwright test"
 ```
 
-CI uses `build:e2e`. Local dev uses `build` (production) or just `vite dev`
-(development), both of which already expose the bridge.
+| Command | MODE | Bridge present? | Use |
+|---------|------|-----------------|-----|
+| `vite dev` | `development` | ✅ yes | Local interactive dev |
+| `npm run build:e2e` + `vite preview` | `e2e` | ✅ yes | CI E2E runs |
+| `npm run build` + `vite preview` | `production` | ❌ no | Production deployments |
+
+`npm run build` (production) does **not** expose the bridge — the
+`MODE !== 'production'` guard strips it at build time.
 
 ---
 
