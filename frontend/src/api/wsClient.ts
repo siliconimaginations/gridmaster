@@ -2,7 +2,9 @@ import { Client, IMessage } from '@stomp/stompjs'
 import SockJS from 'sockjs-client'
 import type { CommandAck, ConnectionStatus, GameStateUpdate, PlayerCommandMessage } from './types'
 
-const WS_URL = (import.meta.env.VITE_WS_URL as string | undefined) ?? 'http://localhost:8080/ws'
+// Relative /ws path lets Vite's proxy forward the WebSocket to localhost:8080 in dev.
+// Set VITE_WS_URL for production deployments.
+const WS_URL = (import.meta.env.VITE_WS_URL as string | undefined) ?? '/ws'
 
 /** Maximum number of commands queued while disconnected. */
 const MAX_QUEUE_SIZE = 10
