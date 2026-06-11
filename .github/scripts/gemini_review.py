@@ -32,14 +32,15 @@ from github import Github
 # Models tried in order. On ResourceExhausted (quota) OR any API error (e.g. model
 # not yet available), the outer loop falls through to the next candidate.
 # The PR comment names which model was actually used.
-# Free-tier RPD ceilings (approximate, checked 2026-06):
-#   gemini-2.5-flash-lite —  500 RPD  ← try first (25× headroom over flash)
-#   gemini-2.5-flash      —   20 RPD  — proven baseline
-#   gemini-1.5-flash-8b   — 1500 RPD  — last resort (older but very high ceiling)
+#
+# Order rationale: lite/budget models first (higher free-tier RPD headroom),
+# flagship models last (lower RPD but better review quality as fallback).
+# All are confirmed stable API IDs as of 2026-06 (ai.google.dev/gemini-api/docs/models).
 MODELS = [
-    "gemini-2.5-flash-lite",  # 500 RPD — highest free-tier ceiling for 2.5 family
-    "gemini-2.5-flash",       #  20 RPD — proven baseline
-    "gemini-1.5-flash-8b",    # 1500 RPD — last resort, very high ceiling
+    "gemini-2.5-flash-lite",  # 2.5 lite — fastest, most budget-friendly; highest free-tier RPD in 2.5 family
+    "gemini-3.1-flash-lite",  # 3.1 lite — newest stable lite model; likely high free-tier RPD
+    "gemini-3.5-flash",       # 3.5 flagship — best quality, stable; lower free-tier RPD
+    "gemini-2.5-flash",       # 2.5 flash — proven baseline; 20 RPD on free tier
 ]
 
 # Hard cap on diff characters sent to Gemini.
