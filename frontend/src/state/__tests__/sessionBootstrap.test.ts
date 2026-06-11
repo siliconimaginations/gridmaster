@@ -8,6 +8,7 @@ import type { SessionDetailDto, TokenResponse } from '../../api/types'
 const mockIssueToken = vi.fn()
 const mockCreateSession = vi.fn()
 const mockGetSession = vi.fn()
+const mockStartClock = vi.fn()
 const mockGetStoredUserId = vi.fn()
 const mockGetStoredSessionId = vi.fn()
 const mockSetStoredAuth = vi.fn()
@@ -21,6 +22,7 @@ vi.mock('../../api/restClient', async () => {
     issueToken: (...args: unknown[]) => mockIssueToken(...args),
     createSession: (...args: unknown[]) => mockCreateSession(...args),
     getSession: (...args: unknown[]) => mockGetSession(...args),
+    startClock: (...args: unknown[]) => mockStartClock(...args),
     getStoredUserId: () => mockGetStoredUserId(),
     getStoredSessionId: () => mockGetStoredSessionId(),
     setStoredAuth: (...args: unknown[]) => mockSetStoredAuth(...args),
@@ -62,6 +64,7 @@ describe('useSessionBootstrap', () => {
     mockIssueToken.mockResolvedValue(TOKEN)
     mockCreateSession.mockResolvedValue(SESSION)
     mockGetSession.mockResolvedValue(SESSION)
+    mockStartClock.mockResolvedValue({ state: 'RUNNING' })
   })
 
   afterEach(() => {
