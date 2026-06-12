@@ -113,11 +113,21 @@ export interface GameStateUpdate {
   pendingEventCards?: EventCardDto[]
 }
 
-// TODO: #99 replace with discriminated union per commandType for compile-time payload safety
-export interface PlayerCommandMessage {
-  commandType: string
-  payload: Record<string, unknown>
-}
+/**
+ * Commands sent from the frontend to the backend over WebSocket.
+ *
+ * Typed as a discriminated union so the compiler enforces the correct payload
+ * shape for each commandType. Closes #99.
+ */
+export type PlayerCommandMessage =
+  | { commandType: 'CommitGenerator'; payload: { generatorId: string } }
+  | { commandType: 'DecommitGenerator'; payload: { generatorId: string } }
+  | { commandType: 'SetGeneratorOutput'; payload: { generatorId: string; activePowerMw: number } }
+  | { commandType: 'RunUnitCommitment'; payload: { hourlyForecastMw: number[] } }
+  | { commandType: 'RespondToEventCard'; payload: { cardId: string; optionId: string } }
+  | { commandType: 'PauseClock'; payload: Record<string, never> }
+  | { commandType: 'ResumeClock'; payload: Record<string, never> }
+  | { commandType: 'SetClockSpeed'; payload: { multiplier: number } }
 
 /** Acknowledgement returned on /user/queue/session/{sessionId}/ack after a command. */
 export interface CommandAck {
@@ -220,5 +230,4 @@ export interface DispatchRequest {
 export interface UnitCommitmentRequest {
   /** Exactly 24 hourly load forecast values in MW. */
   hourlyForecastMw: number[]
-  reserveMarginFraction?: number
 }
