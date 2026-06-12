@@ -183,6 +183,7 @@ const HOURS = Array.from({ length: 24 }, (_, i) => i)
 
 function UCScheduleTab({ generators }: { generators: GeneratorDto[] }) {
   const sendCommand = useGameStore((s) => s.sendCommand)
+  const setUcSchedule = useGameStore((s) => s.setUcSchedule)
 
   // Local schedule state: generatorId → committed hours set
   const [schedule, setSchedule] = useState<Record<string, Set<number>>>(() =>
@@ -215,6 +216,11 @@ function UCScheduleTab({ generators }: { generators: GeneratorDto[] }) {
   function confirm() {
     const hourlyForecastMw = HOURS.map(() => 1000) // placeholder forecast
     sendCommand({ commandType: 'RunUnitCommitment', payload: { hourlyForecastMw } })
+    // Derive a 24-element boolean array: hour h is committed if any generator has h in its set.
+    const committed = HOURS.map((h) =>
+      Object.values(schedule).some((hourSet) => hourSet.has(h)),
+    )
+    setUcSchedule(committed)
   }
 
   const committed = generators.filter((g) => g.committed)
