@@ -11,7 +11,7 @@
  */
 
 import type { BusDto } from '../../api/types'
-import { IEEE14_BUS_POSITIONS, isIeee14Bus } from './ieee14Layout'
+import { IEEE14_BUS_POSITIONS } from './ieee14Layout'
 import { gridLayout } from './gridLayout'
 
 export type { BusPosition } from './ieee14Layout'

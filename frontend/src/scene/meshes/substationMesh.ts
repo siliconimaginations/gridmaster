@@ -55,6 +55,6 @@ export function updateSubstationStatus(
   status: SubstationStatus,
 ): void {
   if (ring.material) {
-    ;(ring.material as StandardMaterial).diffuseColor = STATUS_COLOURS[status]
+    (ring.material as StandardMaterial).diffuseColor = STATUS_COLOURS[status]
   }
 }
