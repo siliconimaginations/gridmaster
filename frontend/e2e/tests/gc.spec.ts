@@ -39,6 +39,10 @@ test('GC-02 pause stops tick counter', async ({ page }) => {
   })
 
   // Pause the clock via HUD button
+  // Store initialises at STOPPED; wait for WS to deliver RUNNING before clicking pause.
+  // Without this, the HUD sends ResumeClock (not PauseClock) and the backend rejects it.
+  await expect(page.getByTestId('hud-clock-state')).toHaveText('RUNNING', { timeout: 10_000 })
+
   await page.getByTestId('hud-playpause-btn').click()
 
   await expect(page.getByTestId('hud-clock-state')).toHaveText('PAUSED', { timeout: 5_000 })
