@@ -389,6 +389,37 @@ class PhysicsControllerTest {
             solveTimeMs = 5L,
         )
 
+    @Test
+    fun `POST mutations returns 400 when integer parameter is a fractional float`() {
+        // 12.9 should be rejected — toInt() would silently truncate to 12
+        val body = """{"mutations":[{"type":"SET_TAP_POSITION","targetId":"T1","parameters":{"tapPosition":12.9}}]}"""
+
+        mvc.post("$BASE/network/mutations") {
+            contentType = MediaType.APPLICATION_JSON
+            content = body
+        }.andExpect {
+            status { isBadRequest() }
+            jsonPath("$.error") { value("INVALID_MUTATION") }
+        }
+    }
+
+    @Test
+    fun `POST mutations accepts integer parameter supplied as whole-number float`() {
+        every {
+            networkMapper.applyMutation(any(), any<NetworkMutation.SetTapPosition>())
+        } returns Result.success(mockSession.iidmNetwork)
+
+        // 12.0 is a valid whole-number float for tapPosition
+        val body = """{"mutations":[{"type":"SET_TAP_POSITION","targetId":"T1","parameters":{"tapPosition":12.0}}]}"""
+
+        mvc.post("$BASE/network/mutations") {
+            contentType = MediaType.APPLICATION_JSON
+            content = body
+        }.andExpect {
+            status { isOk() }
+        }
+    }
+
     // Provides mocks to the Spring context
     @TestConfiguration
     class Mocks {

@@ -326,7 +326,15 @@ private fun NetworkMutationDto.toDomain(): NetworkMutation {
 
     fun int(key: String): Int =
         when (val v = param(key)) {
-            is Number -> v.toInt()
+            is Number -> {
+                val d = v.toDouble()
+                if (d != kotlin.math.floor(d)) {
+                    throw InvalidMutationException(
+                        "Parameter '$key' must be an integer but got fractional value: $v",
+                    )
+                }
+                d.toInt()
+            }
             is String ->
                 v.toIntOrNull()
                     ?: throw InvalidMutationException("Parameter '$key' is not a valid integer: $v")
