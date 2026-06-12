@@ -2,6 +2,8 @@ name: E2E tests
 
 on:
   push:
+    branches: ['**']   # temporary: iterate on fix branch; revert to [main] before merge
+  pull_request:
     branches: [main]
   workflow_dispatch:
 
