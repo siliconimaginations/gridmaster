@@ -234,6 +234,7 @@ jobs:
     needs: frontend-test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    continue-on-error: true  # Badge commit is blocked by branch protection; failure is cosmetic
     permissions:
       contents: write
     steps:
@@ -263,6 +264,7 @@ jobs:
     needs: backend-test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    continue-on-error: true  # Badge commit is blocked by branch protection; failure is cosmetic
     permissions:
       contents: write
     steps:
