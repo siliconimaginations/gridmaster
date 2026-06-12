@@ -32,10 +32,16 @@ vi.mock('../../api/restClient', async () => {
 })
 
 const mockConnect = vi.fn()
-vi.mock('../useGameStore', () => ({
-  useGameStore: (selector: (s: { connect: typeof mockConnect }) => unknown) =>
-    selector({ connect: mockConnect }),
-}))
+const mockSetState = vi.fn()
+
+// useGameStore is called as a selector function AND as useGameStore.setState().
+// The mock must expose both the call signature and the static setState method.
+vi.mock('../useGameStore', () => {
+  const useGameStore = (selector: (s: { connect: typeof mockConnect; sessionInvalidated: boolean }) => unknown) =>
+    selector({ connect: mockConnect, sessionInvalidated: false })
+  useGameStore.setState = (...args: unknown[]) => mockSetState(...args)
+  return { useGameStore }
+})
 
 import { useSessionBootstrap } from '../sessionBootstrap'
 
@@ -91,6 +97,12 @@ describe('useSessionBootstrap', () => {
     })
     expect(mockSetStoredSessionId).toHaveBeenCalledWith(SESSION.id)
     expect(mockConnect).toHaveBeenCalledWith(SESSION.id, TOKEN.token)
+  })
+
+  it('optimistically sets clockState to RUNNING after startClock succeeds', async () => {
+    const { result } = renderHook(() => useSessionBootstrap())
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+    expect(mockSetState).toHaveBeenCalledWith({ clockState: 'RUNNING' })
   })
 
   it('passes the stored userId through to issueToken to resume identity', async () => {
