@@ -321,7 +321,7 @@ When Claude encounters a genuinely hard problem (platform incompatibility, ambig
 After every merged PR, Claude must follow this sequence to decide what to work on next:
 
 1. **Check the GitHub Projects board** at `https://github.com/users/siliconimaginations/projects/2`.
-2. Take the highest-priority item in **This Sprint** (or **In Progress**) that is not blocked.
+2. Take the highest-priority item in **This Sprint** (or **In Progress**) that is not blocked. `priority/P0` items always take precedence and interrupt the current sprint if present.
 3. If the board is empty or all items are blocked, run the weekly triage (see `docs/process/tech-debt-cadence.md §1`) and surface the result to Rick.
 4. Announce the next planned task in chat before starting — Rick can override the selection.
 
@@ -383,6 +383,7 @@ See [`docs/process/tech-debt-cadence.md`](docs/process/tech-debt-cadence.md) for
 | `coverage` | Test coverage gap |
 | `docs` | Stale or missing documentation |
 | `ci` | Pipeline or tooling change |
+| `priority/P0` | **Urgent** — active breakage, data loss, security issue, or blocker on another P1; must be resolved immediately. Do not use for normal sprint planning. |
 | `priority/P1` | This sprint |
 | `priority/P2` | Next 1–2 sprints |
 | `priority/P3` | Backlog |
