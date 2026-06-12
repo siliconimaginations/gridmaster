@@ -57,8 +57,8 @@ class PowSyBlPowerFlowService(
             )
         }
 
-        // TODO: use loadFlowResult?.let { } instead of !! for idiomatic null safety (#26)
-        val lfResult = loadFlowResult!!
+        // Guard above guarantees loadFlowResult is non-null here.
+        val lfResult = checkNotNull(loadFlowResult)
         val (status, iterationCount, slackBusIds) = parseComponentResults(lfResult)
 
         if (status == ConvergenceStatus.NETWORK_FAILURE) {
