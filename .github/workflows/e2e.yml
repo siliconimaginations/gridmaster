@@ -11,8 +11,11 @@ permissions:
 jobs:
   e2e:
     name: Playwright E2E
-    runs-on: ubuntu-22.04   # pin to Jammy — ubuntu-latest is now Noble (24.04) where libasound2 was renamed
-    timeout-minutes: 60     # cold run: Playwright install ~33min + build+tests ~12min = ~45min; warm run ~15min
+    runs-on: ubuntu-22.04   # host VM; the container below runs on top
+    container:
+      image: mcr.microsoft.com/playwright:v1.44.1-jammy  # Chromium + deps pre-installed; no install step needed
+      options: --user root
+    timeout-minutes: 20     # cold: ~12min (Gradle build + backend + tests); warm: ~8min
 
     steps:
       - name: Checkout
@@ -46,22 +49,6 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      - name: Cache Playwright browsers
-        id: playwright-cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
-
-      - name: Install Playwright browsers
-        working-directory: frontend
-        run: |
-          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
-            npx playwright install-deps chromium
-          else
-            npx playwright install chromium --with-deps
-          fi
-
       - name: Build backend (skip tests)
         working-directory: backend
         run: ./gradlew build -x test --no-daemon
@@ -71,18 +58,13 @@ jobs:
         run: |
           ./gradlew bootRun --no-daemon > /tmp/backend.log 2>&1 &
           BACKEND_PID=$!
-          echo "Backend PID: $BACKEND_PID"
-          echo "Waiting for /actuator/health…"
           for i in $(seq 1 30); do
-            if ! kill -0 $BACKEND_PID 2>/dev/null; then
-              echo "Backend process died. Last 50 lines:" && tail -50 /tmp/backend.log
-              exit 1
-            fi
+            if ! kill -0 $BACKEND_PID 2>/dev/null; then tail -50 /tmp/backend.log; exit 1; fi
             curl -sf http://localhost:8080/actuator/health && break
             sleep 2
           done
 
-      - name: Build frontend (e2e mode — includes __e2e bridge)
+      - name: Build frontend (e2e mode)
         working-directory: frontend
         run: npm run build:e2e
 
