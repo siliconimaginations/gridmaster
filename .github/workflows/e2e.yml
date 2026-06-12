@@ -12,7 +12,7 @@ jobs:
   e2e:
     name: Playwright E2E
     runs-on: ubuntu-22.04   # pin to Jammy — ubuntu-latest is now Noble (24.04) where libasound2 was renamed
-    timeout-minutes: 35     # Gradle cold build ~2min (cached), Playwright install ~2min (cached), tests ~10min
+    timeout-minutes: 60     # cold run: Playwright install ~33min + build+tests ~12min = ~45min; warm run ~15min
 
     steps:
       - name: Checkout
@@ -57,10 +57,8 @@ jobs:
         working-directory: frontend
         run: |
           if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
-            # Cache hit — only install system deps (fast, ~10s)
             npx playwright install-deps chromium
           else
-            # Cache miss — full install including browser binary (~2min)
             npx playwright install chromium --with-deps
           fi
 
