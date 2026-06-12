@@ -64,10 +64,3 @@ data class PhysicsSession(
     var latestDispatchResult: DispatchResult? = null,
     var latestUcResult: UcResult? = null,
 )
-
-/** Thrown when a requested session does not exist in [PhysicsSessionStore]. */
-class SessionNotFoundException(val sessionId: String) :
-    RuntimeException("Session not found: $sessionId")
-
-/** Thrown when a [com.gridmaster.api.dto.NetworkMutationDto] cannot be mapped to a domain mutation. */
-class InvalidMutationException(message: String) : RuntimeException(message)
