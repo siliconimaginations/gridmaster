@@ -2,6 +2,7 @@ package com.gridmaster.engine.dispatch
 
 import com.google.ortools.linearsolver.MPSolver
 import com.google.ortools.linearsolver.MPVariable
+import kotlin.time.measureTimedValue
 import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Primary
 import org.springframework.stereotype.Service
@@ -87,7 +88,7 @@ class MipUnitCommitmentService(
 
         log.info("MipUC: solving {}-generator 24-hour UC via SCIP", g)
 
-        val (result, solveDuration) = kotlin.time.measureTimedValue {
+        val (result, solveDuration) = measureTimedValue {
             val solver =
                 MPSolver.createSolver("SCIP")
                     ?: run {
