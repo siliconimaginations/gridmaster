@@ -11,7 +11,7 @@ permissions:
 jobs:
   e2e:
     name: Playwright E2E
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04   # pin to Jammy — ubuntu-latest is now Noble (24.04) where libasound2 was renamed
     timeout-minutes: 20
 
     steps:
