@@ -23,20 +23,20 @@ export type { BusPosition } from './ieee14Layout'
  * use the deterministic grid fallback.
  */
 export function layoutBuses(buses: readonly BusDto[]): Map<string, { x: number; z: number }> {
-  // TODO: #119 simplify to single-pass iteration
   const unmatched: BusDto[] = []
-  for (const bus of buses) {
-    if (!isIeee14Bus(bus.id)) unmatched.push(bus)
-  }
+  const hardcodedEntries: Array<[string, { x: number; z: number }]> = []
 
-  // Start with grid positions for unmatched buses
-  const positions = gridLayout(unmatched)
-
-  // Overlay hardcoded positions for known IEEE 14-bus IDs
   for (const bus of buses) {
     const hardcoded = IEEE14_BUS_POSITIONS[bus.id]
-    if (hardcoded) positions.set(bus.id, hardcoded)
+    if (hardcoded) {
+      hardcodedEntries.push([bus.id, hardcoded])
+    } else {
+      unmatched.push(bus)
+    }
   }
+
+  const positions = gridLayout(unmatched)
+  for (const [id, pos] of hardcodedEntries) positions.set(id, pos)
 
   return positions
 }

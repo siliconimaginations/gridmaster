@@ -11,7 +11,7 @@
  * @see docs/engineering/14-scene-meshes.md §Element mesh registry
  */
 
-import { Scene, Vector3 } from '@babylonjs/core'
+import { Scene, StandardMaterial, Vector3 } from '@babylonjs/core'
 import type { AbstractMesh, ParticleSystem } from '@babylonjs/core'
 import type { GeneratorDto, GridNetworkDto, ViolationDto } from '../../api/types'
 import { layoutBuses } from '../layout/busLayout'
@@ -169,10 +169,9 @@ export class MeshRegistry {
       const existingLine = this.lines.get(branch.id)
       if (existingLine) {
         // Update line tube colour to reflect new loadingPercent / connected state
-        // TODO: #125 use StandardMaterial cast here
         // TODO: line geometry (tube path + pylon positions) is not updated when bus layout changes;
         //       CreateTube does not support in-place path updates — tracked in #125
-        const mat = existingLine.tube.material as { diffuseColor: unknown } | null
+        const mat = existingLine.tube.material as StandardMaterial | null
         if (mat) mat.diffuseColor = lineColour(branch)
       } else {
         const lineMeshes = createLineMesh(this.scene, from, to, branch)

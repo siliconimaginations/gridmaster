@@ -7,7 +7,7 @@
  * @see docs/engineering/14-scene-meshes.md §Substation mesh
  */
 
-import { Color3, MeshBuilder, Scene, Vector3 } from '@babylonjs/core'
+import { Color3, MeshBuilder, Scene, StandardMaterial, Vector3 } from '@babylonjs/core'
 import { createToonMaterial } from '../materials/ToonMaterial'
 import type { ViolationDto } from '../../api/types'
 
@@ -55,7 +55,6 @@ export function updateSubstationStatus(
   status: SubstationStatus,
 ): void {
   if (ring.material) {
-    // TODO: #125 use StandardMaterial cast
-    (ring.material as ReturnType<typeof createToonMaterial>).diffuseColor = STATUS_COLOURS[status]
+    ;(ring.material as StandardMaterial).diffuseColor = STATUS_COLOURS[status]
   }
 }
