@@ -55,6 +55,7 @@ function setStoreState(network: GridNetworkDto | null) {
     network,
     sendCommandOptimistic: mockSendCommandOptimistic,
     sendCommand: mockSendCommand,
+    setUcSchedule: vi.fn(),
   })
 }
 
@@ -265,3 +266,4 @@ describe('DispatchPanel', () => {
     })
   })
 })
+

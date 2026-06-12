@@ -9,6 +9,7 @@ import { useSessionBootstrap } from './state/sessionBootstrap'
 import { AlertToastContainer } from './ui/AlertToast'
 import { InspectorPanel } from './ui/InspectorPanel'
 import { DispatchPanel } from './ui/DispatchPanel'
+import { TimelineStrip } from './ui/TimelineStrip'
 
 /**
  * Root component. Renders a full-screen Babylon.js canvas with React HUD
@@ -84,6 +85,7 @@ export default function App() {
         style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}
       >
         <TopHud />
+        <TimelineStrip />
         <BottomHud onOpenDispatch={() => setDispatchPanelOpen(true)} />
         <AlertToastContainer />
         <InspectorPanel />

@@ -35,6 +35,11 @@ interface GameStore {
   alerts: AlertDto[]
   pendingEventCards: EventCardDto[]
 
+  /** 24-element boolean array — true if any generator is committed for that hour. Null until the player runs a UC schedule. */
+  ucSchedule: boolean[] | null
+  /** Updates the UC schedule displayed in the TimelineStrip. */
+  setUcSchedule: (schedule: boolean[] | null) => void
+
   // Connection slice
   connectionStatus: ConnectionStatus
   sessionId: string | null
@@ -89,6 +94,7 @@ const INITIAL_GAME_STATE = {
   clockSpeedMultiplier: 1,
   alerts: [] as AlertDto[],
   pendingEventCards: [] as EventCardDto[],
+  ucSchedule: null as boolean[] | null,
 } as const satisfies Partial<GameStore>
 
 // ── Store ─────────────────────────────────────────────────────────────────────
@@ -102,6 +108,11 @@ export const useGameStore = create<GameStore>()(subscribeWithSelector((set, get)
   sessionId: null,
   sessionInvalidated: false,
   selectedElement: null,
+
+  // ── setUcSchedule ────────────────────────────────────────────────────────────
+  setUcSchedule: (schedule: boolean[] | null) => {
+    set({ ucSchedule: schedule })
+  },
 
   // ── applyUpdate ─────────────────────────────────────────────────────────────
   applyUpdate: (update: GameStateUpdate) => {
