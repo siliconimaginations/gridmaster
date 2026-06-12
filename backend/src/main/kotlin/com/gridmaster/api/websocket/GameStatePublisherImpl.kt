@@ -168,9 +168,9 @@ class GameStatePublisherImpl(
         // Always send alerts if any fired this tick
         val alertsToSend = newAlerts.map { AlertDto.from(it) }.takeIf { it.isNotEmpty() }
 
-        // Skip broadcast entirely if nothing changed and no alerts
-        if (!networkChanged && !violationsChanged && !cardsChanged && alertsToSend == null) return
-
+        // Always broadcast — tickNumber and clockState change every tick, so clients need
+        // the update to keep their clock in sync. Network/violations/cards are omitted
+        // from the payload when unchanged (nulled out below), keeping bandwidth low.
         val update =
             GameStateUpdate(
                 type = UpdateType.DELTA,
