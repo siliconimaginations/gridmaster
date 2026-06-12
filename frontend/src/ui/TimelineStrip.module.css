@@ -1,0 +1,97 @@
+/* TimelineStrip — dark glass horizontal strip above the bottom HUD */
+
+.root {
+  position: absolute;
+  bottom: 64px; /* sits just above the BottomHud (height ~56px + 8px gap) */
+  left: 0;
+  right: 0;
+  height: 52px;
+  background: rgba(10, 14, 26, 0.82);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  pointer-events: auto;
+  z-index: 10;
+}
+
+.scroll {
+  width: 100%;
+  height: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none; /* Firefox */
+}
+
+.scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* Fixed-width inner track containing all 24 columns */
+.track {
+  position: relative;
+  height: 100%;
+}
+
+/* "Now ▼" pointer — absolutely positioned over the current hour column */
+.nowIndicator {
+  position: absolute;
+  top: 2px;
+  transform: translateX(-50%);
+  font-size: 9px;
+  color: #4ade80; /* green-400 */
+  line-height: 1;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Row of commitment blocks */
+.blocks {
+  display: flex;
+  position: absolute;
+  top: 12px;
+  left: 0;
+  height: 22px;
+}
+
+.block {
+  height: 100%;
+  margin-right: 2px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.committed {
+  background: rgba(74, 222, 128, 0.55); /* green tint */
+  border: 1px solid rgba(74, 222, 128, 0.8);
+}
+
+.uncommitted {
+  /* grey hatching — uses a repeating diagonal gradient */
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(255, 255, 255, 0.06) 0px,
+    rgba(255, 255, 255, 0.06) 3px,
+    transparent 3px,
+    transparent 8px
+  );
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+/* Hour label row */
+.labels {
+  display: flex;
+  position: absolute;
+  bottom: 3px;
+  left: 0;
+}
+
+.label {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.4);
+  text-align: center;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.labelNow {
+  color: #4ade80;
+  font-weight: 600;
+}
