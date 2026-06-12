@@ -82,10 +82,10 @@ Tracking issue: open a `coverage / P2` issue for items 1–2 if none exists.
 
 ---
 
-## 3. Doc Staleness Review (Every 5 Modules)
+## 3. Doc Staleness Review (weekly)
 
 **Who**: Claude.
-**Trigger**: When the 5th implementation PR of a stage merges.
+**Trigger**: sprint planning.
 
 Steps:
 1. For each file in `docs/engineering/` and `docs/ux/`:
@@ -127,17 +127,15 @@ If any job consistently exceeds its target:
 
 ---
 
-## 5. Tech Debt Burn-Down Sprint (Quarterly)
+## 5. Tech Debt Burn-Down (check weekly, execute as needed)
 
-Every quarter (or at stage boundaries), reserve one sprint exclusively for tech debt:
+If there are too many tech debt issues:
 
 1. List all open `tech-debt` and `performance` issues sorted by priority.
 2. Estimate each in lines-changed.
 3. Pull enough to fill ~1 000 lines of non-critical work into the sprint.
 4. Open a tracking umbrella issue: `chore: Q<N> tech debt sprint`.
 5. Close it when all selected issues are resolved.
-
-**This sprint is not optional.** If implementation pressure pushes it out, it becomes the first item of the next sprint.
 
 ---
 
