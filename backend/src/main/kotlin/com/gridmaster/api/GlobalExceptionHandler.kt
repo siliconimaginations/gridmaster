@@ -107,10 +107,3 @@ class GlobalExceptionHandler {
                 ),
             )
 }
-
-/** Wraps unexpected exceptions from physics services (power flow, contingency, dispatch). */
-class PhysicsServiceException(
-    val sessionId: String,
-    message: String,
-    cause: Throwable? = null,
-) : RuntimeException(message, cause)

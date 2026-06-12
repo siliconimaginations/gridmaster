@@ -48,6 +48,8 @@ dependencies {
 
     // Coroutines — NetworkRepository methods are suspend; IO wrapping in SqliteNetworkRepository
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
+    // Required by Spring MVC to invoke suspend controller functions via CoroutineInvocableHandlerMethod
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
     implementation("com.google.ortools:ortools-java:9.10.4067")
     // SQLite
     runtimeOnly("org.xerial:sqlite-jdbc:3.45.2.0")
