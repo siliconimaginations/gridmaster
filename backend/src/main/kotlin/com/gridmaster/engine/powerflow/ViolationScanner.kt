@@ -3,7 +3,6 @@ package com.gridmaster.engine.powerflow
 import com.gridmaster.engine.model.GridNetwork
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
-import kotlin.math.sqrt
 
 /**
  * Scans a [GridNetwork] snapshot for voltage and thermal violations.
@@ -131,6 +130,7 @@ class ViolationScanner(
     ): Double = if (voltageKv > 0.0) mva * 1000.0 / (SQRT3 * voltageKv) else 0.0
 
     companion object {
-        private val SQRT3 = sqrt(3.0)
+        // Hard-coded for const-val eligibility; value equals sqrt(3.0).
+        private const val SQRT3 = 1.7320508075688772
     }
 }
