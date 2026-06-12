@@ -7,6 +7,8 @@ import styles from './BottomHud.module.css'
 interface BottomHudProps {
   /** Called when the player clicks "Run Dispatch" — opens the DispatchPanel. */
   onOpenDispatch?: () => void
+  /** Called when the player clicks "Plan Day" — opens the PlanningPanel. */
+  onOpenPlanning?: () => void
 }
 
 /**
@@ -26,7 +28,7 @@ interface BottomHudProps {
  *
  * @see docs/engineering/13-hud.md
  */
-export function BottomHud({ onOpenDispatch }: BottomHudProps) {
+export function BottomHud({ onOpenDispatch, onOpenPlanning }: BottomHudProps) {
   const { clockState, clockSpeedMultiplier, sessionId, network, pendingEventCards, sendCommandOptimistic } =
     useGameStore(useShallow((s) => ({
       clockState: s.clockState,
@@ -105,9 +107,9 @@ export function BottomHud({ onOpenDispatch }: BottomHudProps) {
 
         <button
           className={styles.actionBtn}
+          onClick={() => onOpenPlanning?.()}
           disabled={disabled}
           data-testid="btn-plan-day"
-          // TODO: open planning panel (#89)
         >
           Plan Day
         </button>
@@ -126,3 +128,4 @@ export function BottomHud({ onOpenDispatch }: BottomHudProps) {
     </div>
   )
 }
+
