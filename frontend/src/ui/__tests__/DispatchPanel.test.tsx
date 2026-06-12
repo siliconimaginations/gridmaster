@@ -11,6 +11,7 @@ const mockSendCommand = vi.fn()
 function makeGenerator(overrides: Partial<GeneratorDto> = {}): GeneratorDto {
   return {
     id: 'gen-1',
+    busId: 'bus-1',
     name: 'Test Gas',
     fuelType: 'GAS',
     activePowerMw: 200,
@@ -23,10 +24,9 @@ function makeGenerator(overrides: Partial<GeneratorDto> = {}): GeneratorDto {
 function makeNetwork(generators: GeneratorDto[]): GridNetworkDto {
   return {
     generators,
-    loads: [{ id: 'load-1', name: 'City Load', activePowerMw: 300, bus: 'A' }],
+    loads: [{ id: 'load-1', busId: 'bus-1', name: 'City Load', activePowerMw: 300, reactivePowerMvar: 0 }],
     buses: [],
-    lines: [],
-    transformers: [],
+    branches: [],
   } as unknown as GridNetworkDto
 }
 
@@ -60,7 +60,7 @@ function setStoreState(network: GridNetworkDto | null) {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function renderPanel(open = true, network: GridNetworkDto | null = null) {
+function renderPanel(open = true) {
   const onClose = vi.fn()
   const result = render(<DispatchPanel open={open} onClose={onClose} />)
   return { ...result, onClose }
@@ -82,7 +82,7 @@ describe('DispatchPanel', () => {
 
   it('renders nothing when network is null', () => {
     setStoreState(null)
-    renderPanel(true, null)
+    renderPanel(true)
     expect(screen.queryByTestId('dispatch-panel')).toBeNull()
   })
 

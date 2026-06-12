@@ -76,13 +76,11 @@ describe('BottomHud', () => {
     expect(mockSendCommand).toHaveBeenCalledWith({ commandType: 'PauseClock', payload: {} })
   })
 
-  it('clicking Run Dispatch sends current total load', async () => {
-    render(<BottomHud />)
+  it('clicking Run Dispatch opens the dispatch panel', async () => {
+    const onOpenDispatch = vi.fn()
+    render(<BottomHud onOpenDispatch={onOpenDispatch} />)
     await userEvent.click(screen.getByTestId('btn-dispatch'))
-    expect(mockSendCommand).toHaveBeenCalledWith({
-      commandType: 'RunEconomicDispatch',
-      payload: { totalLoadMw: 800 },
-    })
+    expect(onOpenDispatch).toHaveBeenCalledOnce()
   })
 
   it('clicking a speed button dispatches SetClockSpeed', async () => {

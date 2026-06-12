@@ -6,7 +6,7 @@ import styles from './BottomHud.module.css'
 
 interface BottomHudProps {
   /** Called when the player clicks "Run Dispatch" — opens the DispatchPanel. */
-  onOpenDispatch: () => void
+  onOpenDispatch?: () => void
 }
 
 /**
@@ -57,7 +57,7 @@ export function BottomHud({ onOpenDispatch }: BottomHudProps) {
   }
 
   function handleDispatch() {
-    onOpenDispatch()
+    onOpenDispatch?.()
   }
 
   const firstEvent = pendingEventCards[0]
