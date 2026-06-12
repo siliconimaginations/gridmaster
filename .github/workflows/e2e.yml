@@ -12,7 +12,7 @@ jobs:
   e2e:
     name: Playwright E2E
     runs-on: ubuntu-22.04   # pin to Jammy — ubuntu-latest is now Noble (24.04) where libasound2 was renamed
-    timeout-minutes: 20
+    timeout-minutes: 35     # increased from 20 — Gradle cold build takes ~10 min; give tests 15 min headroom
 
     steps:
       - name: Checkout
@@ -22,13 +22,23 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '''21'''
           cache: gradle
+
+      - name: Cache Gradle build outputs
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            backend/build
+          key: gradle-e2e-${{ runner.os }}-${{ hashFiles('"backend/**/*.gradle*"', '"backend/gradle/wrapper/gradle-wrapper.properties"') }}
+          restore-keys: gradle-e2e-${{ runner.os }}-
 
       - name: Set up Node 24
         uses: actions/setup-node@v6
         with:
-          node-version: '24'
+          node-version: '''24'''
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
