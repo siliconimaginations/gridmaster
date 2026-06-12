@@ -34,11 +34,8 @@ import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 import java.time.Instant
-
-// TODO: #35 — consider making blocking physics endpoints (runPowerFlow, runDispatch, etc.)
-//             suspend functions once the game engine is coroutine-driven (Stage 5+).
-// TODO: #36 — move domain exceptions (SessionNotFoundException, InvalidMutationException,
-//             PhysicsServiceException) to a dedicated api/exceptions.kt file.
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * REST API for physics operations scoped to a game session.
@@ -152,7 +149,7 @@ class PhysicsController(
      * Divergence is NOT a 500 — [PowerFlowResult.status] == NETWORK_FAILURE is a valid game state.
      */
     @PostMapping("/powerflow/run")
-    fun runPowerFlow(
+    suspend fun runPowerFlow(
         @PathVariable sessionId: String,
         @RequestBody(required = false) request: RunPowerFlowRequest?,
     ): PowerFlowResult {
@@ -163,14 +160,16 @@ class PhysicsController(
         // (writes V, θ, I) and the network must not be modified concurrently.
         // Module 06 (Session Model) will replace this with proper session serialisation.
         val result =
-            synchronized(session) {
-                try {
-                    powerFlowService.solve(session.iidmNetwork, params)
-                } catch (ex: Exception) {
-                    throw PhysicsServiceException(sessionId, "Power flow failed: ${ex.message}", ex)
-                }.also { r ->
-                    session.latestPowerFlowResult = r
-                    session.latestSnapshot = r.snapshot
+            withContext(Dispatchers.IO) {
+                synchronized(session) {
+                    try {
+                        powerFlowService.solve(session.iidmNetwork, params)
+                    } catch (ex: Exception) {
+                        throw PhysicsServiceException(sessionId, "Power flow failed: ${ex.message}", ex)
+                    }.also { r ->
+                        session.latestPowerFlowResult = r
+                        session.latestSnapshot = r.snapshot
+                    }
                 }
             }
         return result
@@ -211,7 +210,7 @@ class PhysicsController(
      * Returns 202 Accepted immediately; results become available via GET /contingencies.
      */
     @PostMapping("/contingencies/trigger")
-    fun triggerContingencies(
+    suspend fun triggerContingencies(
         @PathVariable sessionId: String,
     ): ResponseEntity<Void> {
         val session = sessionStore.get(sessionId)
@@ -222,10 +221,12 @@ class PhysicsController(
         // session.iidmNetwork will not corrupt the in-flight solve.
         // Module 06 (Session Model) will own this pattern centrally — see issue #37.
         val networkSnapshot =
-            synchronized(session) {
-                val baos = java.io.ByteArrayOutputStream()
-                com.powsybl.iidm.serde.NetworkSerDe.write(session.iidmNetwork, baos)
-                com.powsybl.iidm.serde.NetworkSerDe.read(java.io.ByteArrayInputStream(baos.toByteArray()))
+            withContext(Dispatchers.IO) {
+                synchronized(session) {
+                    val baos = java.io.ByteArrayOutputStream()
+                    com.powsybl.iidm.serde.NetworkSerDe.write(session.iidmNetwork, baos)
+                    com.powsybl.iidm.serde.NetworkSerDe.read(java.io.ByteArrayInputStream(baos.toByteArray()))
+                }
             }
         contingencyService.triggerAsync(networkSnapshot, ContingencyAnalysisParameters())
         return ResponseEntity.accepted().build()
@@ -242,7 +243,7 @@ class PhysicsController(
      * Returns a [DispatchResult] with per-generator targets and merit order.
      */
     @PostMapping("/dispatch")
-    fun runDispatch(
+    suspend fun runDispatch(
         @PathVariable sessionId: String,
         @Valid @RequestBody request: DispatchRequest,
     ): DispatchResult {
@@ -250,17 +251,19 @@ class PhysicsController(
         // Hold the lock for the full read-solve-write cycle so that latestSnapshot
         // cannot be replaced by a concurrent power flow run mid-dispatch.
         // Module 06 (Session Model) will own session serialisation at a higher level.
-        return synchronized(session) {
-            val generators = session.latestSnapshot.toDispatchableGenerators()
-            val params = request.toDomain()
-            val result =
-                try {
-                    dispatchService.economicDispatch(generators, request.totalLoadMw, params)
-                } catch (ex: Exception) {
-                    throw PhysicsServiceException(sessionId, "Dispatch failed: ${ex.message}", ex)
-                }
-            session.latestDispatchResult = result
-            result
+        return withContext(Dispatchers.IO) {
+            synchronized(session) {
+                val generators = session.latestSnapshot.toDispatchableGenerators()
+                val params = request.toDomain()
+                val result =
+                    try {
+                        dispatchService.economicDispatch(generators, request.totalLoadMw, params)
+                    } catch (ex: Exception) {
+                        throw PhysicsServiceException(sessionId, "Dispatch failed: ${ex.message}", ex)
+                    }
+                session.latestDispatchResult = result
+                result
+            }
         }
     }
 
@@ -276,28 +279,30 @@ class PhysicsController(
      * Returns a [UcResult] with per-hour commitment sets and dispatch targets.
      */
     @PostMapping("/unitcommitment")
-    fun runUnitCommitment(
+    suspend fun runUnitCommitment(
         @PathVariable sessionId: String,
         @Valid @RequestBody request: UnitCommitmentRequest,
     ): UcResult {
         val session = sessionStore.get(sessionId)
         // Hold the lock for the full read-solve-write cycle (same rationale as runDispatch).
-        return synchronized(session) {
-            val generators = session.latestSnapshot.toDispatchableGenerators()
-            val forecast =
-                LoadForecast(
-                    hourlyLoadMw = request.hourlyForecastMw,
-                    startHour = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.HOURS),
-                )
-            val params = DispatchParameters(reserveMarginFraction = request.reserveMarginFraction)
-            val result =
-                try {
-                    unitCommitmentService.commit(generators, forecast, params)
-                } catch (ex: Exception) {
-                    throw PhysicsServiceException(sessionId, "Unit commitment failed: ${ex.message}", ex)
-                }
-            session.latestUcResult = result
-            result
+        return withContext(Dispatchers.IO) {
+            synchronized(session) {
+                val generators = session.latestSnapshot.toDispatchableGenerators()
+                val forecast =
+                    LoadForecast(
+                        hourlyLoadMw = request.hourlyForecastMw,
+                        startHour = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.HOURS),
+                    )
+                val params = DispatchParameters(reserveMarginFraction = request.reserveMarginFraction)
+                val result =
+                    try {
+                        unitCommitmentService.commit(generators, forecast, params)
+                    } catch (ex: Exception) {
+                        throw PhysicsServiceException(sessionId, "Unit commitment failed: ${ex.message}", ex)
+                    }
+                session.latestUcResult = result
+                result
+            }
         }
     }
 }
@@ -421,3 +426,4 @@ private fun GridNetwork.toDispatchableGenerators(): List<DispatchableGenerator> 
             marginalCostPerMwh = g.marginalCostPerMwh,
         )
     }
+
