@@ -20,8 +20,15 @@ test('GC-01 tick counter increments', async ({ page }) => {
     () => (window as { __e2e: { getStore: () => { tickNumber: number } } }).__e2e.getStore().tickNumber,
   )
 
-  // Wait 6 s — at least two 3-s game ticks at 1× speed
-  await page.waitForTimeout(6_000)
+  // Poll until the tick counter advances rather than sleeping a fixed duration.
+  // A fixed sleep is flaky in CI when the WS is slow to deliver the first tick.
+  // Timeout 15 s allows for WS connection latency on cold container starts.
+  await page.waitForFunction(
+    (initial) =>
+      (window as { __e2e: { getStore: () => { tickNumber: number } } }).__e2e.getStore().tickNumber > initial,
+    tick1,
+    { timeout: 15_000 },
+  )
 
   const tick2 = await page.evaluate(
     () => (window as { __e2e: { getStore: () => { tickNumber: number } } }).__e2e.getStore().tickNumber,
