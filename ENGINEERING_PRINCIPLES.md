@@ -226,9 +226,12 @@ Every PR must pass:
 
 CI failures block merge — no exceptions.
 
+Active gates (Stage 4+):
+- Playwright E2E suite () — runs on every push to main; pinned to 
+- Coverage threshold enforcement (JaCoCo + Vitest, 60% overall / 70% changed files)
+
 Future gates (Stage 7+):
-- Playwright E2E on PR
-- Coverage threshold enforcement
+- Playwright E2E promoted to required PR check
 - Docker image build and smoke test
 
 ---
