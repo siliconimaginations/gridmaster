@@ -39,6 +39,8 @@ import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.post
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath as jJsonPath
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status as jStatus
 import java.time.Instant
 
 private const val SESSION_ID = "test-session-1"
@@ -239,10 +241,9 @@ class PhysicsControllerTest {
         every { powerFlowService.solve(any(), any()) } returns result
 
         val pfResult = mvc.post("$BASE/powerflow/run").andReturn()
-        mvc.perform(asyncDispatch(pfResult)).andExpect {
-            status { isOk() }
-            jsonPath("$.status") { value("CONVERGED") }
-        }
+        mvc.perform(asyncDispatch(pfResult))
+            .andExpect(jStatus().isOk())
+            .andExpect(jJsonPath("$.status").value("CONVERGED"))
 
         verify { powerFlowService.solve(any(), PowerFlowParameters()) }
         assert(mockSession.latestPowerFlowResult == result)
@@ -282,7 +283,7 @@ class PhysicsControllerTest {
         every { contingencyService.triggerAsync(any(), any()) } returns Unit
 
         val ctgResult = mvc.post("$BASE/contingencies/trigger").andReturn()
-        mvc.perform(asyncDispatch(ctgResult)).andExpect { status { isAccepted() } }
+        mvc.perform(asyncDispatch(ctgResult)).andExpect(jStatus().isAccepted())
 
         verify { contingencyService.triggerAsync(any(), any()) }
     }
@@ -302,10 +303,9 @@ class PhysicsControllerTest {
                 contentType = MediaType.APPLICATION_JSON
                 content = body
             }.andReturn()
-        mvc.perform(asyncDispatch(dspResult)).andExpect {
-            status { isOk() }
-            jsonPath("$.totalLoadMw") { value(180.0) }
-        }
+        mvc.perform(asyncDispatch(dspResult))
+            .andExpect(jStatus().isOk())
+            .andExpect(jJsonPath("$.totalLoadMw").value(180.0))
 
         assert(mockSession.latestDispatchResult == result)
     }
@@ -318,7 +318,7 @@ class PhysicsControllerTest {
                 contentType = MediaType.APPLICATION_JSON
                 content = body
             }.andReturn()
-        mvc.perform(asyncDispatch(badModeResult)).andExpect { status { isBadRequest() } }
+        mvc.perform(asyncDispatch(badModeResult)).andExpect(jStatus().isBadRequest())
     }
 
     // -----------------------------------------------------------------------
@@ -347,10 +347,9 @@ class PhysicsControllerTest {
                 contentType = MediaType.APPLICATION_JSON
                 content = body
             }.andReturn()
-        mvc.perform(asyncDispatch(ucMvcResult)).andExpect {
-            status { isOk() }
-            jsonPath("$.feasible") { value(true) }
-        }
+        mvc.perform(asyncDispatch(ucMvcResult))
+            .andExpect(jStatus().isOk())
+            .andExpect(jJsonPath("$.feasible").value(true))
 
         assert(mockSession.latestUcResult == ucResult)
     }
