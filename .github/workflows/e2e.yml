@@ -2,7 +2,7 @@ name: E2E tests
 
 on:
   push:
-    branches: ['**']   # temporary: validate fix branch; revert to [main] after green
+    branches: [main]
   workflow_dispatch:
 
 permissions:
