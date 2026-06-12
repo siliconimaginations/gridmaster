@@ -297,11 +297,11 @@ class PhysicsControllerTest {
         every { dispatchService.economicDispatch(any(), any(), any()) } returns result
 
         val body = """{"totalLoadMw":180.0,"mode":"MERIT_ORDER"}"""
-        val dspPost = mvc.post("$BASE/dispatch") {
-            contentType = MediaType.APPLICATION_JSON
-            content = body
-        }
-        val dspResult = dspPost.andReturn()
+        val dspResult =
+            mvc.post("$BASE/dispatch") {
+                contentType = MediaType.APPLICATION_JSON
+                content = body
+            }.andReturn()
         mvc.perform(asyncDispatch(dspResult)).andExpect {
             status { isOk() }
             jsonPath("$.totalLoadMw") { value(180.0) }
@@ -313,11 +313,11 @@ class PhysicsControllerTest {
     @Test
     fun `POST dispatch returns 400 for unknown mode`() {
         val body = """{"totalLoadMw":100.0,"mode":"UNKNOWN_MODE"}"""
-        val badModePost = mvc.post("$BASE/dispatch") {
-            contentType = MediaType.APPLICATION_JSON
-            content = body
-        }
-        val badModeResult = badModePost.andReturn()
+        val badModeResult =
+            mvc.post("$BASE/dispatch") {
+                contentType = MediaType.APPLICATION_JSON
+                content = body
+            }.andReturn()
         mvc.perform(asyncDispatch(badModeResult)).andExpect { status { isBadRequest() } }
     }
 
@@ -342,11 +342,11 @@ class PhysicsControllerTest {
         val forecast = (1..24).map { 100.0 + it }
         val body = om.writeValueAsString(mapOf("hourlyForecastMw" to forecast))
 
-        val ucMvcPost = mvc.post("$BASE/unitcommitment") {
-            contentType = MediaType.APPLICATION_JSON
-            content = body
-        }
-        val ucMvcResult = ucMvcPost.andReturn()
+        val ucMvcResult =
+            mvc.post("$BASE/unitcommitment") {
+                contentType = MediaType.APPLICATION_JSON
+                content = body
+            }.andReturn()
         mvc.perform(asyncDispatch(ucMvcResult)).andExpect {
             status { isOk() }
             jsonPath("$.feasible") { value(true) }
