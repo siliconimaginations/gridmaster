@@ -9,6 +9,7 @@ import { useSessionBootstrap } from './state/sessionBootstrap'
 import { AlertToastContainer } from './ui/AlertToast'
 import { InspectorPanel } from './ui/InspectorPanel'
 import { DispatchPanel } from './ui/DispatchPanel'
+import { PlanningPanel } from './ui/PlanningPanel'
 import { TimelineStrip } from './ui/TimelineStrip'
 
 /**
@@ -38,6 +39,7 @@ export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const { status: bootstrapStatus, error: bootstrapError, retry: retryBootstrap } = useSessionBootstrap()
   const [dispatchPanelOpen, setDispatchPanelOpen] = useState(false)
+  const [planningPanelOpen, setPlanningPanelOpen] = useState(false)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -86,12 +88,14 @@ export default function App() {
       >
         <TopHud />
         <TimelineStrip />
-        <BottomHud onOpenDispatch={() => setDispatchPanelOpen(true)} />
+        <BottomHud onOpenDispatch={() => setDispatchPanelOpen(true)} onOpenPlanning={() => setPlanningPanelOpen(true)} />
         <AlertToastContainer />
         <InspectorPanel />
         <DispatchPanel open={dispatchPanelOpen} onClose={() => setDispatchPanelOpen(false)} />
+        <PlanningPanel open={planningPanelOpen} onClose={() => setPlanningPanelOpen(false)} />
       </div>
       <BootstrapOverlay status={bootstrapStatus} error={bootstrapError} onRetry={retryBootstrap} />
     </div>
   )
 }
+
