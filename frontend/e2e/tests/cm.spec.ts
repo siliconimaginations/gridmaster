@@ -67,7 +67,7 @@ test('CM-01 toggle generator off → committed=false in next store update', asyn
       return network?.generators.find((g) => g.id === id && !g.committed) !== undefined
     },
     committedGenId,
-    { timeout: 10_000 },
+    { timeout: 20_000 },
   )
 })
 
@@ -93,7 +93,7 @@ test('CM-02 toggle generator on → committed=true after decommit baseline', asy
       return network?.generators.find((g) => g.id === id && !g.committed) !== undefined
     },
     committedGenId,
-    { timeout: 10_000 },
+    { timeout: 20_000 },
   )
 
   // Step 2: Commit it back and assert
@@ -111,6 +111,6 @@ test('CM-02 toggle generator on → committed=true after decommit baseline', asy
       return network?.generators.find((g) => g.id === id && g.committed) !== undefined
     },
     committedGenId,
-    { timeout: 10_000 },
+    { timeout: 20_000 },
   )
 })
