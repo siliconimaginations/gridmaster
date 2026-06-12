@@ -142,6 +142,11 @@ export function useSessionBootstrap(): BootstrapResult {
         }
 
         if (cancelled) return
+        // Optimistically set RUNNING so the HUD reflects the clock state immediately.
+        // The first WebSocket FULL/DELTA will correct this if the actual state differs.
+        // Without this, the store stays at the initial 'STOPPED' until the backend
+        // sends its first broadcast (which may skip if nothing changed — see #162).
+        useGameStore.setState({ clockState: 'RUNNING' })
         connect(sessionId, tokenRes.token)
         setStatus('ready')
       } catch (err) {
