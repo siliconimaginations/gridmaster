@@ -12,7 +12,7 @@ jobs:
   e2e:
     name: Playwright E2E
     runs-on: ubuntu-22.04   # pin to Jammy — ubuntu-latest is now Noble (24.04) where libasound2 was renamed
-    timeout-minutes: 35     # increased from 20 — Gradle cold build takes ~10 min; give tests 15 min headroom
+    timeout-minutes: 35     # Gradle cold build ~2min (cached), Playwright install ~2min (cached), tests ~10min
 
     steps:
       - name: Checkout
@@ -42,6 +42,28 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
+
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: |
+          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
+            # Cache hit — only install system deps (fast, ~10s)
+            npx playwright install-deps chromium
+          else
+            # Cache miss — full install including browser binary (~2min)
+            npx playwright install chromium --with-deps
+          fi
+
       - name: Build backend (skip tests)
         working-directory: backend
         run: ./gradlew build -x test --no-daemon
@@ -49,7 +71,6 @@ jobs:
       - name: Start backend
         working-directory: backend
         run: |
-          # Start bootRun in background; capture PID for diagnostics if startup fails.
           ./gradlew bootRun --no-daemon > /tmp/backend.log 2>&1 &
           BACKEND_PID=$!
           echo "Backend PID: $BACKEND_PID"
@@ -62,14 +83,6 @@ jobs:
             curl -sf http://localhost:8080/actuator/health && break
             sleep 2
           done
-
-      - name: Install frontend dependencies
-        working-directory: frontend
-        run: npm ci
-
-      - name: Install Playwright browsers
-        working-directory: frontend
-        run: npx playwright install chromium --with-deps
 
       - name: Build frontend (e2e mode — includes __e2e bridge)
         working-directory: frontend
