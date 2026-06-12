@@ -14,7 +14,6 @@ import com.gridmaster.engine.powerflow.PowerFlowResult
 import com.gridmaster.engine.powerflow.SolveMode
 import com.gridmaster.game.ClockState
 import com.gridmaster.game.command.AlertSeverity
-import io.mockk.Called
 import io.mockk.clearMocks
 import io.mockk.every
 import io.mockk.mockk
@@ -48,10 +47,10 @@ class GameStatePublisherImplTest {
         publisher = GameStatePublisherImpl(messagingTemplate, sessionStore)
     }
 
-    // ── FULL on interval ──────────────────────────────────────────────────────
+    // -- FULL on interval -----------------------------------------------------
 
     @Test
-    fun `publishTick sends FULL on tick 30`() {
+    fun publishTick_sendsFull_onTick30() {
         val destSlot = slot<String>()
         val payloadSlot = slot<Any>()
         every { messagingTemplate.convertAndSend(capture(destSlot), capture(payloadSlot)) } returns Unit
@@ -67,11 +66,17 @@ class GameStatePublisherImplTest {
     }
 
     @Test
-    fun `publishTick suppresses broadcast when nothing changed between ticks`() {
+    fun publishTick_alwaysSendsDelta_evenWhenNetworkUnchanged() {
+        // Tick 30 (FULL) establishes baseline hashes.
         tick30()
         clearMocks(messagingTemplate, answers = false, recordedCalls = true)
 
-        // Tick 31 — identical state → no broadcast
+        val payloadSlot = slot<Any>()
+        every { messagingTemplate.convertAndSend(any<String>(), capture(payloadSlot)) } returns Unit
+
+        // Tick 31: identical network/violations/cards but tickNumber always increments.
+        // The publisher must always broadcast so the frontend tick counter advances.
+        // (Suppressing when only clock fields change caused GC-01 to fail — fixed in #164.)
         publisher.publishTick(
             sessionId = sessionId,
             tickNumber = 31L,
@@ -83,13 +88,20 @@ class GameStatePublisherImplTest {
             pendingCards = emptyList(),
         )
 
-        verify { messagingTemplate wasNot Called }
+        val update = payloadSlot.captured as GameStateUpdate
+        assertThat(update.type).isEqualTo(UpdateType.DELTA)
+        assertThat(update.tickNumber).isEqualTo(31L)
+        // Unchanged fields are omitted from the DELTA to keep bandwidth low
+        assertThat(update.network).isNull()
+        assertThat(update.violations).isNull()
+        assertThat(update.pendingEventCards).isNull()
+        assertThat(update.alerts).isNull()
     }
 
-    // ── New alerts always broadcast ───────────────────────────────────────────
+    // -- New alerts always broadcast ------------------------------------------
 
     @Test
-    fun `publishTick sends DELTA with alert even when network unchanged`() {
+    fun publishTick_sendsDeltaWithAlert_evenWhenNetworkUnchanged() {
         tick30()
         clearMocks(messagingTemplate, answers = false, recordedCalls = true)
 
@@ -121,10 +133,10 @@ class GameStatePublisherImplTest {
         assertThat(update.alerts!![0].elementId).isEqualTo("l1")
     }
 
-    // ── publishFull ───────────────────────────────────────────────────────────
+    // -- publishFull ----------------------------------------------------------
 
     @Test
-    fun `publishFull sends FULL update to session topic`() {
+    fun publishFull_sendsFull_toSessionTopic() {
         val payloads = mutableListOf<Any>()
         every { messagingTemplate.convertAndSend(any<String>(), capture(payloads)) } returns Unit
 
@@ -137,7 +149,7 @@ class GameStatePublisherImplTest {
     }
 
     @Test
-    fun `publishFull with missedTicks sends ConnectionStatus before state update`() {
+    fun publishFull_withMissedTicks_sendsConnectionStatusFirst() {
         val payloads = mutableListOf<Any>()
         every { messagingTemplate.convertAndSend(any<String>(), capture(payloads)) } returns Unit
 
@@ -159,15 +171,15 @@ class GameStatePublisherImplTest {
         assertThat(status.missedTicks).isEqualTo(3L)
     }
 
-    // ── clearSession ──────────────────────────────────────────────────────────
+    // -- clearSession ---------------------------------------------------------
 
     @Test
-    fun `clearSession resets delta state so next tick broadcasts again`() {
+    fun clearSession_resetsDeltaState_soNextTickBroadcasts() {
         tick30()
         publisher.clearSession(sessionId)
         clearMocks(messagingTemplate, answers = false, recordedCalls = true)
 
-        // State hash reset to 0 → non-zero network hash → delta fires
+        // State hash reset to 0 so next delta always fires
         publisher.publishTick(
             sessionId = sessionId,
             tickNumber = 31L,
@@ -182,10 +194,10 @@ class GameStatePublisherImplTest {
         verify(atLeast = 1) { messagingTemplate.convertAndSend(any<String>(), any<Any>()) }
     }
 
-    // ── Destination ───────────────────────────────────────────────────────────
+    // -- Destination ----------------------------------------------------------
 
     @Test
-    fun `FULL update broadcast to correct STOMP destination`() {
+    fun fullUpdate_broadcastsToCorrect_stompDestination() {
         val destSlot = slot<String>()
         every { messagingTemplate.convertAndSend(capture(destSlot), any<Any>()) } returns Unit
 
@@ -194,7 +206,7 @@ class GameStatePublisherImplTest {
         assertThat(destSlot.captured).isEqualTo("/topic/session/$sessionId/state")
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    // -- Helpers --------------------------------------------------------------
 
     private fun tick30() =
         publisher.publishTick(
