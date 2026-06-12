@@ -39,9 +39,9 @@ import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.post
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch
+import java.time.Instant
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath as jJsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status as jStatus
-import java.time.Instant
 
 private const val SESSION_ID = "test-session-1"
 private val BASE = "/api/sessions/$SESSION_ID"
