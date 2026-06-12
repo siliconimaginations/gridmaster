@@ -119,22 +119,22 @@ export const useGameStore = create<GameStore>()(subscribeWithSelector((set, get)
         pendingEventCards: update.pendingEventCards ?? [],
       })
     } else {
-      // DELTA: merge only the fields present in the update.
-      // Use ?? undefined so backend nulls are treated as "absent" and don't
-      // overwrite existing store arrays with null.
-      // TODO: #101 separate always-present clock fields from optional network/alert fields
-      const delta = definedFields({
+      // DELTA: clock fields are always present — set them unconditionally.
+      // Network/alert fields are optional — only merge when present. Closes #101.
+      const clockUpdate = {
         tickNumber: update.tickNumber,
         gameTimeMinutes: update.gameTimeMinutes,
         clockState: update.clockState,
         clockSpeedMultiplier: update.clockSpeedMultiplier,
+      }
+      const optionalUpdate = definedFields<GameStore>({
         network: update.network ?? undefined,
         powerFlowStatus: update.powerFlowStatus ?? undefined,
         violations: update.violations ?? undefined,
         alerts: update.alerts ?? undefined,
         pendingEventCards: update.pendingEventCards ?? undefined,
       })
-      set(delta)
+      set({ ...clockUpdate, ...optionalUpdate })
     }
   },
 

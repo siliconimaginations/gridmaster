@@ -172,7 +172,7 @@ describe('useGameStore — sendCommandOptimistic', () => {
   it('warns when no session is active', () => {
     useGameStore.setState({ sessionId: null })
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    useGameStore.getState().sendCommandOptimistic({ commandType: 'CommitGenerator', payload: {} })
+    useGameStore.getState().sendCommandOptimistic({ commandType: 'CommitGenerator', payload: { generatorId: 'gen1' } })
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('sendCommandOptimistic called without'))
     warn.mockRestore()
   })
@@ -197,7 +197,7 @@ describe('useGameStore — sendCommandOptimistic', () => {
     useGameStore.getState().connect('sess1', 'token')
     useGameStore.setState({ network: makeNetwork() })
 
-    const msg = { commandType: 'CommitGenerator', payload: { generatorId: 'gen1' } }
+    const msg = { commandType: 'CommitGenerator', payload: { generatorId: 'gen1' } } as const
     useGameStore.getState().sendCommandOptimistic(msg)
 
     expect(mockSend).toHaveBeenCalledWith(msg)
