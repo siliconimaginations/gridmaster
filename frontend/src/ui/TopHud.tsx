@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { useGameStore } from '../state/useGameStore'
 import { useShallow } from 'zustand/react/shallow'
 import { formatGameTime, gridHealthStatus, totalLoadMw } from './hud'
@@ -23,8 +24,8 @@ export function TopHud() {
     violations: s.violations,
   })))
 
-  // TODO: #115 consider useMemo for gridHealthStatus + totalLoadMw if profiling shows TopHud hot
-  const health = gridHealthStatus(violations)
+  const health = useMemo(() => gridHealthStatus(violations), [violations])
+  const displayedLoad = useMemo(() => totalLoadMw(network), [network])
 
   const severityClass: Record<HealthSeverity, string> = {
     ok: styles.severityOk,
@@ -45,7 +46,7 @@ export function TopHud() {
       {/* Load */}
       <div className={styles.pill} data-testid="pill-load">
         <span className={styles.label}>Load</span>
-        <span data-testid="hud-total-load">{totalLoadMw(network)}</span>
+        <span data-testid="hud-total-load">{displayedLoad}</span>
       </div>
 
       {/* Price — deferred until backend sends systemMarginalPrice */}

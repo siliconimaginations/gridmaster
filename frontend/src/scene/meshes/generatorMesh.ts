@@ -7,7 +7,7 @@
  * @see docs/engineering/14-scene-meshes.md §Generator mesh
  */
 
-import { Color3, MeshBuilder, Scene, Vector3 } from '@babylonjs/core'
+import { Color3, MeshBuilder, Scene, StandardMaterial, Vector3 } from '@babylonjs/core'
 import { createToonMaterial } from '../materials/ToonMaterial'
 import type { GeneratorDto, ViolationDto } from '../../api/types'
 
@@ -53,7 +53,6 @@ export function createGeneratorMesh(scene: Scene, position: Vector3, dto: Genera
 /** Updates only the status ring colour without recreating the mesh. */
 export function updateGeneratorStatus(ring: ReturnType<typeof createGeneratorMesh>['ring'], status: GeneratorStatus): void {
   if (ring.material) {
-    // TODO: #125 use StandardMaterial cast
-    (ring.material as ReturnType<typeof createToonMaterial>).diffuseColor = STATUS[status]
+    (ring.material as StandardMaterial).diffuseColor = STATUS[status]
   }
 }
