@@ -34,8 +34,9 @@ test.beforeAll(async ({ request }) => {
   const networkRes = await request.get(`/api/sessions/${id}/network`, {
     headers: { Authorization: `Bearer ${token}` },
   })
-  const network = await networkRes.json() as { generators: Array<{ id: string; committed: boolean }> }
-  committedGenId = network.generators.find((g) => g.committed)?.id ?? ''
+  // GET /network returns GridNetwork domain model with `connected` (not `committed`)
+  const network = await networkRes.json() as { generators: Array<{ id: string; connected: boolean }> }
+  committedGenId = network.generators.find((g) => g.connected)?.id ?? ''
 
   // Clean up discovery session
   await request.delete(`/api/sessions/${id}`, { headers: { Authorization: `Bearer ${token}` } })
