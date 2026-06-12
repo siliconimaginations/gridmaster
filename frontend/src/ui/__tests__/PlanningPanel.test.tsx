@@ -20,6 +20,7 @@ vi.mock('../../state/useGameStore', () => {
   return { useGameStore }
 })
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const { useGameStore } = await import('../../state/useGameStore') as any
 
 function setStoreState(violations: ViolationDto[] | null = null) {
