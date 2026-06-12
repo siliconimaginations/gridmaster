@@ -15,4 +15,3 @@ class PhysicsServiceException(
     message: String,
     cause: Throwable? = null,
 ) : RuntimeException(message, cause)
-
