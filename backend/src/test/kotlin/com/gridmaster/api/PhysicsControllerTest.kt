@@ -38,6 +38,7 @@ import org.springframework.security.test.context.support.WithMockUser
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.post
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch
 import java.time.Instant
 
 private const val SESSION_ID = "test-session-1"
@@ -237,11 +238,11 @@ class PhysicsControllerTest {
         val result = minimalPowerFlowResult()
         every { powerFlowService.solve(any(), any()) } returns result
 
-        mvc.post("$BASE/powerflow/run")
-            .andExpect {
-                status { isOk() }
-                jsonPath("$.status") { value("CONVERGED") }
-            }
+        val pfResult = mvc.post("$BASE/powerflow/run").andReturn()
+        mvc.perform(asyncDispatch(pfResult)).andExpect {
+            status { isOk() }
+            jsonPath("$.status") { value("CONVERGED") }
+        }
 
         verify { powerFlowService.solve(any(), PowerFlowParameters()) }
         assert(mockSession.latestPowerFlowResult == result)
@@ -280,8 +281,8 @@ class PhysicsControllerTest {
     fun `POST contingencies trigger returns 202`() {
         every { contingencyService.triggerAsync(any(), any()) } returns Unit
 
-        mvc.post("$BASE/contingencies/trigger")
-            .andExpect { status { isAccepted() } }
+        val ctgResult = mvc.post("$BASE/contingencies/trigger").andReturn()
+        mvc.perform(asyncDispatch(ctgResult)).andExpect { status { isAccepted() } }
 
         verify { contingencyService.triggerAsync(any(), any()) }
     }
@@ -296,10 +297,11 @@ class PhysicsControllerTest {
         every { dispatchService.economicDispatch(any(), any(), any()) } returns result
 
         val body = """{"totalLoadMw":180.0,"mode":"MERIT_ORDER"}"""
-        mvc.post("$BASE/dispatch") {
+        val dspResult = mvc.post("$BASE/dispatch") {
             contentType = MediaType.APPLICATION_JSON
             content = body
-        }.andExpect {
+        }.andReturn()
+        mvc.perform(asyncDispatch(dspResult)).andExpect {
             status { isOk() }
             jsonPath("$.totalLoadMw") { value(180.0) }
         }
@@ -310,10 +312,11 @@ class PhysicsControllerTest {
     @Test
     fun `POST dispatch returns 400 for unknown mode`() {
         val body = """{"totalLoadMw":100.0,"mode":"UNKNOWN_MODE"}"""
-        mvc.post("$BASE/dispatch") {
+        val badModeResult = mvc.post("$BASE/dispatch") {
             contentType = MediaType.APPLICATION_JSON
             content = body
-        }.andExpect { status { isBadRequest() } }
+        }.andReturn()
+        mvc.perform(asyncDispatch(badModeResult)).andExpect { status { isBadRequest() } }
     }
 
     // -----------------------------------------------------------------------
@@ -337,10 +340,11 @@ class PhysicsControllerTest {
         val forecast = (1..24).map { 100.0 + it }
         val body = om.writeValueAsString(mapOf("hourlyForecastMw" to forecast))
 
-        mvc.post("$BASE/unitcommitment") {
+        val ucMvcResult = mvc.post("$BASE/unitcommitment") {
             contentType = MediaType.APPLICATION_JSON
             content = body
-        }.andExpect {
+        }.andReturn()
+        mvc.perform(asyncDispatch(ucMvcResult)).andExpect {
             status { isOk() }
             jsonPath("$.feasible") { value(true) }
         }
@@ -438,3 +442,4 @@ class PhysicsControllerTest {
         @Bean fun jwtService() = mockk<JwtService>(relaxed = true)
     }
 }
+
