@@ -1,0 +1,355 @@
+/* DispatchPanel — slide-up HUD overlay
+ * Matches the dark glass style from InspectorPanel.module.css
+ * @see docs/ux/06-dispatch-panel.md
+ */
+
+/* ── Overlay ─────────────────────────────────────────────────────────────── */
+
+.overlay {
+  position: fixed;
+  bottom: 56px; /* sits above BottomHud bar height */
+  left: 0;
+  right: 0;
+  height: 40vh;
+  min-height: 240px;
+  max-height: 480px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  background: rgba(10, 14, 20, 0.88);
+  backdrop-filter: blur(8px);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  color: #e2e8f0;
+  font-size: 13px;
+  animation: slideUp 180ms ease-out both;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+/* ── Header ──────────────────────────────────────────────────────────────── */
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  flex-shrink: 0;
+}
+
+.title {
+  font-weight: 600;
+  font-size: 13px;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+
+/* ── Tabs ────────────────────────────────────────────────────────────────── */
+
+.tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.tab {
+  padding: 4px 12px;
+  border-radius: 4px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 12px;
+  transition: color 120ms, background 120ms, border-color 120ms;
+}
+
+.tab:hover {
+  color: #cbd5e1;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.tabActive {
+  color: #e2e8f0;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.closeBtn {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: #64748b;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1;
+  transition: color 120ms;
+}
+
+.closeBtn:hover {
+  color: #e2e8f0;
+}
+
+/* ── Tab content (shared) ────────────────────────────────────────────────── */
+
+.tabContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Merit order table ───────────────────────────────────────────────────── */
+
+.tableHeader,
+.genRow {
+  display: grid;
+  grid-template-columns: 28px 1fr 28px 90px 1fr 80px 52px;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 14px;
+}
+
+.tableHeader {
+  color: #475569;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.genList {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.genRow {
+  cursor: pointer;
+  transition: background 100ms;
+}
+
+.genRow:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.genRowDecommitted {
+  opacity: 0.45;
+}
+
+.rank {
+  color: #475569;
+  font-size: 11px;
+  text-align: right;
+}
+
+.genName {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.genFuel {
+  text-align: center;
+}
+
+.genCost {
+  color: #94a3b8;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.outputCell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.outputBar {
+  flex: 1;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.outputFill {
+  height: 100%;
+  background: #22d3ee;
+  border-radius: 3px;
+  transition: width 300ms ease;
+}
+
+.outputMw {
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  color: #94a3b8;
+  width: 52px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.headroom {
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  color: #475569;
+  text-align: right;
+}
+
+/* Commit / decommit button */
+.commitBtn {
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: opacity 120ms;
+}
+
+.commitBtnOn {
+  background: rgba(34, 197, 94, 0.15);
+  border-color: rgba(34, 197, 94, 0.4);
+  color: #4ade80;
+}
+
+.commitBtnOff {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.35);
+  color: #f87171;
+}
+
+/* Inline output slider */
+.sliderRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 14px 8px calc(14px + 36px); /* indent past rank column */
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.sliderLabel {
+  font-size: 11px;
+  color: #64748b;
+  flex-shrink: 0;
+}
+
+.slider {
+  flex: 1;
+  accent-color: #22d3ee;
+}
+
+.sliderMax {
+  font-size: 11px;
+  color: #64748b;
+  flex-shrink: 0;
+}
+
+/* Total footer row */
+.totalRow {
+  padding: 6px 14px;
+  font-size: 12px;
+  color: #64748b;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  flex-shrink: 0;
+}
+
+/* ── UC schedule grid ────────────────────────────────────────────────────── */
+
+.ucGrid {
+  flex: 1;
+  overflow: auto;
+  padding: 4px 8px;
+}
+
+.ucRow {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-bottom: 2px;
+}
+
+.ucGenLabel {
+  width: 110px;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: #94a3b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 4px;
+}
+
+.ucHourHeader {
+  width: 22px;
+  flex-shrink: 0;
+  text-align: center;
+  font-size: 10px;
+  color: #475569;
+}
+
+.ucCell {
+  width: 22px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+  transition: background 80ms;
+}
+
+.ucCell:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.ucCellOn {
+  background: rgba(34, 197, 94, 0.35);
+}
+
+.ucCellOn:hover {
+  background: rgba(34, 197, 94, 0.5);
+}
+
+.ucActions {
+  display: flex;
+  gap: 8px;
+  padding: 8px 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  flex-shrink: 0;
+}
+
+.autoFillBtn,
+.confirmBtn {
+  padding: 5px 14px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: opacity 120ms;
+}
+
+.autoFillBtn {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #cbd5e1;
+}
+
+.autoFillBtn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.confirmBtn {
+  background: rgba(34, 211, 238, 0.15);
+  border-color: rgba(34, 211, 238, 0.4);
+  color: #22d3ee;
+}
+
+.confirmBtn:hover {
+  background: rgba(34, 211, 238, 0.25);
+}

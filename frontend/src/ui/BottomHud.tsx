@@ -1,8 +1,13 @@
 import { useGameStore } from '../state/useGameStore'
 import { useShallow } from 'zustand/react/shallow'
-import { calculateTotalLoadMw, SPEED_STEPS } from './hud'
+import { SPEED_STEPS } from './hud'
 import type { SpeedStep } from './hud'
 import styles from './BottomHud.module.css'
+
+interface BottomHudProps {
+  /** Called when the player clicks "Run Dispatch" — opens the DispatchPanel. */
+  onOpenDispatch?: () => void
+}
 
 /**
  * Bottom HUD — clock controls (left) and contextual action buttons (right).
@@ -12,8 +17,8 @@ import styles from './BottomHud.module.css'
  * - Speed selector (1×, 10×, 60×, 100×): dispatches SetClockSpeed command
  *
  * Contextual action buttons:
- * - "Run Dispatch" — always shown
- * - "Plan Day" — always shown
+ * - "Run Dispatch" — opens DispatchPanel (#88)
+ * - "Plan Day" — always shown (opens planning panel #89 when implemented)
  * - Event button — shown when pendingEventCards.length > 0 (first card)
  * - Overflow "…" button — shown when > 4 actions present (max 4 visible)
  *
@@ -21,7 +26,7 @@ import styles from './BottomHud.module.css'
  *
  * @see docs/engineering/13-hud.md
  */
-export function BottomHud() {
+export function BottomHud({ onOpenDispatch }: BottomHudProps) {
   const { clockState, clockSpeedMultiplier, sessionId, network, pendingEventCards, sendCommandOptimistic } =
     useGameStore(useShallow((s) => ({
       clockState: s.clockState,
@@ -52,9 +57,7 @@ export function BottomHud() {
   }
 
   function handleDispatch() {
-    // TODO: open dispatch panel (#88) — for now triggers dispatch command directly
-    const totalLoadMw = calculateTotalLoadMw(network)
-    sendCommandOptimistic({ commandType: 'RunEconomicDispatch', payload: { totalLoadMw } })
+    onOpenDispatch?.()
   }
 
   const firstEvent = pendingEventCards[0]

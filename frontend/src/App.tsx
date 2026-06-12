@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { shallow } from 'zustand/shallow'
 import { SceneManager } from './scene/SceneManager'
 import { useGameStore } from './state/useGameStore'
@@ -8,7 +8,7 @@ import { BootstrapOverlay } from './ui/BootstrapOverlay'
 import { useSessionBootstrap } from './state/sessionBootstrap'
 import { AlertToastContainer } from './ui/AlertToast'
 import { InspectorPanel } from './ui/InspectorPanel'
-import { EventCardPanel } from './ui/EventCardPanel'
+import { DispatchPanel } from './ui/DispatchPanel'
 
 /**
  * Root component. Renders a full-screen Babylon.js canvas with React HUD
@@ -36,6 +36,7 @@ import { EventCardPanel } from './ui/EventCardPanel'
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const { status: bootstrapStatus, error: bootstrapError, retry: retryBootstrap } = useSessionBootstrap()
+  const [dispatchPanelOpen, setDispatchPanelOpen] = useState(false)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -83,10 +84,10 @@ export default function App() {
         style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}
       >
         <TopHud />
-        <BottomHud />
+        <BottomHud onOpenDispatch={() => setDispatchPanelOpen(true)} />
         <AlertToastContainer />
         <InspectorPanel />
-        <EventCardPanel />
+        <DispatchPanel open={dispatchPanelOpen} onClose={() => setDispatchPanelOpen(false)} />
       </div>
       <BootstrapOverlay status={bootstrapStatus} error={bootstrapError} onRetry={retryBootstrap} />
     </div>
