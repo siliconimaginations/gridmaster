@@ -33,9 +33,9 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
-import java.time.Instant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.time.Instant
 
 /**
  * REST API for physics operations scoped to a game session.
@@ -426,4 +426,3 @@ private fun GridNetwork.toDispatchableGenerators(): List<DispatchableGenerator> 
             marginalCostPerMwh = g.marginalCostPerMwh,
         )
     }
-
