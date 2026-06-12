@@ -56,7 +56,7 @@ pass before stage milestone), or `P2` (good-to-have).
 
 | ID | Scenario | Priority |
 |----|----------|----------|
-| GC-01 | Clock advances at 1× speed; tick counter increments in the HUD once HUD is implemented | P1 |
+| GC-01 | Clock advances at 1× speed; tick counter increments in the Top HUD | P1 |
 | GC-02 | Pause command halts tick stream; resume restarts it | P1 |
 | GC-03 | Speed change (1×→4×) causes the tick interval to shrink proportionally | P2 |
 
@@ -87,8 +87,8 @@ pass before stage milestone), or `P2` (good-to-have).
 
 | ID | Scenario | Priority |
 |----|----------|----------|
-| HUD-01 | Top HUD shows clock, load, price, health values (non-zero after first tick) | P1 |
-| HUD-02 | Dispatch panel renders merit-order table with ≥ 1 row | P2 |
+| HUD-01 | Top HUD shows clock, load, price, health values (non-zero after first tick) — ✅ implemented | P1 |
+| HUD-02 | Dispatch panel renders merit-order table with ≥ 1 row — ✅ implemented (PR #155) | P2 |
 | HUD-03 | Alert toast appears when a P0 event fires | P2 |
 
 ---
@@ -99,7 +99,7 @@ pass before stage milestone), or `P2` (good-to-have).
 
 Playwright is the E2E framework.  Key reasons:
 - First-class TypeScript support — consistent with the frontend toolchain
-- Headless Chromium runs cleanly in GitHub Actions `ubuntu-latest`
+- Headless Chromium runs cleanly in GitHub Actions `ubuntu-22.04`
 - `page.waitForSelector` and network-idle waits handle Babylon.js canvas boot
 - Built-in WebSocket traffic inspection via `page.on('websocket', …)`
 
