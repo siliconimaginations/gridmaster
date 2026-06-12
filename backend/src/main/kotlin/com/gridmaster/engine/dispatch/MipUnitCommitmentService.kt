@@ -5,7 +5,6 @@ import com.google.ortools.linearsolver.MPVariable
 import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Primary
 import org.springframework.stereotype.Service
-import kotlin.system.measureTimeMillis
 
 /**
  * MIP unit commitment using OR-Tools SCIP.
@@ -88,10 +87,7 @@ class MipUnitCommitmentService(
 
         log.info("MipUC: solving {}-generator 24-hour UC via SCIP", g)
 
-        var solveTimeMs = 0L
-        lateinit var result: UcResult // TODO: #91 refactor to result-returning measureTimeMillis block
-
-        measureTimeMillis {
+        val (result, solveDuration) = kotlin.time.measureTimedValue {
             val solver =
                 MPSolver.createSolver("SCIP")
                     ?: run {
@@ -184,8 +180,7 @@ class MipUnitCommitmentService(
                     }
 
                     // ── Min down time ─────────────────────────────────────────
-                    // TODO: #92 align comment with KDoc formulation
-                    // Constraint: D * (1 + y[hi] - y[hi-1]) >= Σ_{t=hi}^{endH} y[t]
+                    // Enforces: Σ_{t=hi}^{endH} (1−y[t]) ≥ minDown * (y[hi-1]−y[hi])
                     // For hi=0 the initial committed state substitutes for y[hi-1].
                     if (gen.minDownTimeHours > 1) {
                         val endH = minOf(hi + gen.minDownTimeHours - 1, h - 1)
@@ -215,7 +210,7 @@ class MipUnitCommitmentService(
 
             if (!feasible) {
                 log.warn("MipUC: SCIP returned {} — falling back to greedy", status)
-                result = greedy.commit(generators, forecast, parameters)
+                greedy.commit(generators, forecast, parameters)
             } else {
                 // ── Extract solution ──────────────────────────────────────────────
                 val hourlySchedule = mutableListOf<UcHourSchedule>()
@@ -254,17 +249,16 @@ class MipUnitCommitmentService(
                         )
                 }
 
-                result =
-                    UcResult(
-                        hourlySchedule = hourlySchedule,
-                        totalStartupCostGbp = totalStartupCost,
-                        totalOperatingCostGbp = totalOperatingCost,
-                        feasible = true,
-                        solveTimeMs = 0, // patched below
-                    )
+                UcResult(
+                    hourlySchedule = hourlySchedule,
+                    totalStartupCostGbp = totalStartupCost,
+                    totalOperatingCostGbp = totalOperatingCost,
+                    feasible = true,
+                    solveTimeMs = 0,
+                )
             } // end if feasible
-        }.also { solveTimeMs = it }
+        }
 
-        return result.copy(solveTimeMs = solveTimeMs)
+        return result.copy(solveTimeMs = solveDuration.inWholeMilliseconds)
     }
 }
