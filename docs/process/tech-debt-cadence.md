@@ -143,35 +143,21 @@ If there are too many tech debt issues:
 
 The board lives at `https://github.com/users/siliconimaginations/projects/` (or org-level if the repo moves to an org).
 
-### Columns
+### Fields
 
-| Column | Definition |
-|--------|-----------|
-| **Backlog** | All triaged issues not yet scheduled |
-| **This Sprint** | P1 issues + selected P2s for the current sprint |
-| **In Progress** | Issues with an open PR or active branch |
-| **In Review** | PR open, CI running or awaiting Gemini/Rick review |
-| **Done** | Merged and closed |
+The board uses two single-select fields on each item, not separate named columns:
 
-### Automation rules (set in Projects → Manage → Workflows)
+| Field | Options |
+|-------|---------|
+| **Status** | Todo / In Progress / Done |
+| **Priority** | P1 — This Sprint / P2 — Next Sprint / P3 — Backlog |
 
-| Trigger | Action |
-|---------|--------|
-| Issue opened | Add to **Backlog** |
-| PR opened | Move linked issue to **In Review** |
-| PR merged | Move linked issue to **Done** and close it |
-| Issue closed without PR | Move to **Done** |
+Sprint membership is controlled by the **Priority** field. The board is viewed as a standard table grouped by Priority.
 
-### Initial setup (one-time, requires `project` scope on PAT)
+### Board management
 
-The `nagasawa94` PAT currently has `repo` + `workflow` scopes but not `project`.
-Until the scope is added, please set up the board manually:
+Board mutations require the `project` OAuth scope. The `nagasawa94` PAT has `repo` + `workflow` only; all board mutations use Rick's PAT (`siliconimaginations`) via the GitHub Projects v2 GraphQL API.
 
-1. Go to `https://github.com/users/siliconimaginations/projects/new`.
-2. Select "Board" layout.
-3. Name it **GridMaster Backlog**.
-4. Add the columns above.
-5. Enable the automation rules above.
-6. Bulk-add all open issues from `siliconimaginations/gridmaster`.
-
-Once the `project` scope is added to the PAT, Claude can manage the board programmatically.
+Key GraphQL IDs (project `PVT_kwHOEN2YFM4BZ3uF`):
+- Status field: `PVTSSF_lAHOEN2YFM4BZ3uFzhUzY48` (Todo option: `f75ad846`)
+- Priority field: `PVTSSF_lAHOEN2YFM4BZ3uFzhUzb7k` (P1: `68d86744`, P2: `58963618`, P3: `16ff7f25`)
