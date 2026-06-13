@@ -34,7 +34,7 @@ This doc covers three things the process doc left open:
 - `data-testid` attributes on HUD elements and the bootstrap overlay
 - `window.__e2e` store bridge (dev/test builds only)
 - `.github/workflows/e2e.yml` — the CI workflow
-- P0 + selected P1 scenarios: SL-01 through SL-04, GC-01, GC-02, CM-01, CM-02
+- P0 + selected P1 scenarios: SL-01 through SL-04, GC-01, GC-02, CM-01, CM-02, CM-03
 - Local dev instructions
 
 **Out of scope**
@@ -105,7 +105,7 @@ frontend/
     tests/
       sl.spec.ts      ← SL-01 … SL-04 (Session Lifecycle)
       gc.spec.ts      ← GC-01, GC-02 (Game Clock)
-      cm.spec.ts      ← CM-01, CM-02 (Command / Network Mutation)
+      cm.spec.ts      ← CM-01, CM-02, CM-03 (Command / Network Mutation)
   playwright.config.ts
 ```
 
@@ -447,6 +447,52 @@ test('CM-02 toggle generator on → committed=true in next update', async ({ pag
   )
 })
 
+### CM-03 — Set generator active power output
+
+```ts
+/**
+ * Sends SetGeneratorOutput targeting 50% of the generator's max rating (safe
+ * across all ieee14 generators). Waits for `activePowerMw` in the next
+ * GameStateUpdate to be within 1 MW of the requested value.
+ *
+ * The ±1 MW tolerance accounts for floating-point rounding in the PowSyBl AC
+ * power flow solve — the setpoint is applied as-requested but the solved
+ * output reflects the power-balance solution.
+ */
+test('CM-03 SetGeneratorOutput → activePowerMw reflects new setpoint', async ({ page }) => {
+  await page.goto('/')
+  await page.waitForSelector('[data-testid="bootstrap-overlay"]', { state: 'hidden', timeout: 15_000 })
+
+  // Wait for at least one tick so the network state is populated in the store.
+  await page.waitForFunction(
+    () => (window as any).__e2e?.getStore().tickNumber > 0,
+    { timeout: 15_000 },
+  )
+
+  const targetMw = Math.round(committedGenMaxMw * 0.5) // 50% of max — stays within min/max
+
+  await page.evaluate(([id, mw]) => {
+    (window as any).__e2e.getStore()
+      .sendCommand({ commandType: 'SetGeneratorOutput', payload: { generatorId: id, targetMw: mw } })
+  }, [committedGenId, targetMw] as [string, number])
+
+  // Wait for the broadcast GameStateUpdate to reflect the new setpoint
+  await page.waitForFunction(
+    ([id, mw]) => {
+      const { network } = (window as any).__e2e.getStore()
+      const gen = network?.generators.find((g: any) => g.id === id)
+      return gen !== undefined && Math.abs(gen.activePowerMw - (mw as number)) < 1.0
+    },
+    [committedGenId, targetMw] as [string, number],
+    { timeout: 20_000 },
+  )
+})
+```
+
+`committedGenMaxMw` is discovered alongside `committedGenId` in the shared `beforeAll`
+block — the REST discovery call already reads `maxActivePowerMw` from the network response.
+
+
 ---
 
 ## Playwright Config
@@ -696,3 +742,4 @@ scenario.
 | 2 | SL-04 (page reload reconnects): needs a reliable way to assert reconnect vs fresh-connect — use `missedTicks > 0` from the RECONNECTED status? | Claude | implementation PR |
 | 3 | Should the E2E job post a comment on the triggering commit/PR with a pass/fail summary? | Rick | Stage 5 |
 | 4 | Add `e2e-failure` auto-issue creation (referenced in `e2e-qa-workflow.md §CI Failure Handling`) now or in Stage 7? | Rick | Stage 5 planning |
+
