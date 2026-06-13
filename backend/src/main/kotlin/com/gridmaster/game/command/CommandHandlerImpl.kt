@@ -17,9 +17,9 @@ import com.gridmaster.engine.powerflow.PowerFlowResult
 import com.gridmaster.engine.powerflow.PowerFlowService
 import com.gridmaster.game.TickEngine
 import com.gridmaster.game.event.EventEngine
+import com.powsybl.iidm.network.VariantManagerConstants
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
-import com.powsybl.iidm.network.VariantManagerConstants
 
 /**
  * Default [CommandHandler] implementation.
@@ -186,13 +186,17 @@ class CommandHandlerImpl(
             // cloneVariant is cheaper than an XML round-trip: it copies in-memory field data.
             val rollbackId = "rollback-${System.nanoTime()}"
             network.variantManager.cloneVariant(
-                VariantManagerConstants.INITIAL_VARIANT_ID, rollbackId, false,
+                VariantManagerConstants.INITIAL_VARIANT_ID,
+                rollbackId,
+                false,
             )
 
             fun rollback() {
                 runCatching {
                     network.variantManager.cloneVariant(
-                        rollbackId, VariantManagerConstants.INITIAL_VARIANT_ID, true,
+                        rollbackId,
+                        VariantManagerConstants.INITIAL_VARIANT_ID,
+                        true,
                     )
                 }.onFailure {
                     log.warn("CommandHandler: rollback variant restore failed for session {}: {}", sessionId, it.message)
@@ -695,4 +699,3 @@ private fun GridNetwork.toDispatchableGenerators() =
             marginalCostPerMwh = g.marginalCostPerMwh,
         )
     }
-
