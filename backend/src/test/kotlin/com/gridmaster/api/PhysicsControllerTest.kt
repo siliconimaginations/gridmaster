@@ -444,4 +444,3 @@ class PhysicsControllerTest {
         @Bean fun jwtService() = mockk<JwtService>(relaxed = true)
     }
 }
-
