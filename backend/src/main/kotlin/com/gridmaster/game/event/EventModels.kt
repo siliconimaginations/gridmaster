@@ -19,6 +19,8 @@ sealed class GameEvent {
     abstract val category: EventCategory
     abstract val description: String
     abstract val severity: EventSeverity
+    /** Direct effects produced when this event fires. PolicyEvent always returns an empty list; card option effects are applied on resolution. */
+    abstract val effects: List<EventEffect>
 }
 
 enum class EventCategory { WEATHER, ECONOMIC, POLICY, FUEL }
@@ -36,7 +38,7 @@ data class WeatherEvent(
     /** Null or empty = system-wide; non-empty = only these regions are affected. */
     val affectedRegionIds: List<String>?,
     val durationMinutes: Int,
-    val effects: List<EventEffect>,
+    override val effects: List<EventEffect>,
 ) : GameEvent()
 
 enum class WeatherEventType {
@@ -54,9 +56,8 @@ data class EconomicEvent(
     override val description: String,
     override val severity: EventSeverity,
     val type: EconomicEventType,
-    /** Null = no load change; 1.15 = 15% demand increase. */
-    val loadScaleFactor: Double?,
     val durationMinutes: Int,
+    override val effects: List<EventEffect>,
 ) : GameEvent()
 
 enum class EconomicEventType {
@@ -76,6 +77,8 @@ data class PolicyEvent(
     override val severity: EventSeverity,
     /** The decision card the player must respond to. */
     val card: EventCard,
+    /** Always empty — effects come from [CardOption.effects] resolved via [EventEngine.resolveCard]. */
+    override val effects: List<EventEffect> = emptyList(),
 ) : GameEvent()
 
 // ── Fuel ─────────────────────────────────────────────────────────────────────
@@ -86,10 +89,10 @@ data class FuelEvent(
     override val description: String,
     override val severity: EventSeverity,
     val type: FuelEventType,
+    /** Informational — the fuel type targeted by this event. The actual effect is encoded in [effects]. */
     val affectedFuelType: FuelType,
-    /** Multiplier applied to marginalCostPerMwh for the affected fuel type. */
-    val costMultiplier: Double,
     val durationMinutes: Int,
+    override val effects: List<EventEffect>,
 ) : GameEvent()
 
 enum class FuelEventType { PRICE_SPIKE, SUPPLY_DISRUPTION, PRICE_COLLAPSE }
