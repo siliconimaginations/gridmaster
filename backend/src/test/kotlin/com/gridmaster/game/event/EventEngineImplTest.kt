@@ -236,8 +236,8 @@ class EventEngineImplTest {
                 description = "Holiday demand drop",
                 severity = EventSeverity.INFO,
                 type = EconomicEventType.HOLIDAY,
-                loadScaleFactor = 0.85,
                 durationMinutes = 1440,
+                effects = listOf(EventEffect.ScaleLoad(regionIds = null, factor = 0.85)),
             )
         engine.schedule(sessionId, event, atGameTimeMinutes = 100)
 
@@ -284,8 +284,8 @@ class EventEngineImplTest {
                 severity = EventSeverity.WARNING,
                 type = FuelEventType.PRICE_SPIKE,
                 affectedFuelType = FuelType.GAS,
-                costMultiplier = 1.5,
                 durationMinutes = 720,
+                effects = listOf(EventEffect.ScaleGeneratorCost(fuelType = FuelType.GAS, factor = 1.5)),
             )
         engine.schedule(sessionId, event, atGameTimeMinutes = 100)
 

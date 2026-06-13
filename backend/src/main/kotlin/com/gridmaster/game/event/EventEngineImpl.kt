@@ -271,23 +271,9 @@ class EventEngineImpl : EventEngine {
             }
         val expiresAt = durationMinutes?.let { currentTime + it }
 
-        // TODO: #72 — unify effect derivation; EconomicEvent/FuelEvent should use effects list like WeatherEvent
-        val effects =
-            when (event) {
-                is WeatherEvent -> event.effects
-                is EconomicEvent ->
-                    event.loadScaleFactor?.let {
-                        listOf(EventEffect.ScaleLoad(regionIds = null, factor = it))
-                    } ?: emptyList()
-                is PolicyEvent -> emptyList() // Card options applied on resolution
-                is FuelEvent ->
-                    listOf(
-                        EventEffect.ScaleGeneratorCost(
-                            fuelType = event.affectedFuelType,
-                            factor = event.costMultiplier,
-                        ),
-                    )
-            }
+        // All GameEvent subtypes now declare their effects explicitly — no per-type derivation needed.
+        // PolicyEvent.effects is always empty; card option effects are applied via resolveCard().
+        val effects = event.effects
 
         val mutations =
             effects.flatMap { convertEffect(it, snapshot, state, currentTime, expiresAt) }
@@ -504,24 +490,24 @@ private object BuiltInCatalogue {
                 description = "Public holiday — demand reduction",
                 severity = EventSeverity.INFO,
                 type = EconomicEventType.HOLIDAY,
-                loadScaleFactor = 0.85,
                 durationMinutes = 1440,
+                effects = listOf(EventEffect.ScaleLoad(regionIds = null, factor = 0.85)),
             ),
             EconomicEvent(
                 id = "evt-gdp-001",
                 description = "Economic growth — industrial demand increase",
                 severity = EventSeverity.INFO,
                 type = EconomicEventType.GDP_GROWTH,
-                loadScaleFactor = 1.05,
                 durationMinutes = 2880,
+                effects = listOf(EventEffect.ScaleLoad(regionIds = null, factor = 1.05)),
             ),
             EconomicEvent(
                 id = "evt-ev-surge-001",
                 description = "EV adoption surge — evening charging peak",
                 severity = EventSeverity.WARNING,
                 type = EconomicEventType.EV_ADOPTION_SURGE,
-                loadScaleFactor = 1.08,
                 durationMinutes = 120,
+                effects = listOf(EventEffect.ScaleLoad(regionIds = null, factor = 1.08)),
             ),
         )
 
@@ -597,8 +583,8 @@ private object BuiltInCatalogue {
                 severity = EventSeverity.WARNING,
                 type = FuelEventType.PRICE_SPIKE,
                 affectedFuelType = FuelType.GAS,
-                costMultiplier = 1.5,
                 durationMinutes = 720,
+                effects = listOf(EventEffect.ScaleGeneratorCost(fuelType = FuelType.GAS, factor = 1.5)),
             ),
             FuelEvent(
                 id = "evt-coal-collapse-001",
@@ -606,8 +592,8 @@ private object BuiltInCatalogue {
                 severity = EventSeverity.INFO,
                 type = FuelEventType.PRICE_COLLAPSE,
                 affectedFuelType = FuelType.COAL,
-                costMultiplier = 0.6,
                 durationMinutes = 1440,
+                effects = listOf(EventEffect.ScaleGeneratorCost(fuelType = FuelType.COAL, factor = 0.6)),
             ),
         )
 
