@@ -214,21 +214,17 @@ class PhysicsController(
         @PathVariable sessionId: String,
     ): ResponseEntity<Void> {
         val session = sessionStore.get(sessionId)
-        // TODO: #38 — NetworkSerDe round-trip is correct but O(network size); investigate
-        //   a PowSyBl-native deep-copy for better performance in larger networks.
-        // Produce an isolated network snapshot via IIDM XML round-trip under the session lock.
-        // This ensures the async analysis works on a frozen copy; subsequent mutations on
-        // session.iidmNetwork will not corrupt the in-flight solve.
-        // Module 06 (Session Model) will own this pattern centrally — see issue #37.
-        val networkSnapshot =
-            withContext(Dispatchers.IO) {
-                synchronized(session) {
-                    val baos = java.io.ByteArrayOutputStream()
-                    com.powsybl.iidm.serde.NetworkSerDe.write(session.iidmNetwork, baos)
-                    com.powsybl.iidm.serde.NetworkSerDe.read(java.io.ByteArrayInputStream(baos.toByteArray()))
-                }
+        // Acquire the session lock while cloneVariant() captures the current network state.
+        // triggerAsync() calls variantManager.cloneVariant() synchronously, so the variant
+        // snapshot is atomic with the lock. PowSyBl uses a per-thread working variant
+        // (ThreadLocal), so the background analysis on its variant does not interfere with
+        // session mutations that operate on INITIAL_VARIANT_ID.
+        // This replaces the former NetworkSerDe XML round-trip (O(network size)) — #38.
+        withContext(Dispatchers.IO) {
+            synchronized(session) {
+                contingencyService.triggerAsync(session.iidmNetwork, ContingencyAnalysisParameters())
             }
-        contingencyService.triggerAsync(networkSnapshot, ContingencyAnalysisParameters())
+        }
         return ResponseEntity.accepted().build()
     }
 
@@ -426,3 +422,4 @@ private fun GridNetwork.toDispatchableGenerators(): List<DispatchableGenerator> 
             marginalCostPerMwh = g.marginalCostPerMwh,
         )
     }
+
