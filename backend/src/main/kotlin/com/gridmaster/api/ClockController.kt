@@ -2,6 +2,7 @@ package com.gridmaster.api
 
 import com.gridmaster.api.dto.ClockStatusResponse
 import com.gridmaster.api.dto.SetSpeedRequest
+import com.gridmaster.game.TickClockStatus
 import com.gridmaster.game.TickEngine
 import jakarta.validation.Valid
 import org.springframework.http.ResponseEntity
@@ -35,7 +36,7 @@ class ClockController(private val tickEngine: TickEngine) {
         val status =
             tickEngine.clockStatus(sessionId, auth.name)
                 ?: return ResponseEntity.notFound().build()
-        return ResponseEntity.ok(ClockStatusResponse.from(status))
+        return clockResponse(status)
     }
 
     /**
@@ -48,10 +49,7 @@ class ClockController(private val tickEngine: TickEngine) {
     fun start(
         @PathVariable sessionId: String,
         auth: Authentication,
-    ): ResponseEntity<ClockStatusResponse> {
-        val startStatus = tickEngine.start(sessionId, auth.name)
-        return ResponseEntity.ok(ClockStatusResponse.from(startStatus))
-    }
+    ): ResponseEntity<ClockStatusResponse> = clockResponse(tickEngine.start(sessionId, auth.name))
 
     /**
      * Pause the running tick loop. The tick in progress completes first.
@@ -63,10 +61,7 @@ class ClockController(private val tickEngine: TickEngine) {
     fun pause(
         @PathVariable sessionId: String,
         auth: Authentication,
-    ): ResponseEntity<ClockStatusResponse> {
-        val pauseStatus = tickEngine.pause(sessionId, auth.name)
-        return ResponseEntity.ok(ClockStatusResponse.from(pauseStatus))
-    }
+    ): ResponseEntity<ClockStatusResponse> = clockResponse(tickEngine.pause(sessionId, auth.name))
 
     /**
      * Resume a paused tick loop.
@@ -77,10 +72,7 @@ class ClockController(private val tickEngine: TickEngine) {
     fun resume(
         @PathVariable sessionId: String,
         auth: Authentication,
-    ): ResponseEntity<ClockStatusResponse> {
-        val resumeStatus = tickEngine.resume(sessionId, auth.name)
-        return ResponseEntity.ok(ClockStatusResponse.from(resumeStatus))
-    }
+    ): ResponseEntity<ClockStatusResponse> = clockResponse(tickEngine.resume(sessionId, auth.name))
 
     /**
      * Set the speed multiplier (1–100). Takes effect on the next tick.
@@ -92,10 +84,7 @@ class ClockController(private val tickEngine: TickEngine) {
         @PathVariable sessionId: String,
         @Valid @RequestBody request: SetSpeedRequest,
         auth: Authentication,
-    ): ResponseEntity<ClockStatusResponse> {
-        val speedStatus = tickEngine.setSpeed(sessionId, auth.name, request.multiplier)
-        return ResponseEntity.ok(ClockStatusResponse.from(speedStatus))
-    }
+    ): ResponseEntity<ClockStatusResponse> = clockResponse(tickEngine.setSpeed(sessionId, auth.name, request.multiplier))
 
     /**
      * Permanently stop the tick loop. The session transitions to STOPPED and is
@@ -111,4 +100,8 @@ class ClockController(private val tickEngine: TickEngine) {
         tickEngine.stop(sessionId, auth.name)
         return ResponseEntity.noContent().build()
     }
+
+    /** Wrap a [TickClockStatus] result as a 200 OK [ClockStatusResponse]. */
+    private fun clockResponse(status: TickClockStatus): ResponseEntity<ClockStatusResponse> =
+        ResponseEntity.ok(ClockStatusResponse.from(status))
 }
