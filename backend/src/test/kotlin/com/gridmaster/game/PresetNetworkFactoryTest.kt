@@ -97,6 +97,45 @@ class PresetNetworkFactoryTest {
         assertThat(result.status).isEqualTo(ConvergenceStatus.CONVERGED)
     }
 
+
+    @Test
+    fun `freeplay50 network has expected topology`() {
+        val network = PresetNetworkFactory.create("freeplay50")
+
+        // 29 substations (10 North + 9 East + 10 South)
+        assertThat(network.substationCount).isEqualTo(29)
+        // 13 generators (4N + 4E + 5S)
+        assertThat(network.generatorCount).isEqualTo(13)
+        // 21 loads (9N + 6E + 6S)
+        assertThat(network.loadCount).isEqualTo(21)
+        // 30 lines (10N + 8E + 9S + 3 inter-region)
+        assertThat(network.lineCount).isEqualTo(30)
+        // 21 step-down transformers (9N + 6E + 6S)
+        assertThat(network.twoWindingsTransformerCount).isEqualTo(21)
+        // ~50 buses in bus-breaker view (19N + 15E + 16S)
+        val busCount = network.voltageLevels.sumOf { vl ->
+            vl.busBreakerView.buses.toList().size
+        }
+        assertThat(busCount).isEqualTo(50)
+    }
+
+    @Test
+    @Tag("integration")
+    fun `freeplay50 preset network converges under AC power flow`() {
+        assumeTrue(
+            nativeAvailable,
+            "Skipping: powsybl-math-native not available on " +
+                "${System.getProperty("os.name")} ${System.getProperty("os.arch")}",
+        )
+
+        val network = PresetNetworkFactory.create("freeplay50")
+        val service = PowSyBlPowerFlowService(IidmNetworkMapperImpl(), ViolationScanner())
+
+        val result = service.solve(network)
+
+        assertThat(result.status).isEqualTo(ConvergenceStatus.CONVERGED)
+    }
+
     companion object {
         /** True when the powsybl-math-native shared library loaded successfully. */
         val nativeAvailable: Boolean by lazy {
