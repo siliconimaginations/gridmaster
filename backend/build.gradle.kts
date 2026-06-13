@@ -12,7 +12,17 @@ plugins {
 
 group = "com.gridmaster"
 version = "0.1.0-SNAPSHOT"
-java.sourceCompatibility = JavaVersion.VERSION_21
+
+// Toolchain pins Temurin 21 for both compilation and runtime.
+// Gradle will auto-download it if not present (requires
+// org.gradle.java.installations.auto-download=true in gradle.properties).
+// This replaces the old java.sourceCompatibility + jvmTarget approach.
+kotlin {
+    jvmToolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+        vendor = JvmVendorSpec.ADOPTIUM
+    }
+}
 
 repositories {
     mavenCentral()
@@ -69,7 +79,6 @@ dependencies {
 tasks.withType<KotlinCompile> {
     kotlinOptions {
         freeCompilerArgs = listOf("-Xjsr305=strict")
-        jvmTarget = "21"
     }
 }
 
