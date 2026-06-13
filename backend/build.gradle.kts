@@ -21,6 +21,11 @@ java {
     }
 }
 
+kotlin {
+    // Explicitly align the Kotlin compiler target with the Java toolchain declared above.
+    jvmToolchain(21)
+}
+
 repositories {
     mavenCentral()
     maven { url = uri("https://oss.sonatype.org/content/repositories/snapshots") }
@@ -76,7 +81,6 @@ dependencies {
 tasks.withType<KotlinCompile> {
     kotlinOptions {
         freeCompilerArgs = listOf("-Xjsr305=strict")
-        // jvmTarget is set automatically by the kotlin { jvmToolchain { } } block above.
     }
 }
 
