@@ -49,4 +49,13 @@ interface NetworkRepository {
 
     /** Return the last stored [GridNetwork] snapshot, or null if none exists. */
     suspend fun latestSnapshot(sessionId: String): GridNetwork?
+
+    /**
+     * Release all in-memory state held for [sessionId].
+     *
+     * Implementations should drop any per-session counters or caches to prevent unbounded
+     * growth when many sessions are created and ended over the server's lifetime.
+     * The default implementation is a no-op for implementations with no in-memory state.
+     */
+    fun evictSession(sessionId: String) {}
 }

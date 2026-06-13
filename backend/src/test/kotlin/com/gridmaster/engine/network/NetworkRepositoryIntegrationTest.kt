@@ -123,6 +123,38 @@ class NetworkRepositoryIntegrationTest {
             assertThat(loadedSnapshot!!.id).isEqualTo(snapshot.id)
         }
 
+    /**
+     * Verifies that [SqliteNetworkRepository.evictSession] resets the per-session save counter
+     * so the next [SqliteNetworkRepository.save] call is treated as tick 1 and writes IIDM.
+     *
+     * Without eviction, saves 2-N within [SqliteNetworkRepository.IIDM_FLUSH_INTERVAL] perform
+     * JSON-only updates; the IIDM on disk remains stale. With eviction the counter is gone,
+     * so the next save starts a fresh interval and writes IIDM immediately.
+     */
+    @Test
+    fun `evictSession resets counter so next save writes IIDM`() =
+        runTest {
+            val repo = repo()
+            val mapper = IidmNetworkMapperImpl()
+            val network = TestNetworkFactory.create()
+
+            // Tick 1 → full write (IIDM + JSON); ticks 2-5 → JSON-only.
+            repeat(5) { repo.save("session-5", network, mapper.toGridNetwork(network)) }
+
+            // Modify load — this change should reach IIDM only via the next IIDM write.
+            network.getLoad(TestNetworkFactory.LOAD_1).p0 = 777.0
+
+            // Without eviction: save at tick 6 writes JSON only → loadIidm returns stale data.
+            // With eviction: counter is gone → next save is tick 1 again → IIDM written.
+            repo.evictSession("session-5")
+            repo.save("session-5", network, mapper.toGridNetwork(network))
+
+            val loadedIidm = repo.loadIidm("session-5")
+            assertThat(loadedIidm).isNotNull()
+            val load1 = loadedIidm!!.getLoad(TestNetworkFactory.LOAD_1)
+            assertThat(load1.p0).isEqualTo(777.0)
+        }
+
     private fun repo() = SqliteNetworkRepository(jpaRepository, objectMapper())
 
     private fun objectMapper(): ObjectMapper = ObjectMapper().registerKotlinModule().registerModule(JavaTimeModule())

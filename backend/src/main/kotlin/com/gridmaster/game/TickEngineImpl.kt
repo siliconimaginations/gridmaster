@@ -1,6 +1,7 @@
 package com.gridmaster.game
 
 import com.gridmaster.api.PhysicsSessionStore
+import com.gridmaster.engine.network.NetworkRepository
 import com.gridmaster.api.SessionNotFoundException
 import com.gridmaster.api.websocket.GameStatePublisher
 import com.gridmaster.engine.contingency.ContingencyAnalysisService
@@ -10,7 +11,6 @@ import com.gridmaster.engine.powerflow.PowerFlowResult
 import com.gridmaster.engine.powerflow.PowerFlowService
 import com.gridmaster.engine.powerflow.ViolationSeverity
 import com.gridmaster.game.event.EventEngine
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -44,12 +44,6 @@ private val NetworkViolation.severity: ViolationSeverity
  * [ConcurrentHashMap] so map mutations are safe. The tick loop only ever reads its
  * own session's runtime — it never modifies other sessions.
  *
- * ### Pause/resume
- * The tick loop suspends on [SessionRuntime.pauseSignal] while paused — zero CPU cost.
- * [pause] creates a fresh [CompletableDeferred] signal; [resume] and [stop] complete it
- * to wake the loop. `CompletableDeferred.await()` is idiomatic for "wait for an external
- * signal" and avoids any lock-ownership concerns that arise with [kotlinx.coroutines.sync.Mutex].
- *
  * ### Slip handling
  * If a tick's work exceeds the wall-clock slot, the loop records a slip and
  * starts the next tick immediately. After [SLIP_PAUSE_THRESHOLD] consecutive slips
@@ -68,6 +62,7 @@ class TickEngineImpl(
     private val powerFlowService: PowerFlowService,
     private val contingencyAnalysisService: ContingencyAnalysisService,
     private val eventEngine: EventEngine,
+    private val networkRepository: NetworkRepository,
     @Value("\${gridmaster.clock.auto-save-interval:$DEFAULT_AUTO_SAVE_INTERVAL}")
     private val autoSaveInterval: Long,
 ) : TickEngine {
@@ -82,7 +77,7 @@ class TickEngineImpl(
     private var gameStatePublisher: GameStatePublisher? = null
 
     /** Parent scope for all per-session coroutines. Cancelled on application shutdown. */
-    internal var engineScope: CoroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    private val engineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
     /** Live session runtimes keyed by sessionId. */
     private val sessions = ConcurrentHashMap<String, SessionRuntime>()
@@ -129,12 +124,9 @@ class TickEngineImpl(
                     "Cannot pause session $sessionId in state ${runtime.clockState}"
                 }
                 runtime.clockState = ClockState.PAUSED
-                // Set inside synchronized so clockState and pauseSignal are always updated atomically —
-                // prevents the tick loop from seeing PAUSED with a null signal between the two writes.
-                runtime.pauseSignal = CompletableDeferred()
-                runtime.pendingSave = true
                 runtime.toStatus()
             }
+        runtime.pendingSave = true // Tick loop saves after current tick finishes
         log.info("Paused session {}", sessionId)
         return pausedStatus
     }
@@ -152,10 +144,6 @@ class TickEngineImpl(
                 runtime.clockState = ClockState.RUNNING
                 runtime.toStatus()
             }
-        // Complete the signal — wakes the tick loop coroutine suspended in await().
-        val signal = runtime.pauseSignal
-        runtime.pauseSignal = null
-        signal?.complete(Unit)
         log.info("Resumed session {}", sessionId)
         return resumedStatus
     }
@@ -197,14 +185,10 @@ class TickEngineImpl(
     ) {
         val runtime = findAndCheckOwner(sessionId, userId)
         runtime.clockState = ClockState.STOPPED
-        // Complete the pause signal (if any) before cancelling — the CancellationException
-        // from job.cancel() propagates through the re-awakened await() suspension point.
-        val signal = runtime.pauseSignal
-        runtime.pauseSignal = null
-        signal?.complete(Unit)
         runtime.job?.cancel()
         sessions.remove(sessionId)
         eventEngine.unregister(sessionId)
+        networkRepository.evictSession(sessionId)
         log.info("Stopped tick loop for session {}", sessionId)
     }
 
@@ -231,10 +215,7 @@ class TickEngineImpl(
                             runtime.pendingSave = false
                             triggerAutoSave(runtime)
                         }
-                        // Capture the reference before suspending so resume() nulling the field
-                        // after complete() does not affect this await() call.
-                        val signal = runtime.pauseSignal
-                        signal?.await()
+                        delay(PAUSE_POLL_INTERVAL_MS)
                         continue
                     }
                     ClockState.RUNNING, ClockState.SLOW -> executeTick(runtime)
@@ -279,10 +260,7 @@ class TickEngineImpl(
             } catch (e: Exception) {
                 log.error("Power flow solve failed for session {}, tick {}", runtime.sessionId, ctx.tickNumber, e)
                 // Pause (not stop) so the player can inspect the grid and potentially resume. Closes #64.
-                synchronized(runtime) {
-                    runtime.clockState = ClockState.PAUSED
-                    runtime.pauseSignal = CompletableDeferred()
-                }
+                synchronized(runtime) { runtime.clockState = ClockState.PAUSED }
                 triggerAutoSave(runtime)
                 return
             }
@@ -340,10 +318,7 @@ class TickEngineImpl(
                     runtime.sessionId,
                     SLIP_PAUSE_THRESHOLD,
                 )
-                synchronized(runtime) {
-                    runtime.clockState = ClockState.PAUSED
-                    runtime.pauseSignal = CompletableDeferred()
-                }
+                synchronized(runtime) { runtime.clockState = ClockState.PAUSED }
                 triggerAutoSave(runtime)
                 return
             }
@@ -416,7 +391,7 @@ class TickEngineImpl(
 
     private fun triggerAutoSave(runtime: SessionRuntime) {
         val snapshot = runtime.toStatus()
-        engineScope.launch {
+        engineScope.launch(Dispatchers.IO) {
             saveSnapshot(
                 sessionId = runtime.sessionId,
                 userId = runtime.userId,
@@ -448,6 +423,9 @@ class TickEngineImpl(
     }
 
     companion object {
+        /** Polling interval while paused, in milliseconds. */
+        private const val PAUSE_POLL_INTERVAL_MS = 50L
+
         /** Trigger N-1 contingency analysis every N ticks (= 1 grid-hour at 10 min/tick). */
         private const val CONTINGENCY_TRIGGER_INTERVAL = 6L
 
@@ -501,20 +479,6 @@ internal class SessionRuntime(
      */
     @Volatile
     var playerSpeedOverride: Boolean = false
-
-    /**
-     * A [CompletableDeferred] that the tick loop suspends on via [CompletableDeferred.await]
-     * while this session is paused — zero CPU cost.
-     * A fresh deferred is created on each [TickEngineImpl.pause] call; [TickEngineImpl.resume]
-     * and [TickEngineImpl.stop] call [CompletableDeferred.complete] to wake the coroutine.
-     * Set to null when not paused.
-     *
-     * Using [CompletableDeferred] rather than [kotlinx.coroutines.sync.Mutex] avoids any
-     * lock-ownership ambiguity: any coroutine may call [CompletableDeferred.complete] to
-     * signal the waiting loop, with no requirement to be the original lock holder.
-     */
-    @Volatile
-    var pauseSignal: CompletableDeferred<Unit>? = null
 
     /** Snapshot of the current state as an immutable [TickClockStatus]. Synchronized for consistency. */
     fun toStatus(): TickClockStatus =
