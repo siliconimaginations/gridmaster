@@ -26,8 +26,10 @@ import com.gridmaster.engine.powerflow.PowerFlowResult
 import com.gridmaster.engine.powerflow.PowerFlowService
 import com.gridmaster.engine.powerflow.SolveMode
 import jakarta.validation.Valid
+import com.powsybl.iidm.network.VariantManagerConstants
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -59,6 +61,8 @@ class PhysicsController(
     private val dispatchService: DispatchService,
     private val unitCommitmentService: UnitCommitmentService,
 ) {
+    private val log = LoggerFactory.getLogger(PhysicsController::class.java)
+
     // -------------------------------------------------------------------------
     // Network state
     // -------------------------------------------------------------------------
@@ -99,28 +103,35 @@ class PhysicsController(
 
         val updated =
             synchronized(session) {
-                // Snapshot the live network before applying any mutations so we can
-                // roll back atomically if one of them fails mid-list.
-                val snapshot =
-                    java.io.ByteArrayOutputStream()
-                        .also { com.powsybl.iidm.serde.NetworkSerDe.write(session.iidmNetwork, it) }
-                        .toByteArray()
+                val network = session.iidmNetwork
+                // Clone current state before mutations so we can restore atomically on failure
+                // without reassigning session.iidmNetwork. PowSyBl variant clone is cheaper
+                // than an XML round-trip and preserves the same network object reference.
+                val rollbackId = "rollback-${System.nanoTime()}"
+                network.variantManager.cloneVariant(
+                    VariantManagerConstants.INITIAL_VARIANT_ID, rollbackId, false,
+                )
 
                 try {
                     for (mutation in mutations) {
-                        networkMapper.applyMutation(session.iidmNetwork, mutation)
+                        networkMapper.applyMutation(network, mutation)
                             .getOrElse { ex ->
                                 throw InvalidMutationException(ex.message ?: "Mutation failed: $mutation")
                             }
                     }
                 } catch (ex: InvalidMutationException) {
-                    // Restore network to pre-request state before surfacing the error
-                    session.iidmNetwork =
-                        com.powsybl.iidm.serde.NetworkSerDe.read(java.io.ByteArrayInputStream(snapshot))
+                    // Restore INITIAL from the rollback snapshot, then discard it.
+                    runCatching {
+                        network.variantManager.cloneVariant(
+                            rollbackId, VariantManagerConstants.INITIAL_VARIANT_ID, true,
+                        )
+                    }.onFailure { log.warn("applyMutations rollback failed for session {}: {}", sessionId, it.message) }
+                    runCatching { network.variantManager.removeVariant(rollbackId) }
                     throw ex
                 }
 
-                networkMapper.toGridNetwork(session.iidmNetwork).also { session.latestSnapshot = it }
+                runCatching { network.variantManager.removeVariant(rollbackId) }
+                networkMapper.toGridNetwork(network).also { session.latestSnapshot = it }
             }
         return updated
     }
@@ -422,4 +433,5 @@ private fun GridNetwork.toDispatchableGenerators(): List<DispatchableGenerator> 
             marginalCostPerMwh = g.marginalCostPerMwh,
         )
     }
+
 
