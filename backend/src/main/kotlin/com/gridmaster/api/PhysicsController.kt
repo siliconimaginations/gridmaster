@@ -25,8 +25,8 @@ import com.gridmaster.engine.powerflow.PowerFlowParameters
 import com.gridmaster.engine.powerflow.PowerFlowResult
 import com.gridmaster.engine.powerflow.PowerFlowService
 import com.gridmaster.engine.powerflow.SolveMode
-import jakarta.validation.Valid
 import com.powsybl.iidm.network.VariantManagerConstants
+import jakarta.validation.Valid
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
@@ -109,7 +109,9 @@ class PhysicsController(
                 // than an XML round-trip and preserves the same network object reference.
                 val rollbackId = "rollback-${System.nanoTime()}"
                 network.variantManager.cloneVariant(
-                    VariantManagerConstants.INITIAL_VARIANT_ID, rollbackId, false,
+                    VariantManagerConstants.INITIAL_VARIANT_ID,
+                    rollbackId,
+                    false,
                 )
 
                 try {
@@ -123,7 +125,9 @@ class PhysicsController(
                     // Restore INITIAL from the rollback snapshot, then discard it.
                     runCatching {
                         network.variantManager.cloneVariant(
-                            rollbackId, VariantManagerConstants.INITIAL_VARIANT_ID, true,
+                            rollbackId,
+                            VariantManagerConstants.INITIAL_VARIANT_ID,
+                            true,
                         )
                     }.onFailure { log.warn("applyMutations rollback failed for session {}: {}", sessionId, it.message) }
                     runCatching { network.variantManager.removeVariant(rollbackId) }
@@ -433,5 +437,3 @@ private fun GridNetwork.toDispatchableGenerators(): List<DispatchableGenerator> 
             marginalCostPerMwh = g.marginalCostPerMwh,
         )
     }
-
-
