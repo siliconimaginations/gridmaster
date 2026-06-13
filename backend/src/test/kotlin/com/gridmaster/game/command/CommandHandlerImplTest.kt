@@ -369,7 +369,8 @@ class CommandHandlerImplTest {
         val result = handler.applyMutations(listOf(NetworkMutation.TripLine("l99")), sessionId)
 
         assertThat(result.success).isFalse()
-        assertThat(session.iidmNetwork).isNotSameAs(originalRef)
+        // Variant rollback restores state in-place — same object reference, internal state reset.
+        assertThat(session.iidmNetwork).isSameAs(originalRef)
     }
 
     // ── Alerts ────────────────────────────────────────────────────────────────
@@ -435,7 +436,8 @@ class CommandHandlerImplTest {
 
         assertThat(result.success).isFalse()
         assertThat(result.commandOutcomes[0].rejectionReason).contains("Power flow error")
-        assertThat(session.iidmNetwork).isNotSameAs(originalRef)
+        // Variant rollback restores state in-place — same object reference, internal state reset.
+        assertThat(session.iidmNetwork).isSameAs(originalRef)
     }
 
     // ── ConnectElement ────────────────────────────────────────────────────────

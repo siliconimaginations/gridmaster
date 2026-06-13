@@ -104,6 +104,25 @@ class NetworkRepositoryIntegrationTest {
             assertThat(load1.activePowerMw).isEqualTo(999.0)
         }
 
+    @Test
+    fun `flush writes IIDM immediately and snapshot is loadable`() =
+        runTest {
+            val repo = repo()
+            val mapper = IidmNetworkMapperImpl()
+            val network = TestNetworkFactory.create()
+            val snapshot = mapper.toGridNetwork(network)
+
+            repo.flush("session-4", network, snapshot)
+
+            val loadedIidm = repo.loadIidm("session-4")
+            assertThat(loadedIidm).isNotNull()
+            assertThat(loadedIidm!!.id).isEqualTo(network.id)
+
+            val loadedSnapshot = repo.latestSnapshot("session-4")
+            assertThat(loadedSnapshot).isNotNull()
+            assertThat(loadedSnapshot!!.id).isEqualTo(snapshot.id)
+        }
+
     private fun repo() = SqliteNetworkRepository(jpaRepository, objectMapper())
 
     private fun objectMapper(): ObjectMapper = ObjectMapper().registerKotlinModule().registerModule(JavaTimeModule())

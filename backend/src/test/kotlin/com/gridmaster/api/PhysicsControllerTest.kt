@@ -202,9 +202,9 @@ class PhysicsControllerTest {
             status { isBadRequest() }
         }
 
-        // Network was restored from snapshot — iidmNetwork is now a deserialized replacement,
-        // not the original object. The snapshot was taken before any mutations ran.
-        assertThat(mockSession.iidmNetwork).isNotSameAs(originalNetworkRef)
+        // Network was rolled back via variant clone — iidmNetwork remains the same object
+        // reference (it is a val), but its internal state was restored to pre-mutation values.
+        assertThat(mockSession.iidmNetwork).isSameAs(originalNetworkRef)
 
         // Session snapshot was not updated — latestSnapshot still points to the pre-request value
         assertThat(mockSession.latestSnapshot).isSameAs(mockSnapshot)
@@ -444,4 +444,3 @@ class PhysicsControllerTest {
         @Bean fun jwtService() = mockk<JwtService>(relaxed = true)
     }
 }
-
