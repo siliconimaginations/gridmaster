@@ -19,6 +19,7 @@ class SqliteNetworkRepository(
     private val jpaRepository: NetworkSnapshotJpaRepository,
     private val objectMapper: ObjectMapper,
 ) : NetworkRepository {
+    // TODO #189: evict stale entries when a session ends to prevent unbounded map growth
     private val saveCounters = ConcurrentHashMap<String, AtomicLong>()
 
     companion object {
