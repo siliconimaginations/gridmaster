@@ -227,12 +227,34 @@ Every PR must pass:
 CI failures block merge — no exceptions.
 
 Active gates (Stage 4+):
-- Playwright E2E suite () — runs on every push to main; pinned to 
+- Playwright E2E suite runs on every push to `main` and via `workflow_dispatch`. See `e2e.yml` and `docs/engineering/15-e2e-ci.md` for the full scenario catalogue and infrastructure design.
 - Coverage threshold enforcement (JaCoCo + Vitest, 60% overall / 70% changed files)
 
 Future gates (Stage 7+):
-- Playwright E2E promoted to required PR check
+- Playwright E2E promoted to required PR check on every PR
 - Docker image build and smoke test
+
+### E2E Coverage Policy
+
+Any PR that introduces a new player-visible feature or modifies an existing one must either:
+
+1. **Include an E2E test** for the affected scenario in the same PR (preferred), or
+2. **Open a tracking issue** tagged `coverage` and reference it in the PR description with `// TODO: #<issue>`.
+
+The following scenarios are currently implemented and constitute the baseline guardrail:
+
+| ID | Scenario | File |
+|----|----------|------|
+| SL-01 | App loads without JS errors | `sl.spec.ts` |
+| SL-02 | POST /api/sessions returns valid sessionId | `sl.spec.ts` |
+| SL-03 | First GameStateUpdate arrives within 15 s | `sl.spec.ts` |
+| GC-01 | Tick counter increments at 1× speed | `gc.spec.ts` |
+| GC-02 | Pause halts tick stream; resume restarts it | `gc.spec.ts` |
+| CM-01 | DecommitGenerator → committed=false in next update | `cm.spec.ts` |
+| CM-02 | CommitGenerator → committed=true after decommit baseline | `cm.spec.ts` |
+| CM-03 | SetGeneratorOutput → activePowerMw reflects new setpoint | `cm.spec.ts` |
+
+Scenarios are tracked in `docs/process/e2e-qa-workflow.md`. New scenarios inherit the P0/P1/P2 priority system defined there — P0 and P1 scenarios must be in CI before the stage is declared done.
 
 ---
 
@@ -399,3 +421,4 @@ See [`docs/process/tech-debt-cadence.md`](docs/process/tech-debt-cadence.md) for
 | Frontend (Vitest) | 60% | 70% |
 
 Thresholds rise 5 pp per major stage milestone. The current values reflect Stage 3 (backend implementation in progress).
+
