@@ -14,9 +14,8 @@ import io.mockk.every
 import io.mockk.justRun
 import io.mockk.mockk
 import io.mockk.verify
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.advanceTimeBy
-import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.AfterEach
@@ -34,13 +33,6 @@ import java.util.concurrent.TimeUnit
  * - Slip detection and pause on threshold
  * - Auto-save triggered at configured interval
  * - Clock status reporting
- *
- * Timing-sensitive tests use [runTest] with [UnconfinedTestDispatcher] so that
- * [kotlinx.coroutines.delay] calls inside the tick loop advance virtual time rather than
- * blocking real wall-clock time. This makes each test deterministic and nearly instant.
- * Each such test injects the [TestScope][kotlinx.coroutines.test.TestScope] as the engine's
- * [TickEngineImpl.engineScope] and calls [TickEngineImpl.stop] before the block exits to
- * avoid [kotlinx.coroutines.test.UncompletedCoroutinesError].
  */
 @Timeout(value = 15, unit = TimeUnit.SECONDS)
 class TickEngineImplTest {
@@ -49,6 +41,7 @@ class TickEngineImplTest {
     private lateinit var powerFlowService: PowerFlowService
     private lateinit var contingencyAnalysisService: ContingencyAnalysisService
     private lateinit var eventEngine: com.gridmaster.game.event.EventEngine
+    private lateinit var networkRepository: com.gridmaster.engine.network.NetworkRepository
     private lateinit var engine: TickEngineImpl
 
     private val sessionId = "session-1"
@@ -63,6 +56,7 @@ class TickEngineImplTest {
         powerFlowService = mockk()
         contingencyAnalysisService = mockk()
         eventEngine = mockk(relaxed = true)
+        networkRepository = mockk(relaxed = true)
 
         engine =
             TickEngineImpl(
@@ -71,6 +65,7 @@ class TickEngineImplTest {
                 powerFlowService = powerFlowService,
                 contingencyAnalysisService = contingencyAnalysisService,
                 eventEngine = eventEngine,
+                networkRepository = networkRepository,
                 autoSaveInterval = 5L,
             )
 
@@ -202,60 +197,46 @@ class TickEngineImplTest {
     // Auto-slow
     // -------------------------------------------------------------------------
 
-    /**
-     * Uses [runTest] + [UnconfinedTestDispatcher] so [delay] calls in the tick loop
-     * advance virtual time. The [UnconfinedTestDispatcher] also runs the first tick
-     * synchronously during [TickEngineImpl.start], so auto-slow is observable immediately
-     * without real wall-clock waiting.
-     */
     @Test
-    fun `auto-slow activates on NETWORK_FAILURE and sets speed to 1`() =
-        runTest(UnconfinedTestDispatcher()) {
+    fun `auto-slow activates on NETWORK_FAILURE and sets speed to 1`() {
+        runBlocking {
             every { powerFlowService.solve(any()) } returns networkFailureResult()
+            // Start at 100× so ticks fire every 10ms
             every { gameSessionService.load(sessionId, userId) } returns buildGameSession(multiplier = 100)
-            engine.engineScope = this
             engine.start(sessionId, userId)
-            // UnconfinedTestDispatcher runs tick 1 synchronously during start():
-            // NETWORK_FAILURE → applyAutoSlow → autoSlowed=true, speed→1, state→SLOW.
-            // Advance past the first tick's virtual delay to confirm stable state.
-            advanceTimeBy(50)
+            // start() already uses multiplier=100 from the loaded session; no setSpeed needed
+            delay(200)
 
             val status = engine.clockStatus(sessionId)
             assertThat(status).isNotNull
             assertThat(status!!.autoSlowed).isTrue()
             assertThat(status.speedMultiplier).isEqualTo(1)
             assertThat(status.clockState).isEqualTo(ClockState.SLOW)
-
-            engine.stop(sessionId, userId)
         }
+    }
 
-    /**
-     * Verifies that auto-slow is cleared when the grid recovers. Uses virtual time so the
-     * 1× recovery slot (1 000 ms virtual) completes instantly.
-     */
     @Test
-    fun `auto-slow clears when power flow recovers`() =
-        runTest(UnconfinedTestDispatcher()) {
+    fun `auto-slow clears when power flow recovers`() {
+        runBlocking {
             val callCount = java.util.concurrent.atomic.AtomicInteger(0)
             every { powerFlowService.solve(any()) } answers {
-                // Tick 1 fails → auto-slow (speed→1, 1 000 ms slot). Tick 2+ succeed → clear.
+                // First tick: fail → auto-slow (drops to 1×). Second tick (~1s later): recover.
                 if (callCount.incrementAndGet() <= 1) networkFailureResult() else convergedResult()
             }
             every { gameSessionService.load(sessionId, userId) } returns buildGameSession(multiplier = 100)
-            engine.engineScope = this
             engine.start(sessionId, userId)
-            // Tick 1 ran synchronously: NETWORK_FAILURE → auto-slow (speed→1, slotMs→1 000 ms).
-            // The tick loop is suspended at delay(~10ms) (captured slotMs before auto-slow).
-            // Advance 1 100 ms virtual time: tick 2 runs at 1× → convergedResult → auto-slow clears.
-            advanceTimeBy(1_100)
+            engine.setSpeed(sessionId, userId, 100)
+            // Auto-slow triggers quickly (10ms ticks at 100×); after 3 failure ticks
+            // the clock drops to 1× (1000ms slot). Wait long enough for one recovery tick.
+            delay(1500)
 
             val status = engine.clockStatus(sessionId)
             assertThat(status).isNotNull
+            // After enough ticks with recovery, auto-slow should have cleared
             assertThat(status!!.autoSlowed).isFalse()
             assertThat(status.clockState).isIn(ClockState.RUNNING, ClockState.PAUSED)
-
-            engine.stop(sessionId, userId)
         }
+    }
 
     @Test
     fun `setSpeed by player clears auto-slow`() {
@@ -277,61 +258,46 @@ class TickEngineImplTest {
     // Auto-save
     // -------------------------------------------------------------------------
 
-    /**
-     * Advances virtual time to fire 10+ ticks so the configured [autoSaveInterval] (5 ticks)
-     * is crossed at least twice. With [UnconfinedTestDispatcher], the auto-save coroutine also
-     * runs synchronously, so [GameSessionService.save] is verifiable immediately.
-     */
     @Test
     fun `auto-save is triggered at configured interval`() =
-        runTest(UnconfinedTestDispatcher()) {
+        runBlocking {
             every { gameSessionService.load(sessionId, userId) } returns buildGameSession(multiplier = 100)
-            engine.engineScope = this
             engine.start(sessionId, userId)
-            // Advance 110 ms virtual time: 11 ticks at 100× (10 ms/tick).
-            // autoSaveInterval=5 → ticks 5 and 10 trigger auto-save.
-            advanceTimeBy(110)
+            engine.setSpeed(sessionId, userId, 100)
+            // Wait long enough for > 5 ticks at 100× (10ms/tick → 50ms for 5 ticks)
+            delay(300)
             engine.pause(sessionId, userId)
 
             // save() called on pause + at auto-save intervals
             verify(atLeast = 1) {
                 gameSessionService.save(sessionId, userId, any(), any(), any())
             }
-
-            engine.stop(sessionId, userId)
         }
 
     // -------------------------------------------------------------------------
     // Slip detection
     // -------------------------------------------------------------------------
 
-    /**
-     * Verifies the engine auto-pauses after [SLIP_PAUSE_THRESHOLD] consecutive slipping ticks.
-     * Uses [UnconfinedTestDispatcher]: the tick coroutine runs synchronously on the test thread,
-     * so [Thread.sleep] still advances real wall-clock time for slip detection while the test
-     * itself completes in ~200 ms (10 slips × 20 ms) instead of the original 1 s delay.
-     */
     @Test
-    fun `engine auto-pauses after SLIP_PAUSE_THRESHOLD consecutive slipping ticks`() =
-        runTest(UnconfinedTestDispatcher()) {
-            // At 100× the slot is 10 ms. Sleeping 20 ms causes every tick to slip.
+    fun `engine auto-pauses after SLIP_PAUSE_THRESHOLD consecutive slipping ticks`() {
+        runBlocking {
+            // At 100× the slot is 10ms. Mock solve to take 20ms — every tick slips.
             every { powerFlowService.solve(any()) } answers {
-                Thread.sleep(20)
+                Thread.sleep(20) // block for longer than the 10ms slot
                 convergedResult()
             }
             every { gameSessionService.load(sessionId, userId) } returns buildGameSession(multiplier = 100)
-            engine.engineScope = this
             engine.start(sessionId, userId)
-            // With UnconfinedTestDispatcher the slip path (no delay) runs synchronously:
-            // 10 slips × 20 ms real time = ~200 ms, then the loop auto-pauses at pauseSignal.await().
-            // engine.start() returns only after the loop first suspends — i.e. after auto-pause.
+            engine.setSpeed(sessionId, userId, 100)
+
+            // SLIP_PAUSE_THRESHOLD = 10 slips × ~20ms each = ~200ms. Wait 1s to be safe.
+            delay(1000)
 
             val status = engine.clockStatus(sessionId)
             assertThat(status).isNotNull
             assertThat(status!!.clockState).isEqualTo(ClockState.PAUSED)
-
-            engine.stop(sessionId, userId)
         }
+    }
 
     // -------------------------------------------------------------------------
     // slotMillis helper

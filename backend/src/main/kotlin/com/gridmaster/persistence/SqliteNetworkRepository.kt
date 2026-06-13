@@ -19,7 +19,6 @@ class SqliteNetworkRepository(
     private val jpaRepository: NetworkSnapshotJpaRepository,
     private val objectMapper: ObjectMapper,
 ) : NetworkRepository {
-    // TODO #189: evict stale entries when a session ends to prevent unbounded map growth
     private val saveCounters = ConcurrentHashMap<String, AtomicLong>()
 
     companion object {
@@ -127,6 +126,16 @@ class SqliteNetworkRepository(
     override suspend fun latestSnapshot(sessionId: String): GridNetwork? {
         val entity = findEntity(sessionId) ?: return null
         return objectMapper.readValue(entity.snapshotJson, GridNetwork::class.java)
+    }
+
+    /**
+     * Remove the per-session save counter from [saveCounters], preventing unbounded map
+     * growth in long-running servers with many sessions.
+     *
+     * Called by [com.gridmaster.game.TickEngineImpl] on session stop.
+     */
+    override fun evictSession(sessionId: String) {
+        saveCounters.remove(sessionId)
     }
 
     private suspend fun findEntity(sessionId: String): NetworkSnapshotEntity? =
