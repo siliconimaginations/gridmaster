@@ -19,8 +19,7 @@ import com.gridmaster.game.TickEngine
 import com.gridmaster.game.event.EventEngine
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
+import com.powsybl.iidm.network.VariantManagerConstants
 
 /**
  * Default [CommandHandler] implementation.
@@ -32,9 +31,9 @@ import java.io.ByteArrayOutputStream
  * and zero mutations applied.
  *
  * ### Atomicity
- * A [NetworkSerDe] snapshot is taken before the mutation loop. If any mutation
- * fails (or validation rejects in batch mode), the snapshot is restored and
- * the error is surfaced without partial application.
+ * A PowSyBl variant clone is taken before the mutation loop. If any mutation
+ * fails (or validation rejects in batch mode), the INITIAL variant is restored
+ * from the rollback clone and the error is surfaced without partial application.
  *
  * ### Power flow
  * A single power flow solve follows all mutations. The result feeds violation
@@ -180,23 +179,37 @@ class CommandHandlerImpl(
         val session = sessionStore.get(sessionId)
 
         return synchronized(session) {
-            // Snapshot before mutations so we can roll back atomically.
-            val snapshot =
-                ByteArrayOutputStream()
-                    .also { com.powsybl.iidm.serde.NetworkSerDe.write(session.iidmNetwork, it) }
-                    .toByteArray()
+            val network = session.iidmNetwork
+
+            // Clone current state before mutations. On failure we restore INITIAL from the
+            // rollback variant rather than reassigning session.iidmNetwork, keeping it a val.
+            // cloneVariant is cheaper than an XML round-trip: it copies in-memory field data.
+            val rollbackId = "rollback-${System.nanoTime()}"
+            network.variantManager.cloneVariant(
+                VariantManagerConstants.INITIAL_VARIANT_ID, rollbackId, false,
+            )
+
+            fun rollback() {
+                runCatching {
+                    network.variantManager.cloneVariant(
+                        rollbackId, VariantManagerConstants.INITIAL_VARIANT_ID, true,
+                    )
+                }.onFailure {
+                    log.warn("CommandHandler: rollback variant restore failed for session {}: {}", sessionId, it.message)
+                }
+                runCatching { network.variantManager.removeVariant(rollbackId) }
+            }
 
             // Apply all mutations; roll back and surface error on first failure.
             try {
                 for (mutation in mutations) {
-                    networkMapper.applyMutation(session.iidmNetwork, mutation)
+                    networkMapper.applyMutation(network, mutation)
                         .getOrElse { ex ->
                             throw InvalidMutationException(ex.message ?: "Mutation failed: $mutation")
                         }
                 }
             } catch (ex: InvalidMutationException) {
-                session.iidmNetwork =
-                    com.powsybl.iidm.serde.NetworkSerDe.read(ByteArrayInputStream(snapshot))
+                rollback()
                 log.warn("CommandHandler: mutation failed for session {}: {}", sessionId, ex.message)
                 val currentSnapshot = session.latestSnapshot
                 val outcomes =
@@ -229,11 +242,10 @@ class CommandHandlerImpl(
             // Run power flow — NETWORK_FAILURE is a valid game state, not an exception.
             val powerFlowResult =
                 try {
-                    powerFlowService.solve(session.iidmNetwork, PowerFlowParameters())
+                    powerFlowService.solve(network, PowerFlowParameters())
                 } catch (ex: Exception) {
                     log.error("CommandHandler: power flow threw for session {}: {}", sessionId, ex.message, ex)
-                    session.iidmNetwork =
-                        com.powsybl.iidm.serde.NetworkSerDe.read(ByteArrayInputStream(snapshot))
+                    rollback()
                     val currentSnapshot = session.latestSnapshot
                     val outcomes =
                         if (sourceCommands.isEmpty()) {
@@ -262,6 +274,9 @@ class CommandHandlerImpl(
                     )
                 }
 
+            // Success: discard rollback variant.
+            runCatching { network.variantManager.removeVariant(rollbackId) }
+
             // Update session state.
             session.latestPowerFlowResult = powerFlowResult
             session.latestSnapshot = powerFlowResult.snapshot
@@ -277,16 +292,10 @@ class CommandHandlerImpl(
                 alerts.size,
             )
 
-            // Trigger async N-1 if topology changed.
-            // TODO: #38 — NetworkSerDe round-trip is correct but O(network size); evaluate
-            //   PowSyBl-native deep copy once compatibility with our BOM is confirmed.
+            // Trigger async N-1 if topology changed. triggerAsync() calls cloneVariant()
+            // internally, so no separate copy is needed here (#38).
             if (mutations.any { it.isTopologyChange() }) {
-                val networkCopy =
-                    ByteArrayOutputStream()
-                        .also { com.powsybl.iidm.serde.NetworkSerDe.write(session.iidmNetwork, it) }
-                        .toByteArray()
-                        .let { com.powsybl.iidm.serde.NetworkSerDe.read(ByteArrayInputStream(it)) }
-                contingencyService.triggerAsync(networkCopy, ContingencyAnalysisParameters())
+                contingencyService.triggerAsync(network, ContingencyAnalysisParameters())
                 log.debug("CommandHandler: triggered async N-1 for session {}", sessionId)
             }
 
@@ -686,3 +695,4 @@ private fun GridNetwork.toDispatchableGenerators() =
             marginalCostPerMwh = g.marginalCostPerMwh,
         )
     }
+

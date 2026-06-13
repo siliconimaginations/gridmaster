@@ -56,7 +56,7 @@ class PhysicsSessionStore {
 data class PhysicsSession(
     val sessionId: String,
     /** Live PowSyBl Network — mutated by applying [com.gridmaster.engine.model.NetworkMutation]s. */
-    var iidmNetwork: Network,
+    val iidmNetwork: Network,
     /** Latest GridNetwork snapshot produced after the most recent power flow solve. */
     var latestSnapshot: GridNetwork,
     var latestPowerFlowResult: PowerFlowResult? = null,
