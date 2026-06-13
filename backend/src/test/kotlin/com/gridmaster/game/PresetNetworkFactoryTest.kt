@@ -97,7 +97,6 @@ class PresetNetworkFactoryTest {
         assertThat(result.status).isEqualTo(ConvergenceStatus.CONVERGED)
     }
 
-
     @Test
     fun `freeplay50 network has expected topology`() {
         val network = PresetNetworkFactory.create("freeplay50")
@@ -113,9 +112,10 @@ class PresetNetworkFactoryTest {
         // 21 step-down transformers (9N + 6E + 6S)
         assertThat(network.twoWindingsTransformerCount).isEqualTo(21)
         // ~50 buses in bus-breaker view (19N + 15E + 16S)
-        val busCount = network.voltageLevels.sumOf { vl ->
-            vl.busBreakerView.buses.toList().size
-        }
+        val busCount =
+            network.voltageLevels.sumOf { vl ->
+                vl.busBreakerView.buses.toList().size
+            }
         assertThat(busCount).isEqualTo(50)
     }
 
