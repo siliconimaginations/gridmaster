@@ -103,7 +103,7 @@ class PhysicsControllerTest {
                 shuntCompensators = emptyList(),
             )
 
-        // Use a real PowSyBl Network so NetworkSerDe.write() works in triggerContingencies.
+        // Use a real PowSyBl Network so variantManager.cloneVariant() works in triggerContingencies.
         // Mapper and service stubs still match via any() matchers, so other tests are unaffected.
         val iidmNetwork = com.gridmaster.engine.network.TestNetworkFactory.create()
         mockSession = PhysicsSession(SESSION_ID, iidmNetwork, mockSnapshot)
@@ -444,3 +444,4 @@ class PhysicsControllerTest {
         @Bean fun jwtService() = mockk<JwtService>(relaxed = true)
     }
 }
+
