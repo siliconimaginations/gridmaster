@@ -165,10 +165,23 @@ non-blocking (fire-and-forget to separate coroutines).
    that some situations require more careful attention. It also prevents the
    clock from racing past important events while the player is not watching.
 
-4. **Coroutine-based, not thread-pool.**
-   Spring Boot coroutines (kotlinx.coroutines) on a single `CoroutineScope`
-   tied to the session lifecycle. Structured concurrency ensures cleanup on
-   session stop.
+4. **Coroutine-based pause via `CompletableDeferred` (implemented in PR #191).**
+   The tick loop suspends on a `CompletableDeferred<Unit>` while paused — zero
+   CPU cost. `pause()` creates a fresh deferred and stores it in
+   `SessionRuntime.pauseSignal`; `resume()` and `stop()` call
+   `CompletableDeferred.complete(Unit)` to wake the coroutine.
+
+   `CompletableDeferred` was chosen over `Mutex(locked=true)` because any
+   coroutine may call `complete()` regardless of which coroutine created the
+   deferred, avoiding lock-ownership ambiguity. Both `clockState` and
+   `pauseSignal` are updated atomically inside `synchronized(runtime)` in
+   `pause()` to prevent the tick loop from observing `PAUSED` with a `null`
+   signal between the two writes. The signal reference is captured in a local
+   `val` before `await()` to guard against `resume()` nulling the field after
+   `complete()` but before the `await()` returns.
+
+   Earlier drafts considered `Mutex(locked=true)`, but `CompletableDeferred`
+   gives cleaner ownership semantics for "wait for an external signal" patterns.
 
 ---
 
@@ -184,9 +197,24 @@ non-blocking (fire-and-forget to separate coroutines).
 
 ## Testing Strategy
 
-**Unit tests**: mock all dependencies; assert tick pipeline calls services
-in correct order; assert auto-slow triggers activate/deactivate correctly;
-assert slip detection logic.
+**Unit tests** (`TickEngineImplTest`): all dependencies mocked with MockK.
+
+- Lifecycle tests (start/pause/resume/stop/setSpeed) are synchronous — no
+  coroutine involvement beyond verifying state transitions.
+- Timing-sensitive tests (auto-slow activation, auto-slow recovery, auto-save
+  interval, slip detection) use `runTest(UnconfinedTestDispatcher())` from
+  `kotlinx-coroutines-test`. The test injects a `TestScope` as
+  `TickEngineImpl.engineScope` before calling `start()`, so `delay()` calls
+  inside the tick loop advance virtual time rather than blocking real
+  wall-clock time. Each test calls `advanceTimeBy(N)` to fast-forward
+  virtual milliseconds, then asserts the expected state. The engine is
+  explicitly stopped inside the `runTest` block to avoid
+  `UncompletedCoroutinesError` from the suspended tick coroutine.
+- The slip-detection test retains `Thread.sleep(20)` in the mock to simulate
+  a slow power-flow solve — real elapsed time drives slip detection via
+  `System.currentTimeMillis()`. With `UnconfinedTestDispatcher`, the tick
+  coroutine runs on the test thread, so 10 slips complete in ~200 ms of real
+  wall-clock time (previously ~1 s with `delay(1000)`).
 
 **Integration tests**: run 10 ticks on IEEE 14-bus; assert `gameTimeMinutes`
 advances by 100; assert power flow called 10 times; assert auto-save called
