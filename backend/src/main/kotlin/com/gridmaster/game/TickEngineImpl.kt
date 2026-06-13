@@ -46,8 +46,8 @@ private val NetworkViolation.severity: ViolationSeverity
  * own session's runtime — it never modifies other sessions.
  *
  * ### Pause/resume
- * The tick loop suspends on [SessionRuntime.pauseGate] while paused — zero CPU cost.
- * [pause] locks the gate via [Mutex.tryLock]; [resume] unlocks it to wake the loop.
+ * The tick loop suspends on [SessionRuntime.pauseSignal] while paused — zero CPU cost.
+ * [pause] creates a fresh locked [Mutex] signal; [resume] and [stop] unlock it to wake the loop.
  *
  * ### Slip handling
  * If a tick's work exceeds the wall-clock slot, the loop records a slip and
@@ -130,8 +130,8 @@ class TickEngineImpl(
                 runtime.clockState = ClockState.PAUSED
                 runtime.toStatus()
             }
-        // Lock the pause gate so the tick loop suspends with zero CPU cost.
-        runtime.pauseGate.tryLock()
+        // Create a fresh locked Mutex — the tick loop suspends on withLock until resume() unlocks it.
+        runtime.pauseSignal = Mutex(locked = true)
         runtime.pendingSave = true // Tick loop saves after current tick finishes
         log.info("Paused session {}", sessionId)
         return pausedStatus
@@ -150,10 +150,10 @@ class TickEngineImpl(
                 runtime.clockState = ClockState.RUNNING
                 runtime.toStatus()
             }
-        // Unlock the pause gate — wakes the tick loop coroutine.
-        if (runtime.pauseGate.isLocked) {
-            runtime.pauseGate.unlock()
-        }
+        // Unlock the signal — wakes the tick loop coroutine.
+        val signal = runtime.pauseSignal
+        runtime.pauseSignal = null
+        signal?.unlock()
         log.info("Resumed session {}", sessionId)
         return resumedStatus
     }
@@ -195,11 +195,11 @@ class TickEngineImpl(
     ) {
         val runtime = findAndCheckOwner(sessionId, userId)
         runtime.clockState = ClockState.STOPPED
-        // Unlock the gate in case the loop is suspended — CancellationException from
-        // job.cancel() will propagate through the re-awakened coroutine.
-        if (runtime.pauseGate.isLocked) {
-            runtime.pauseGate.unlock()
-        }
+        // Unlock the pause signal (if any) before cancelling — the CancellationException
+        // from job.cancel() propagates through the re-awakened withLock suspension point.
+        val signal = runtime.pauseSignal
+        runtime.pauseSignal = null
+        signal?.unlock()
         runtime.job?.cancel()
         sessions.remove(sessionId)
         eventEngine.unregister(sessionId)
@@ -229,8 +229,8 @@ class TickEngineImpl(
                             runtime.pendingSave = false
                             triggerAutoSave(runtime)
                         }
-                        // Suspend with zero CPU cost until resume() unlocks the gate.
-                        runtime.pauseGate.withLock { }
+                        // Suspend with zero CPU cost until resume() or stop() unlocks the signal.
+                        runtime.pauseSignal?.withLock { }
                         continue
                     }
                     ClockState.RUNNING, ClockState.SLOW -> executeTick(runtime)
@@ -275,8 +275,10 @@ class TickEngineImpl(
             } catch (e: Exception) {
                 log.error("Power flow solve failed for session {}, tick {}", runtime.sessionId, ctx.tickNumber, e)
                 // Pause (not stop) so the player can inspect the grid and potentially resume. Closes #64.
-                synchronized(runtime) { runtime.clockState = ClockState.PAUSED }
-                runtime.pauseGate.tryLock()
+                synchronized(runtime) {
+                    runtime.clockState = ClockState.PAUSED
+                    runtime.pauseSignal = Mutex(locked = true)
+                }
                 triggerAutoSave(runtime)
                 return
             }
@@ -334,8 +336,10 @@ class TickEngineImpl(
                     runtime.sessionId,
                     SLIP_PAUSE_THRESHOLD,
                 )
-                synchronized(runtime) { runtime.clockState = ClockState.PAUSED }
-                runtime.pauseGate.tryLock()
+                synchronized(runtime) {
+                    runtime.clockState = ClockState.PAUSED
+                    runtime.pauseSignal = Mutex(locked = true)
+                }
                 triggerAutoSave(runtime)
                 return
             }
@@ -495,11 +499,15 @@ internal class SessionRuntime(
     var playerSpeedOverride: Boolean = false
 
     /**
-     * Used to suspend the tick loop coroutine with zero CPU cost while [clockState]
-     * is [ClockState.PAUSED]. [TickEngineImpl.pause] locks this gate via [tryLock];
-     * [TickEngineImpl.resume] and [TickEngineImpl.stop] unlock it to wake the loop.
+     * Holds a [Mutex] that is locked ([Mutex.locked] = true) while this session is paused.
+     * The tick loop coroutine awaits [Mutex.withLock] on it — suspending with zero CPU cost.
+     * A fresh [Mutex] is created on each [TickEngineImpl.pause] call so there is no
+     * ambiguity about ownership or lock state across pause/resume cycles.
+     * Set to null when not paused; [TickEngineImpl.resume] and [TickEngineImpl.stop]
+     * call [Mutex.unlock] and clear this field to wake the coroutine.
      */
-    val pauseGate = Mutex()
+    @Volatile
+    var pauseSignal: Mutex? = null
 
     /** Snapshot of the current state as an immutable [TickClockStatus]. Synchronized for consistency. */
     fun toStatus(): TickClockStatus =
