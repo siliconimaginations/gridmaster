@@ -82,7 +82,7 @@ class TickEngineImpl(
     private var gameStatePublisher: GameStatePublisher? = null
 
     /** Parent scope for all per-session coroutines. Cancelled on application shutdown. */
-    private val engineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    internal var engineScope: CoroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
     /** Live session runtimes keyed by sessionId. */
     private val sessions = ConcurrentHashMap<String, SessionRuntime>()
@@ -416,7 +416,7 @@ class TickEngineImpl(
 
     private fun triggerAutoSave(runtime: SessionRuntime) {
         val snapshot = runtime.toStatus()
-        engineScope.launch(Dispatchers.IO) {
+        engineScope.launch {
             saveSnapshot(
                 sessionId = runtime.sessionId,
                 userId = runtime.userId,
