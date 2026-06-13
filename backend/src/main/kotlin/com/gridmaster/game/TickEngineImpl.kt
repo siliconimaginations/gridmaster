@@ -10,14 +10,13 @@ import com.gridmaster.engine.powerflow.PowerFlowResult
 import com.gridmaster.engine.powerflow.PowerFlowService
 import com.gridmaster.engine.powerflow.ViolationSeverity
 import com.gridmaster.game.event.EventEngine
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
@@ -47,7 +46,9 @@ private val NetworkViolation.severity: ViolationSeverity
  *
  * ### Pause/resume
  * The tick loop suspends on [SessionRuntime.pauseSignal] while paused — zero CPU cost.
- * [pause] creates a fresh locked [Mutex] signal; [resume] and [stop] unlock it to wake the loop.
+ * [pause] creates a fresh [CompletableDeferred] signal; [resume] and [stop] complete it
+ * to wake the loop. `CompletableDeferred.await()` is idiomatic for "wait for an external
+ * signal" and avoids any lock-ownership concerns that arise with [kotlinx.coroutines.sync.Mutex].
  *
  * ### Slip handling
  * If a tick's work exceeds the wall-clock slot, the loop records a slip and
@@ -130,8 +131,8 @@ class TickEngineImpl(
                 runtime.clockState = ClockState.PAUSED
                 runtime.toStatus()
             }
-        // Create a fresh locked Mutex — the tick loop suspends on withLock until resume() unlocks it.
-        runtime.pauseSignal = Mutex(locked = true)
+        // Create a fresh incomplete deferred — the tick loop suspends on await() until resume() completes it.
+        runtime.pauseSignal = CompletableDeferred()
         runtime.pendingSave = true // Tick loop saves after current tick finishes
         log.info("Paused session {}", sessionId)
         return pausedStatus
@@ -150,10 +151,10 @@ class TickEngineImpl(
                 runtime.clockState = ClockState.RUNNING
                 runtime.toStatus()
             }
-        // Unlock the signal — wakes the tick loop coroutine.
+        // Complete the signal — wakes the tick loop coroutine suspended in await().
         val signal = runtime.pauseSignal
         runtime.pauseSignal = null
-        signal?.unlock()
+        signal?.complete(Unit)
         log.info("Resumed session {}", sessionId)
         return resumedStatus
     }
@@ -195,11 +196,11 @@ class TickEngineImpl(
     ) {
         val runtime = findAndCheckOwner(sessionId, userId)
         runtime.clockState = ClockState.STOPPED
-        // Unlock the pause signal (if any) before cancelling — the CancellationException
-        // from job.cancel() propagates through the re-awakened withLock suspension point.
+        // Complete the pause signal (if any) before cancelling — the CancellationException
+        // from job.cancel() propagates through the re-awakened await() suspension point.
         val signal = runtime.pauseSignal
         runtime.pauseSignal = null
-        signal?.unlock()
+        signal?.complete(Unit)
         runtime.job?.cancel()
         sessions.remove(sessionId)
         eventEngine.unregister(sessionId)
@@ -229,8 +230,10 @@ class TickEngineImpl(
                             runtime.pendingSave = false
                             triggerAutoSave(runtime)
                         }
-                        // Suspend with zero CPU cost until resume() or stop() unlocks the signal.
-                        runtime.pauseSignal?.withLock { }
+                        // Capture the reference before suspending so resume() nulling the field
+                        // after complete() does not affect this await() call.
+                        val signal = runtime.pauseSignal
+                        signal?.await()
                         continue
                     }
                     ClockState.RUNNING, ClockState.SLOW -> executeTick(runtime)
@@ -277,7 +280,7 @@ class TickEngineImpl(
                 // Pause (not stop) so the player can inspect the grid and potentially resume. Closes #64.
                 synchronized(runtime) {
                     runtime.clockState = ClockState.PAUSED
-                    runtime.pauseSignal = Mutex(locked = true)
+                    runtime.pauseSignal = CompletableDeferred()
                 }
                 triggerAutoSave(runtime)
                 return
@@ -338,7 +341,7 @@ class TickEngineImpl(
                 )
                 synchronized(runtime) {
                     runtime.clockState = ClockState.PAUSED
-                    runtime.pauseSignal = Mutex(locked = true)
+                    runtime.pauseSignal = CompletableDeferred()
                 }
                 triggerAutoSave(runtime)
                 return
@@ -499,15 +502,18 @@ internal class SessionRuntime(
     var playerSpeedOverride: Boolean = false
 
     /**
-     * Holds a [Mutex] that is locked ([Mutex.locked] = true) while this session is paused.
-     * The tick loop coroutine awaits [Mutex.withLock] on it — suspending with zero CPU cost.
-     * A fresh [Mutex] is created on each [TickEngineImpl.pause] call so there is no
-     * ambiguity about ownership or lock state across pause/resume cycles.
-     * Set to null when not paused; [TickEngineImpl.resume] and [TickEngineImpl.stop]
-     * call [Mutex.unlock] and clear this field to wake the coroutine.
+     * A [CompletableDeferred] that the tick loop suspends on via [CompletableDeferred.await]
+     * while this session is paused — zero CPU cost.
+     * A fresh deferred is created on each [TickEngineImpl.pause] call; [TickEngineImpl.resume]
+     * and [TickEngineImpl.stop] call [CompletableDeferred.complete] to wake the coroutine.
+     * Set to null when not paused.
+     *
+     * Using [CompletableDeferred] rather than [kotlinx.coroutines.sync.Mutex] avoids any
+     * lock-ownership ambiguity: any coroutine may call [CompletableDeferred.complete] to
+     * signal the waiting loop, with no requirement to be the original lock holder.
      */
     @Volatile
-    var pauseSignal: Mutex? = null
+    var pauseSignal: CompletableDeferred<Unit>? = null
 
     /** Snapshot of the current state as an immutable [TickClockStatus]. Synchronized for consistency. */
     fun toStatus(): TickClockStatus =
