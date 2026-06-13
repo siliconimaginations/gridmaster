@@ -129,11 +129,12 @@ class TickEngineImpl(
                     "Cannot pause session $sessionId in state ${runtime.clockState}"
                 }
                 runtime.clockState = ClockState.PAUSED
+                // Set inside synchronized so clockState and pauseSignal are always updated atomically —
+                // prevents the tick loop from seeing PAUSED with a null signal between the two writes.
+                runtime.pauseSignal = CompletableDeferred()
+                runtime.pendingSave = true
                 runtime.toStatus()
             }
-        // Create a fresh incomplete deferred — the tick loop suspends on await() until resume() completes it.
-        runtime.pauseSignal = CompletableDeferred()
-        runtime.pendingSave = true // Tick loop saves after current tick finishes
         log.info("Paused session {}", sessionId)
         return pausedStatus
     }
