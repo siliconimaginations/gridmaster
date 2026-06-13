@@ -12,7 +12,19 @@ plugins {
 
 group = "com.gridmaster"
 version = "0.1.0-SNAPSHOT"
-java.sourceCompatibility = JavaVersion.VERSION_21
+java {
+    // Pin JVM to Temurin 21 — toolchain replaces sourceCompatibility + jvmTarget settings.
+    // Gradle will use the JDK installed by CI (actions/setup-java temurin-21) or auto-provision locally.
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+        vendor = JvmVendorSpec.ADOPTIUM
+    }
+}
+
+kotlin {
+    // Explicitly align the Kotlin compiler target with the Java toolchain declared above.
+    jvmToolchain(21)
+}
 
 repositories {
     mavenCentral()
@@ -69,7 +81,6 @@ dependencies {
 tasks.withType<KotlinCompile> {
     kotlinOptions {
         freeCompilerArgs = listOf("-Xjsr305=strict")
-        jvmTarget = "21"
     }
 }
 
