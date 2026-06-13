@@ -19,6 +19,7 @@ sealed class GameEvent {
     abstract val category: EventCategory
     abstract val description: String
     abstract val severity: EventSeverity
+
     /** Direct effects produced when this event fires. PolicyEvent always returns an empty list; card option effects are applied on resolution. */
     abstract val effects: List<EventEffect>
 }
