@@ -11,12 +11,15 @@ For each implemented scenario that failed in results.json:
    it to the GitHub Projects board (project #2) as P1.
 
 Environment variables (set automatically in GitHub Actions):
-  GITHUB_TOKEN        — token with issues:write and project read
+  GITHUB_TOKEN        — token with issues:write (GITHUB_TOKEN from Actions)
+  PROJECT_TOKEN       — PAT with `project` scope for Projects V2 GraphQL mutations
+                        (falls back to GITHUB_TOKEN if not set, but will fail for
+                        user-level projects without project scope)
   GITHUB_REPOSITORY   — "owner/repo"
   GITHUB_RUN_NUMBER   — CI run number (e.g. "53")
   GITHUB_RUN_URL      — full URL to the Actions run
   GITHUB_SERVER_URL   — e.g. "https://github.com" (used to build run URL fallback)
-  GITHUB_REPOSITORY_URL — used to build run URL if GITHUB_RUN_URL not set
+  GITHUB_RUN_ID       — used to build run URL if GITHUB_RUN_URL not set
 """
 
 from __future__ import annotations
@@ -26,12 +29,13 @@ from collections import defaultdict
 RESULTS   = "frontend/playwright-report/results.json"
 CATALOGUE = "frontend/e2e/catalogue.json"
 
-GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
-REPO         = os.environ.get("GITHUB_REPOSITORY", "")  # "owner/repo"
-RUN_NUMBER   = os.environ.get("GITHUB_RUN_NUMBER", "?")
-RUN_ID       = os.environ.get("GITHUB_RUN_ID", "")
-SERVER_URL   = os.environ.get("GITHUB_SERVER_URL", "https://github.com")
-RUN_URL      = (
+GITHUB_TOKEN  = os.environ.get("GITHUB_TOKEN", "")
+PROJECT_TOKEN = os.environ.get("PROJECT_TOKEN") or GITHUB_TOKEN  # needs `project` scope
+REPO          = os.environ.get("GITHUB_REPOSITORY", "")          # "owner/repo"
+RUN_NUMBER    = os.environ.get("GITHUB_RUN_NUMBER", "?")
+RUN_ID        = os.environ.get("GITHUB_RUN_ID", "")
+SERVER_URL    = os.environ.get("GITHUB_SERVER_URL", "https://github.com")
+RUN_URL       = (
     os.environ.get("GITHUB_RUN_URL")
     or (f"{SERVER_URL}/{REPO}/actions/runs/{RUN_ID}" if RUN_ID else "(unknown)")
 )
@@ -42,6 +46,7 @@ E2E_FAILURE_LABEL = "e2e-failure"
 # ── GitHub helpers ────────────────────────────────────────────────────────────
 
 def gh(method: str, path: str, body: dict | None = None) -> dict | list:
+    """REST API call — uses GITHUB_TOKEN (issues:write is enough)."""
     url = f"https://api.github.com{path}"
     data = json.dumps(body).encode() if body else None
     req = urllib.request.Request(
@@ -62,11 +67,16 @@ def gh(method: str, path: str, body: dict | None = None) -> dict | list:
 
 
 def gh_graphql(query: str, variables: dict | None = None) -> dict:
+    """GraphQL call — uses PROJECT_TOKEN which must have `project` scope.
+
+    GITHUB_TOKEN cannot access user-level Projects V2; a PAT with `project`
+    scope (stored as the PROJECT_TOKEN secret) is required.
+    """
     data = json.dumps({"query": query, "variables": variables or {}}).encode()
     req = urllib.request.Request(
         "https://api.github.com/graphql", data=data, method="POST",
         headers={
-            "Authorization": f"bearer {GITHUB_TOKEN}",
+            "Authorization": f"bearer {PROJECT_TOKEN}",
             "Content-Type": "application/json",
         },
     )
@@ -101,6 +111,9 @@ def main() -> None:
     if not GITHUB_TOKEN:
         print("GITHUB_TOKEN not set — skipping issue creation", file=sys.stderr)
         sys.exit(0)
+
+    if not PROJECT_TOKEN:
+        print("PROJECT_TOKEN not set — issues will be created but not added to board", file=sys.stderr)
 
     if not os.path.exists(RESULTS):
         print(f"No results file at {RESULTS} — skipping issue creation")
@@ -225,7 +238,11 @@ def main() -> None:
 
 
 def _add_to_project(issue_node_id: str, issue_number: int, feat_id: str) -> None:
-    """Add the issue to the user's Projects V2 board #2 and set Priority = P1."""
+    """Add the issue to the user's Projects V2 board #2 and set Priority = P1.
+
+    Requires PROJECT_TOKEN (a PAT with `project` scope).
+    GITHUB_TOKEN cannot access user-level Projects V2.
+    """
     owner = REPO.split("/")[0]
 
     # 1. Get project node ID
@@ -301,7 +318,8 @@ def _add_to_project(issue_node_id: str, issue_number: int, feat_id: str) -> None
         return
 
     p1_option = next(
-        (o for o in priority_field.get("options", []) if o.get("name", "").upper() == "P1"),
+        # TODO #219: tighten to startswith("P1 ") or regex \bP1\b to avoid over-matching "P10"
+        (o for o in priority_field.get("options", []) if o.get("name", "").upper().startswith("P1")),
         None,
     )
     if not p1_option:
