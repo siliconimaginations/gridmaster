@@ -1,0 +1,47 @@
+# ci-speed-badge.yml — runs after every successful push to main.
+#
+# Queries the GitHub Actions API for recent ci.yml run durations,
+# computes the average wall-clock time, and commits an SVG badge to
+# .github/badges/ci-speed.svg.
+#
+# Runs in its own workflow (separate from ci.yml) so that
+# continue-on-error is scoped to this cosmetic job only and cannot
+# hide failures in the real CI pipeline.  The badge commit will fail
+# with GH006 when branch protection blocks the github-actions bot —
+# this is expected and cosmetic.
+
+name: CI speed badge
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  ci-speed-badge:
+    name: CI speed badge update
+    # Only run when the triggering CI workflow succeeded.
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    continue-on-error: true  # Badge commit blocked by branch protection (GH006); cosmetic only
+    permissions:
+      contents: write
+      actions: read
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Generate CI speed badge
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          BADGES_DIR: .github/badges
+        run: python3 .github/scripts/gen_ci_speed_badge.py
+
+      - name: Commit CI speed badge
+        uses: EndBug/add-and-commit@v10
+        with:
+          add: .github/badges/ci-speed.svg
+          message: 'ci: update CI speed badge [skip ci]'
+          default_author: github_actions
