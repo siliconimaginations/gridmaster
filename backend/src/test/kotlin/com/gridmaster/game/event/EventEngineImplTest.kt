@@ -428,6 +428,24 @@ class EventEngineImplTest {
         assertThat(log).anyMatch { it.event.id.startsWith("card-choice-") }
     }
 
+    @Test
+    fun `PolicyEvent produces no network mutations — card effects are applied via resolveCard only`() {
+        engine.register(sessionId, EventConfig(randomSeed = 42))
+        // PolicyEvent.effects is always emptyList(); card option effects are applied via resolveCard(),
+        // not during the tick that fires the event. This test locks in that contract.
+        val card =
+            EventCard(
+                prompt = "Accept subsidy?",
+                options = listOf(CardOption("Yes", listOf(EventEffect.ScaleGeneratorCost(FuelType.GAS, 0.8)))),
+            )
+        val event = PolicyEvent("pol-no-mut", description = "Contract test", severity = EventSeverity.INFO, card = card)
+        engine.schedule(sessionId, event, atGameTimeMinutes = 100)
+
+        val fired = engine.onTick(ctx(100), snapshot)
+        val policyFired = fired.find { it.event.id == "pol-no-mut" }!!
+        assertThat(policyFired.mutations).isEmpty()
+    }
+
     // ── Stochastic scheduling ─────────────────────────────────────────────────
 
     @Test
