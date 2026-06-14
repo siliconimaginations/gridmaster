@@ -1,27 +1,33 @@
 #!/usr/bin/env python3
 """
-Generate a flat SVG badge from Playwright JSON results.
+Generate a flat SVG badge showing E2E scenario coverage.
 
-Metric: N/M e2e scenarios passed
-  N = number of specs whose final test result is 'passed' (across all retries)
-  M = total number of specs in the suite
+Metric: N/M  where
+  M = total scenarios listed in frontend/e2e/catalogue.json
+  N = catalogue scenarios whose spec title appears as a *passing* test
+      in the Playwright JSON results file
+
+This gives an honest coverage fraction even when some catalogue entries
+have no test yet (they simply don't appear in results → not counted).
+Running all existing tests green but missing 3 catalogue entries shows
+17/20, not 17/17.
 
 Writes .github/badges/e2e.svg.
 
 Usage:
   python3 scripts/gen_e2e_badge.py [path/to/results.json]
 
-The default path matches Playwright's --reporter=json default output location
-when outputFile is set to frontend/playwright-report/results.json.
+The default path matches the outputFile set in playwright.config.ts.
 """
 import json, os, sys
 
-RESULTS = sys.argv[1] if len(sys.argv) > 1 else "frontend/playwright-report/results.json"
-OUTPUT  = ".github/badges/e2e.svg"
+RESULTS   = sys.argv[1] if len(sys.argv) > 1 else "frontend/playwright-report/results.json"
+CATALOGUE = "frontend/e2e/catalogue.json"
+OUTPUT    = ".github/badges/e2e.svg"
 
 
 def collect_specs(suites: list) -> list[dict]:
-    """Recursively collect all leaf specs from the nested suite tree."""
+    """Recursively collect all leaf specs from the nested Playwright suite tree."""
     specs = []
     for suite in suites:
         specs.extend(suite.get("specs", []))
@@ -30,36 +36,56 @@ def collect_specs(suites: list) -> list[dict]:
 
 
 def spec_passed(spec: dict) -> bool:
-    """A spec passes if every test in it has at least one 'passed' result."""
+    """A spec passes if every test within it has at least one 'passed' result."""
     for test in spec.get("tests", []):
-        results = test.get("results", [])
-        if not any(r.get("status") == "passed" for r in results):
+        if not any(r.get("status") == "passed" for r in test.get("results", [])):
             return False
     return True
 
 
-if not os.path.exists(RESULTS):
-    print(f"No results file at {RESULTS} — skipping badge generation.")
+# ── Load catalogue ────────────────────────────────────────────────────────────
+
+if not os.path.exists(CATALOGUE):
+    print(f"No catalogue at {CATALOGUE} — skipping badge generation.")
     sys.exit(0)
 
-with open(RESULTS) as f:
-    data = json.load(f)
+with open(CATALOGUE) as f:
+    cat = json.load(f)
 
-specs = collect_specs(data.get("suites", []))
-total  = len(specs)
-passed = sum(1 for s in specs if spec_passed(s))
+all_scenarios = cat.get("scenarios", [])
+total = len(all_scenarios)
+catalogue_ids = {s["id"] for s in all_scenarios}
 
 if total == 0:
-    print("No specs found — skipping badge generation.")
+    print("Empty catalogue — skipping badge generation.")
     sys.exit(0)
 
-value   = f"{passed}/{total}"
-all_ok  = passed == total
-colour  = "#4c1" if all_ok else "#e05d44" if passed == 0 else "#dfb317"
-label   = "e2e scenarios"
+# ── Load Playwright results ───────────────────────────────────────────────────
 
-# Badge geometry (shields.io flat style)
-lw = 108   # label panel width (px)
+passing_ids: set[str] = set()
+
+if os.path.exists(RESULTS):
+    with open(RESULTS) as f:
+        data = json.load(f)
+    for spec in collect_specs(data.get("suites", [])):
+        title = spec.get("title", "")
+        # Spec titles use the scenario ID as a prefix, e.g. "SL-01 app loads …"
+        scenario_id = title.split()[0] if title else ""
+        if scenario_id in catalogue_ids and spec_passed(spec):
+            passing_ids.add(scenario_id)
+else:
+    print(f"No results file at {RESULTS} — coverage will show 0/{total}.")
+
+covered = len(passing_ids)
+value   = f"{covered}/{total}"
+pct     = covered / total
+
+colour = "#4c1" if pct == 1.0 else "#97ca00" if pct >= 0.8 else "#dfb317" if pct >= 0.5 else "#e05d44"
+label  = "e2e coverage"
+
+# ── Build SVG (shields.io flat style) ────────────────────────────────────────
+
+lw = 98    # label panel width (px)
 vw = 40    # value panel width (px)
 tw = lw + vw
 lx = lw * 10 // 2
@@ -96,5 +122,6 @@ os.makedirs(os.path.dirname(OUTPUT), exist_ok=True)
 with open(OUTPUT, "w") as f:
     f.write(svg)
 
-status = "✅" if all_ok else "❌"
-print(f"Badge written to {OUTPUT}: {value} {status} (colour {colour})")
+print(f"Badge written to {OUTPUT}: {value} ({pct*100:.0f}%) colour={colour}")
+print(f"  Passing: {sorted(passing_ids)}")
+print(f"  Missing: {sorted(catalogue_ids - passing_ids)}")
