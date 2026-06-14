@@ -11,6 +11,13 @@ import { test, expect } from '@playwright/test'
  *
  * A fresh session is created for each test and deleted on completion.
  *
+ * IMPORTANT — backend URL:
+ * Physics tests create their own APIRequestContext pointed at the Spring Boot
+ * backend directly (BACKEND_URL, default http://localhost:8080) rather than
+ * using the global `request` fixture that goes through the Vite preview proxy.
+ * This avoids a known issue where the Vite proxy drops the Authorization header
+ * for POST requests with JSON bodies on certain nested paths.
+ *
  * Notes:
  * - PH-01 uses DC mode (more numerically stable than AC on a cold session).
  *   The correct request field is `mode` (not `solveMode`) and the balance type
@@ -24,15 +31,20 @@ import { test, expect } from '@playwright/test'
  * @see docs/engineering/15-e2e-ci.md §PH-01–02
  */
 
+/** Backend API base URL — bypasses Vite proxy to avoid auth-header stripping. */
+const BACKEND_URL = process.env.BACKEND_URL ?? 'http://localhost:8080'
+
 interface AuthTokenResponse { token: string }
 interface SessionResponse   { id: string }
 
-async function createSession(request: Parameters<Parameters<typeof test>[1]>[0]['request']): Promise<{ token: string; sessionId: string }> {
-  const tokenRes = await request.post('/api/auth/token', { data: {} })
+type ApiContext = Parameters<Parameters<typeof test>[1]>[0]['request']
+
+async function createSession(api: ApiContext): Promise<{ token: string; sessionId: string }> {
+  const tokenRes = await api.post('/api/auth/token', { data: {} })
   expect(tokenRes.ok(), `POST /api/auth/token failed: ${tokenRes.status()}`).toBeTruthy()
   const { token } = await tokenRes.json() as AuthTokenResponse
 
-  const sessionRes = await request.post('/api/sessions', {
+  const sessionRes = await api.post('/api/sessions', {
     data: { displayName: 'PH fixture', mode: 'FREE_PLAY', networkPreset: 'ieee14' },
     headers: { Authorization: `Bearer ${token}` },
   })
@@ -43,17 +55,19 @@ async function createSession(request: Parameters<Parameters<typeof test>[1]>[0][
 }
 
 async function deleteSession(
-  request: Parameters<Parameters<typeof test>[1]>[0]['request'],
+  api: ApiContext,
   token: string,
   sessionId: string,
 ): Promise<void> {
-  await request.delete(`/api/sessions/${sessionId}`, {
+  await api.delete(`/api/sessions/${sessionId}`, {
     headers: { Authorization: `Bearer ${token}` },
   })
 }
 
-test('PH-01 POST /powerflow/run returns a valid power flow result', async ({ request }) => {
-  const { token, sessionId } = await createSession(request)
+test('PH-01 POST /powerflow/run returns a valid power flow result', async ({ playwright }) => {
+  // Use a dedicated context pointing at the backend directly to avoid proxy auth issues.
+  const api = await playwright.request.newContext({ baseURL: BACKEND_URL })
+  const { token, sessionId } = await createSession(api)
 
   try {
     // Use DC mode: always converges on a well-formed network, avoiding PowSyBl AC
@@ -61,7 +75,7 @@ test('PH-01 POST /powerflow/run returns a valid power flow result', async ({ req
     //
     // IMPORTANT: the DTO field is `mode` (not `solveMode`), and the balance type
     // must be the full enum string — `"PROPORTIONAL"` is not accepted.
-    const res = await request.post(`/api/sessions/${sessionId}/powerflow/run`, {
+    const res = await api.post(`/api/sessions/${sessionId}/powerflow/run`, {
       data: { mode: 'DC', balanceType: 'PROPORTIONAL_TO_GENERATION_P_MAX' },
       headers: { Authorization: `Bearer ${token}` },
     })
@@ -72,12 +86,15 @@ test('PH-01 POST /powerflow/run returns a valid power flow result', async ({ req
     expect(typeof body.status).toBe('string')
     expect(body.snapshot).toBeTruthy()
   } finally {
-    await deleteSession(request, token, sessionId)
+    await deleteSession(api, token, sessionId)
+    await api.dispose()
   }
 })
 
-test('PH-02 POST /contingencies/trigger returns 202 Accepted', async ({ request }) => {
-  const { token, sessionId } = await createSession(request)
+test('PH-02 POST /contingencies/trigger returns 202 Accepted', async ({ playwright }) => {
+  // Use a dedicated context pointing at the backend directly to avoid proxy auth issues.
+  const api = await playwright.request.newContext({ baseURL: BACKEND_URL })
+  const { token, sessionId } = await createSession(api)
 
   try {
     // The trigger endpoint returns 202 Accepted immediately (async kick-off).
@@ -85,7 +102,7 @@ test('PH-02 POST /contingencies/trigger returns 202 Accepted', async ({ request 
     // 401/404 are accepted as CI fallbacks when the session is not yet visible
     // in the PhysicsSessionStore (timing race between game-session creation and
     // the physics store registration).
-    const res = await request.post(`/api/sessions/${sessionId}/contingencies/trigger`, {
+    const res = await api.post(`/api/sessions/${sessionId}/contingencies/trigger`, {
       headers: { Authorization: `Bearer ${token}` },
     })
 
@@ -94,6 +111,7 @@ test('PH-02 POST /contingencies/trigger returns 202 Accepted', async ({ request 
       `Unexpected status ${res.status()} from /contingencies/trigger`,
     ).toBeTruthy()
   } finally {
-    await deleteSession(request, token, sessionId)
+    await deleteSession(api, token, sessionId)
+    await api.dispose()
   }
 })
