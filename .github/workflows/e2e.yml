@@ -85,15 +85,17 @@ jobs:
           path: frontend/test-results/
           retention-days: 14
 
-  # Isolated job: write access for badge commit, only runs on push to main.
-  # Mirrors the same isolation applied to frontend-badge / backend-badge in ci.yml.
+  # Isolated job: write access for badge commits, only runs on push to main.
+  # Generates two badges: e2e-coverage.svg and e2e-pass.svg.
+  # Mirrors the isolation pattern used by frontend-badge / backend-badge in ci.yml.
+  # See docs/engineering/16-e2e-coverage-workflow.md for metric definitions.
   e2e-badge:
     name: E2E badge update
     runs-on: ubuntu-22.04
     needs: e2e
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
-      contents: write   # needed to commit the SVG badge
+      contents: write   # needed to commit the SVG badges
 
     steps:
       - name: Checkout
@@ -107,13 +109,13 @@ jobs:
           name: playwright-report
           path: frontend/playwright-report
 
-      - name: Generate E2E badge
-        run: python3 scripts/gen_e2e_badge.py
+      - name: Generate E2E badges (coverage + pass rate)
+        run: python3 scripts/gen_e2e_badges.py
 
-      - name: Commit E2E badge
+      - name: Commit E2E badges
         uses: stefanzweifel/git-auto-commit-action@v5
-        continue-on-error: true   # GH006 branch-protection blocks bot push; badge is cosmetic
+        continue-on-error: true   # GH006 branch-protection blocks bot push; badges are cosmetic
         with:
-          file_pattern: .github/badges/e2e.svg
-          commit_message: 'ci: update e2e badge [skip ci]'
+          file_pattern: .github/badges/e2e-coverage.svg .github/badges/e2e-pass.svg
+          commit_message: 'ci: update e2e badges [skip ci]'
 

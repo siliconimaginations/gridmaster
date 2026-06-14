@@ -42,6 +42,9 @@ test('DP-02 real-time tab shows at least one generator row', async ({ page }) =>
 test('DP-03 day-ahead tab renders UC schedule grid', async ({ page }) => {
   await bootstrapAndOpenDispatch(page)
 
-  await page.getByTestId('tab-dayahead').click()
-  await expect(page.getByTestId('uc-grid')).toBeVisible({ timeout: 5_000 })
+  const tab = page.getByTestId('tab-dayahead')
+  await tab.click()
+  // Wait for the tab to become selected before asserting grid contents
+  await expect(tab).toHaveAttribute('aria-selected', 'true', { timeout: 5_000 })
+  await expect(page.getByTestId('uc-grid')).toBeVisible({ timeout: 10_000 })
 })

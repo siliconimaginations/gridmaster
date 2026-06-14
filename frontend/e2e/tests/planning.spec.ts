@@ -29,9 +29,13 @@ test('PL-01 Plan Day button opens PlanningPanel', async ({ page }) => {
 test('PL-02 N-1 tab shows violations table or empty state', async ({ page }) => {
   await bootstrapAndOpenPlanning(page)
 
-  // Either the violations table or the "no violations" empty state must be present
-  const table    = page.getByTestId('n1-table')
-  const empty    = page.getByTestId('n1-empty')
+  // Default tab is 'invest' — click N-1 tab first
+  const n1Tab = page.getByTestId('tab-n1')
+  await n1Tab.click()
+  await expect(n1Tab).toHaveAttribute('aria-selected', 'true', { timeout: 5_000 })
 
+  // Either the violations table or the "no violations" empty state must be present
+  const table = page.getByTestId('n1-table')
+  const empty = page.getByTestId('n1-empty')
   await expect(table.or(empty)).toBeVisible({ timeout: 5_000 })
 })

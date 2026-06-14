@@ -1,7 +1,7 @@
 # GridMaster
 
 ![CI](https://github.com/siliconimaginations/gridmaster/actions/workflows/ci.yml/badge.svg)
-![Backend Coverage](.github/badges/jacoco.svg) ![Frontend Coverage](.github/badges/vitest.svg) ![E2E Scenarios](.github/badges/e2e.svg)
+![Backend Coverage](.github/badges/jacoco.svg) ![Frontend Coverage](.github/badges/vitest.svg) ![E2E Coverage](.github/badges/e2e-coverage.svg) ![E2E Pass Rate](.github/badges/e2e-pass.svg)
 
 An educational power grid simulation game. Players learn how real power grids are operated and planned — from reading power flows and dispatching generators, to contingency analysis, economic dispatch, and long-term expansion planning.
 
