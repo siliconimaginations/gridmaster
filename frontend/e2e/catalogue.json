@@ -1,0 +1,25 @@
+{
+  "_comment": "Master catalogue of all intended E2E acceptance scenarios. This is the fixed denominator for the e2e coverage badge. Add an entry here whenever a new feature needs an E2E test — even before the test is written. The badge script counts entries where 'implemented' is true AND the matching spec title passes in CI.",
+  "scenarios": [
+    { "id": "SL-01", "description": "App loads without JS errors",                                    "implemented": true },
+    { "id": "SL-02", "description": "POST /api/sessions returns valid UUID",                           "implemented": true },
+    { "id": "SL-03", "description": "First GameStateUpdate arrives within 15 s",                      "implemented": true },
+    { "id": "GC-01", "description": "Tick counter increments (clock advancing at ≥1×)",               "implemented": true },
+    { "id": "GC-02", "description": "Pause halts tick stream; resume restarts it",                    "implemented": true },
+    { "id": "CM-01", "description": "DecommitGenerator → committed=false in next store update",       "implemented": true },
+    { "id": "CM-02", "description": "CommitGenerator → committed=true after decommit baseline",       "implemented": true },
+    { "id": "HUD-01", "description": "Pill badges (load, health, price, clock) non-empty after boot", "implemented": true },
+    { "id": "HUD-02", "description": "Speed change via 10× button reflected in store",                "implemented": true },
+    { "id": "DP-01",  "description": "Run Dispatch button opens DispatchPanel",                       "implemented": true },
+    { "id": "DP-02",  "description": "Real-time tab renders at least one generator row",              "implemented": true },
+    { "id": "DP-03",  "description": "Day-ahead tab renders UC schedule grid",                        "implemented": true },
+    { "id": "PL-01",  "description": "Plan Day button opens PlanningPanel",                           "implemented": true },
+    { "id": "PL-02",  "description": "N-1 tab shows violations table or empty state",                 "implemented": true },
+    { "id": "PH-01",  "description": "POST /powerflow/run returns converged boolean",                 "implemented": true },
+    { "id": "PH-02",  "description": "POST /contingencies/trigger responds 200 or 422",               "implemented": true },
+    { "id": "TL-01",  "description": "Timeline strip and now-marker visible after bootstrap",         "implemented": true },
+    { "id": "IP-01",  "description": "Clicking network element opens InspectorPanel",                 "implemented": false },
+    { "id": "AL-01",  "description": "Alert toast appears when violation is triggered",               "implemented": false },
+    { "id": "EV-01",  "description": "Event card overlay appears and accept updates game state",      "implemented": false }
+  ]
+}
