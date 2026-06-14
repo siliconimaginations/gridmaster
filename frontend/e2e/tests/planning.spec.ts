@@ -7,11 +7,13 @@ import { test, expect } from '@playwright/test'
  * PL-02: N-1 tab shows either a violations table or the "no violations" empty state
  *
  * Note on PL-02 tab click: The PlanningPanel uses the same 180 ms slide-up
- * animation as the DispatchPanel. We wait 300 ms for the animation to settle,
- * then use `tab.evaluate(el => el.click())` rather than Playwright's `force: true`.
- * Native HTMLElement.click() is a trusted event that always bubbles to React's
- * delegated event root, whereas force:true CDP events can be missed by React's
- * fiber reconciliation when the panel is re-rendering on every game tick.
+ * animation as the DispatchPanel. We wait for the animation to finish via the
+ * Web Animations API (`el.getAnimations()`) rather than using a fixed
+ * `waitForTimeout`, then use `tab.evaluate(el => el.click())` rather than
+ * Playwright's `force: true`. Native HTMLElement.click() is a trusted event
+ * that always bubbles to React's delegated event root, whereas force:true CDP
+ * events can be missed by React's fiber reconciliation when the panel is
+ * re-rendering on every game tick.
  *
  * @see docs/engineering/15-e2e-ci.md §PL-01–02
  */
@@ -36,9 +38,10 @@ test('PL-01 Plan Day button opens PlanningPanel', async ({ page }) => {
 test('PL-02 N-1 tab shows violations table or empty state', async ({ page }) => {
   await bootstrapAndOpenPlanning(page)
 
-  // Wait for the 180 ms slide-up animation to settle before clicking the tab.
-  // eslint-disable-next-line playwright/no-wait-for-timeout
-  await page.waitForTimeout(300)
+  // Wait for the 180 ms slide-up animation to finish using the Web Animations API.
+  await page.getByTestId('planning-panel').evaluate(el =>
+    Promise.all(el.getAnimations().map((a: Animation) => a.finished)),
+  )
 
   // Use element.click() via evaluate rather than Playwright force:true.
   // Native HTMLElement.click() is a trusted event that bubbles to React's

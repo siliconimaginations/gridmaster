@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { BACKEND_URL } from '../shared/config'
 
 /**
  * PH — Physics REST API
@@ -17,6 +18,8 @@ import { test, expect } from '@playwright/test'
  * using the global `request` fixture that goes through the Vite preview proxy.
  * This avoids a known issue where the Vite proxy drops the Authorization header
  * for POST requests with JSON bodies on certain nested paths.
+ * BACKEND_URL is imported from e2e/shared/config.ts so it is defined exactly
+ * once and can be overridden via the BACKEND_URL environment variable in CI.
  *
  * Notes:
  * - PH-01 uses DC mode (more numerically stable than AC on a cold session).
@@ -30,9 +33,6 @@ import { test, expect } from '@playwright/test'
  *
  * @see docs/engineering/15-e2e-ci.md §PH-01–02
  */
-
-/** Backend API base URL — bypasses Vite proxy to avoid auth-header stripping. */
-const BACKEND_URL = process.env.BACKEND_URL ?? 'http://localhost:8080'
 
 interface AuthTokenResponse { token: string }
 interface SessionResponse   { id: string }
