@@ -7,9 +7,11 @@ import { test, expect } from '@playwright/test'
  * PL-02: N-1 tab shows either a violations table or the "no violations" empty state
  *
  * Note on PL-02 tab click: The PlanningPanel uses the same 180 ms slide-up
- * animation as the DispatchPanel. We wait 300 ms for the animation to settle
- * before clicking the N-1 tab. `force: true` bypasses the stability check,
- * which never resolves because the panel content re-renders on every game tick.
+ * animation as the DispatchPanel. We wait 300 ms for the animation to settle,
+ * then use `tab.evaluate(el => el.click())` rather than Playwright's `force: true`.
+ * Native HTMLElement.click() is a trusted event that always bubbles to React's
+ * delegated event root, whereas force:true CDP events can be missed by React's
+ * fiber reconciliation when the panel is re-rendering on every game tick.
  *
  * @see docs/engineering/15-e2e-ci.md §PL-01–02
  */
@@ -35,15 +37,16 @@ test('PL-02 N-1 tab shows violations table or empty state', async ({ page }) => 
   await bootstrapAndOpenPlanning(page)
 
   // Wait for the 180 ms slide-up animation to settle before clicking the tab.
-  // During animation the tab button's bounding box is off-screen (translateY(100%)),
-  // so a click at those coordinates does not reach the React onClick handler.
   // eslint-disable-next-line playwright/no-wait-for-timeout
   await page.waitForTimeout(300)
 
-  // force: true — bypasses stability check (content re-renders every game tick).
+  // Use element.click() via evaluate rather than Playwright force:true.
+  // Native HTMLElement.click() is a trusted event that bubbles to React's
+  // delegated event root and reliably fires the onClick handler even while
+  // the panel is re-rendering on every game tick.
   // PlanningPanel tabs have no aria-selected attribute, so we assert content directly.
   const n1Tab = page.getByTestId('tab-n1')
-  await n1Tab.click({ force: true })
+  await n1Tab.evaluate((el: HTMLElement) => el.click())
 
   // Either the violations table or the "no violations" empty state must be present
   const table = page.getByTestId('n1-table')
