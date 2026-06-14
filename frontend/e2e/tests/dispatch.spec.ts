@@ -11,7 +11,8 @@ import { test, expect } from '@playwright/test'
  * the network is ready (button only enables once network !== null).
  *
  * Note on DP-03 tab click: The DispatchPanel uses a CSS slide-up animation
- * (180 ms). We wait 300 ms for the animation to settle, then use
+ * (180 ms). We wait for the animation to finish via the Web Animations API
+ * (`el.getAnimations()`) rather than using a fixed `waitForTimeout`, then use
  * `tab.evaluate(el => el.click())` rather than Playwright's `force: true`.
  * Native HTMLElement.click() is a trusted event that always bubbles to React's
  * delegated event root, whereas force:true CDP events can be missed by React's
@@ -49,11 +50,14 @@ test('DP-02 real-time tab shows at least one generator row', async ({ page }) =>
 test('DP-03 day-ahead tab renders UC schedule grid', async ({ page }) => {
   await bootstrapAndOpenDispatch(page)
 
-  // Wait for the 180 ms slide-up animation to settle. During animation the
-  // tab button's bounding box is off-screen (translateY(100%)), so clicks
-  // at those coordinates miss the element entirely.
-  // eslint-disable-next-line playwright/no-wait-for-timeout
-  await page.waitForTimeout(300)
+  // Wait for the 180 ms slide-up animation to finish using the Web Animations API.
+  // During animation the tab button's bounding box is off-screen (translateY(100%)),
+  // so clicks at those coordinates miss the element entirely.
+  // getAnimations() returns [] once the animation completes, so the Promise resolves
+  // immediately when the panel is already at rest (e.g. on re-runs or fast machines).
+  await page.getByTestId('dispatch-panel').evaluate(el =>
+    Promise.all(el.getAnimations().map((a: Animation) => a.finished)),
+  )
 
   const tab = page.getByTestId('tab-dayahead')
   // Use element.click() via evaluate rather than Playwright force:true.
