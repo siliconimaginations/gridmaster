@@ -318,7 +318,7 @@ def _add_to_project(issue_node_id: str, issue_number: int, feat_id: str) -> None
         return
 
     p1_option = next(
-        (o for o in priority_field.get("options", []) if o.get("name", "").upper() == "P1"),
+        (o for o in priority_field.get("options", []) if o.get("name", "").upper().startswith("P1")),
         None,
     )
     if not p1_option:
