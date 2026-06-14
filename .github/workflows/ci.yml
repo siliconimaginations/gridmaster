@@ -290,3 +290,35 @@ jobs:
           add: .github/badges/jacoco.svg
           message: 'ci: update coverage badge [skip ci]'
           default_author: github_actions
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # CI speed badge — computes average CI wall-clock time from recent runs
+  # and commits an SVG badge. Only runs on push to main.
+  # Uses continue-on-error because badge commits are blocked by branch
+  # protection (GH006); the badge is cosmetic only.
+  # ─────────────────────────────────────────────────────────────────────────
+  ci-speed-badge:
+    name: CI speed badge update
+    needs: [backend-lint, backend-test, backend-integration, frontend-lint, frontend-test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Generate CI speed badge
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          BADGES_DIR: .github/badges
+        run: python3 .github/scripts/gen_ci_speed_badge.py
+
+      - name: Commit CI speed badge
+        uses: EndBug/add-and-commit@v10
+        with:
+          add: .github/badges/ci-speed.svg
+          message: 'ci: update CI speed badge [skip ci]'
+          default_author: github_actions
