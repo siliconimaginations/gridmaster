@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: read   # e2e job; badge commit is in e2e-badge job below
 
 jobs:
   e2e:
@@ -84,4 +84,36 @@ jobs:
           name: playwright-results
           path: frontend/test-results/
           retention-days: 14
+
+  # Isolated job: write access for badge commit, only runs on push to main.
+  # Mirrors the same isolation applied to frontend-badge / backend-badge in ci.yml.
+  e2e-badge:
+    name: E2E badge update
+    runs-on: ubuntu-22.04
+    needs: e2e
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write   # needed to commit the SVG badge
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download Playwright report
+        uses: actions/download-artifact@v4
+        with:
+          name: playwright-report
+          path: frontend/playwright-report
+
+      - name: Generate E2E badge
+        run: python3 scripts/gen_e2e_badge.py
+
+      - name: Commit E2E badge
+        uses: stefanzweifel/git-auto-commit-action@v5
+        continue-on-error: true   # GH006 branch-protection blocks bot push; badge is cosmetic
+        with:
+          file_pattern: .github/badges/e2e.svg
+          commit_message: 'ci: update e2e badge [skip ci]'
 
