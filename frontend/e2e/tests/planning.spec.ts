@@ -6,10 +6,10 @@ import { test, expect } from '@playwright/test'
  * PL-01: "Plan Day" button opens the PlanningPanel
  * PL-02: N-1 tab shows either a violations table or the "no violations" empty state
  *
- * Note on PL-02 tab click: `{ force: true }` bypasses Playwright's actionability
- * check blocked by the panel's CSS transition. PlanningPanel tab buttons do NOT
- * have an `aria-selected` attribute (unlike DispatchPanel), so we assert content
- * visibility directly after the forced click.
+ * Note on PL-02 tab click: The PlanningPanel uses the same 180 ms slide-up
+ * animation as the DispatchPanel. We wait 300 ms for the animation to settle
+ * before clicking the N-1 tab. `force: true` bypasses the stability check,
+ * which never resolves because the panel content re-renders on every game tick.
  *
  * @see docs/engineering/15-e2e-ci.md §PL-01–02
  */
@@ -34,8 +34,13 @@ test('PL-01 Plan Day button opens PlanningPanel', async ({ page }) => {
 test('PL-02 N-1 tab shows violations table or empty state', async ({ page }) => {
   await bootstrapAndOpenPlanning(page)
 
-  // Default tab is 'invest' — click N-1 tab.
-  // force: true — bypasses stability check blocked by panel animation.
+  // Wait for the 180 ms slide-up animation to settle before clicking the tab.
+  // During animation the tab button's bounding box is off-screen (translateY(100%)),
+  // so a click at those coordinates does not reach the React onClick handler.
+  // eslint-disable-next-line playwright/no-wait-for-timeout
+  await page.waitForTimeout(300)
+
+  // force: true — bypasses stability check (content re-renders every game tick).
   // PlanningPanel tabs have no aria-selected attribute, so we assert content directly.
   const n1Tab = page.getByTestId('tab-n1')
   await n1Tab.click({ force: true })

@@ -23,7 +23,7 @@ Environment variables (set automatically in GitHub Actions):
 """
 
 from __future__ import annotations
-import json, os, sys, urllib.request, urllib.error
+import json, os, re, sys, urllib.request, urllib.error
 from collections import defaultdict
 
 RESULTS   = "frontend/playwright-report/results.json"
@@ -318,8 +318,7 @@ def _add_to_project(issue_node_id: str, issue_number: int, feat_id: str) -> None
         return
 
     p1_option = next(
-        # TODO #219: tighten to startswith("P1 ") or regex \bP1\b to avoid over-matching "P10"
-        (o for o in priority_field.get("options", []) if o.get("name", "").upper().startswith("P1")),
+        (o for o in priority_field.get("options", []) if re.match(r"^P1\b", o.get("name", ""), re.IGNORECASE)),
         None,
     )
     if not p1_option:
@@ -353,3 +352,4 @@ def _add_to_project(issue_node_id: str, issue_number: int, feat_id: str) -> None
 
 if __name__ == "__main__":
     main()
+

@@ -10,11 +10,13 @@ import { test, expect } from '@playwright/test'
  * Each test opens the panel independently; GC-02-style bootstrap wait ensures
  * the network is ready (button only enables once network !== null).
  *
- * Note on DP-03 tab click: `{ force: true }` bypasses Playwright's actionability
- * check (element stability / not-covered). The DispatchPanel uses a CSS slide-up
- * animation; during the animation the tab button may be mid-transition and the
- * stability check times out at 60 s. Forcing the click is safe here — the button
- * is rendered and the onClick handler sets React state synchronously.
+ * Note on DP-03 tab click: The DispatchPanel uses a CSS slide-up animation
+ * (180 ms). During the animation the `getBoundingClientRect()` of the tab
+ * button reflects its mid-transition position (potentially off-screen), so
+ * even a forced click dispatches at the wrong coordinates. We wait 300 ms
+ * after the panel becomes visible to let the animation settle, then click
+ * with `force: true` to bypass Playwright's stability check (which never
+ * resolves because the panel content re-renders every game tick).
  *
  * @see docs/engineering/15-e2e-ci.md §DP-01–03
  */
@@ -48,8 +50,14 @@ test('DP-02 real-time tab shows at least one generator row', async ({ page }) =>
 test('DP-03 day-ahead tab renders UC schedule grid', async ({ page }) => {
   await bootstrapAndOpenDispatch(page)
 
+  // Wait for the 180 ms slide-up animation to settle. During animation the
+  // tab button's bounding box reflects its off-screen position, so a click —
+  // even with force:true — dispatches at the wrong viewport coordinates.
+  // eslint-disable-next-line playwright/no-wait-for-timeout
+  await page.waitForTimeout(300)
+
   const tab = page.getByTestId('tab-dayahead')
-  // force: true — bypasses stability check blocked by panel slide-up animation
+  // force: true — bypasses stability check (content re-renders every game tick)
   await tab.click({ force: true })
   // aria-selected is set on DispatchPanel tabs; wait for it to confirm React state update
   await expect(tab).toHaveAttribute('aria-selected', 'true', { timeout: 5_000 })
