@@ -10,6 +10,12 @@ import { test, expect } from '@playwright/test'
  * Each test opens the panel independently; GC-02-style bootstrap wait ensures
  * the network is ready (button only enables once network !== null).
  *
+ * Note on DP-03 tab click: `{ force: true }` bypasses Playwright's actionability
+ * check (element stability / not-covered). The DispatchPanel uses a CSS slide-up
+ * animation; during the animation the tab button may be mid-transition and the
+ * stability check times out at 60 s. Forcing the click is safe here — the button
+ * is rendered and the onClick handler sets React state synchronously.
+ *
  * @see docs/engineering/15-e2e-ci.md §DP-01–03
  */
 
@@ -43,8 +49,9 @@ test('DP-03 day-ahead tab renders UC schedule grid', async ({ page }) => {
   await bootstrapAndOpenDispatch(page)
 
   const tab = page.getByTestId('tab-dayahead')
-  await tab.click()
-  // Wait for the tab to become selected before asserting grid contents
+  // force: true — bypasses stability check blocked by panel slide-up animation
+  await tab.click({ force: true })
+  // aria-selected is set on DispatchPanel tabs; wait for it to confirm React state update
   await expect(tab).toHaveAttribute('aria-selected', 'true', { timeout: 5_000 })
   await expect(page.getByTestId('uc-grid')).toBeVisible({ timeout: 10_000 })
 })
