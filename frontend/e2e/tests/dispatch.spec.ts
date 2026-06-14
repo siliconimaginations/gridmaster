@@ -11,12 +11,11 @@ import { test, expect } from '@playwright/test'
  * the network is ready (button only enables once network !== null).
  *
  * Note on DP-03 tab click: The DispatchPanel uses a CSS slide-up animation
- * (180 ms). During the animation the `getBoundingClientRect()` of the tab
- * button reflects its mid-transition position (potentially off-screen), so
- * even a forced click dispatches at the wrong coordinates. We wait 300 ms
- * after the panel becomes visible to let the animation settle, then click
- * with `force: true` to bypass Playwright's stability check (which never
- * resolves because the panel content re-renders every game tick).
+ * (180 ms). We wait 300 ms for the animation to settle, then use
+ * `tab.evaluate(el => el.click())` rather than Playwright's `force: true`.
+ * Native HTMLElement.click() is a trusted event that always bubbles to React's
+ * delegated event root, whereas force:true CDP events can be missed by React's
+ * fiber reconciliation when the panel is re-rendering on every game tick.
  *
  * @see docs/engineering/15-e2e-ci.md §DP-01–03
  */
@@ -51,14 +50,17 @@ test('DP-03 day-ahead tab renders UC schedule grid', async ({ page }) => {
   await bootstrapAndOpenDispatch(page)
 
   // Wait for the 180 ms slide-up animation to settle. During animation the
-  // tab button's bounding box reflects its off-screen position, so a click —
-  // even with force:true — dispatches at the wrong viewport coordinates.
+  // tab button's bounding box is off-screen (translateY(100%)), so clicks
+  // at those coordinates miss the element entirely.
   // eslint-disable-next-line playwright/no-wait-for-timeout
   await page.waitForTimeout(300)
 
   const tab = page.getByTestId('tab-dayahead')
-  // force: true — bypasses stability check (content re-renders every game tick)
-  await tab.click({ force: true })
+  // Use element.click() via evaluate rather than Playwright force:true.
+  // Native HTMLElement.click() is a trusted event that bubbles to React's
+  // delegated event root and reliably fires the onClick handler even while
+  // the panel is re-rendering on every game tick.
+  await tab.evaluate((el: HTMLElement) => el.click())
   // aria-selected is set on DispatchPanel tabs; wait for it to confirm React state update
   await expect(tab).toHaveAttribute('aria-selected', 'true', { timeout: 5_000 })
   await expect(page.getByTestId('uc-grid')).toBeVisible({ timeout: 10_000 })
