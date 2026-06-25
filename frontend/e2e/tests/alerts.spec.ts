@@ -47,11 +47,22 @@ test('AL-01 decommitting a large generator triggers a visible alert toast', asyn
     timeout: 15_000,
   })
 
-  // Wait for the first WebSocket FULL update (tickNumber > 0 guarantees the WS
-  // DTO's `committed` field is present, not just the REST domain model `connected`).
+  // Wait for the first WebSocket FULL update AND for at least one generator to
+  // have `committed === true`.  Checking tickNumber > 0 alone is not sufficient:
+  // in CI the REST hydration response can arrive *after* the first WS tick and
+  // overwrite network with the domain model (which uses `connected`, not `committed`).
+  // The source-level race is fixed in useGameStore.connect(), but we keep an
+  // explicit `committed` check here as a belt-and-suspenders guard.
   await page.waitForFunction(
-    () => (window.__e2e?.getStore().tickNumber ?? 0) > 0,
-    { timeout: 15_000 },
+    () => {
+      const s = window.__e2e?.getStore()
+      return (
+        s !== undefined &&
+        (s.tickNumber ?? 0) > 0 &&
+        (s.network?.generators ?? []).some((g) => g.committed === true)
+      )
+    },
+    { timeout: 20_000 },
   )
 
   // No alerts should be present at game start
