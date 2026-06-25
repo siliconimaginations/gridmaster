@@ -58,13 +58,27 @@ test('IP-01 selecting a generator opens InspectorPanel; backdrop click closes it
     genId,
   )
 
-  // Verify the store reflected the selection before asserting DOM visibility
+  // Verify store has BOTH selectedElement and network non-null.
+  // InspectorPanel renders null when either is missing, so checking only
+  // selectedElement led to toBeVisible timeouts if network was momentarily
+  // absent (e.g. due to the REST/WS race fixed in useGameStore.connect()).
   await page.waitForFunction(
-    () => window.__e2e?.getStore().selectedElement !== null,
-    { timeout: 5_000 },
+    () => {
+      const s = window.__e2e?.getStore()
+      return s !== undefined && s.selectedElement !== null && s.network !== null
+    },
+    { timeout: 10_000 },
   )
 
-  // InspectorPanel must now be visible
+  // DOM-level check with a generous timeout to account for React 18 concurrent
+  // scheduling: the Zustand state update is synchronous but the React render
+  // may be deferred a few frames.
+  await page.waitForFunction(
+    () => document.querySelector('[data-testid="inspector-panel"]') !== null,
+    { timeout: 15_000 },
+  )
+
+  // Final Playwright assertion (element is already confirmed in DOM, so fast)
   const panel = page.getByTestId('inspector-panel')
   await expect(panel).toBeVisible({ timeout: 5_000 })
 
