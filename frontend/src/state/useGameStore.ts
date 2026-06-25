@@ -157,9 +157,16 @@ export const useGameStore = create<GameStore>()(subscribeWithSelector((set, get)
 
     // Hydrate network state immediately via REST so the scene renders even
     // if the first WebSocket message is a DELTA (which omits unchanged fields).
-    getNetwork(sessionId).then((network) => {
-      if (useGameStore.getState().sessionId === sessionId) {
-        useGameStore.setState({ network })
+    getNetwork(sessionId).then((restNetwork) => {
+      const s = useGameStore.getState()
+      // Race-guard: only apply REST hydration if the session is still active
+      // AND the WebSocket hasn't already provided a network snapshot.
+      // A WS FULL update always sets network to a non-null GridNetworkWsDto
+      // (which carries `committed` on generators). REST returns the domain model
+      // (which uses `connected`), so applying it after WS would strip `committed`
+      // and cause AL-01 failures. See: github.com/siliconimaginations/gridmaster #AL01fix
+      if (s.sessionId === sessionId && s.network === null) {
+        useGameStore.setState({ network: restNetwork })
       }
     }).catch(() => { /* session may not exist yet — WS updates will fill in */ })
 
