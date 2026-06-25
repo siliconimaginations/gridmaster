@@ -159,12 +159,19 @@ export const useGameStore = create<GameStore>()(subscribeWithSelector((set, get)
     // if the first WebSocket message is a DELTA (which omits unchanged fields).
     getNetwork(sessionId).then((restNetwork) => {
       const s = useGameStore.getState()
-      // Race-guard: only apply REST hydration if the session is still active
-      // AND the WebSocket hasn't already provided a network snapshot.
-      // A WS FULL update always sets network to a non-null GridNetworkWsDto
-      // (which carries `committed` on generators). REST returns the domain model
-      // (which uses `connected`), so applying it after WS would strip `committed`
-      // and cause AL-01 failures. See: github.com/siliconimaginations/gridmaster #AL01fix
+      // Race-guard: apply REST hydration only when:
+      //   1. The session is still active (guards against quick disconnect/reconnect).
+      //   2. network is still null — meaning no WS FULL update has arrived yet.
+      //
+      // Two scenarios:
+      //   A) REST arrives before WS FULL  → network is null  → REST hydrates (cold render works ✓)
+      //      Later WS FULL overwrites with the authoritative WsDto (which has `committed`).
+      //   B) WS FULL arrives before REST  → network is non-null → REST is skipped (correct ✓)
+      //      Skipping is essential because REST returns the domain-model DTO (`connected`)
+      //      while WS returns GridNetworkWsDto (`committed`). If REST overwrote WS the
+      //      `committed` field would be stripped and AL-01 / InspectorPanel would break.
+      //
+      // TODO: unify REST and WS DTOs so this guard is unnecessary. Tracked: #237
       if (s.sessionId === sessionId && s.network === null) {
         useGameStore.setState({ network: restNetwork })
       }
