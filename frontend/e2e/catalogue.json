@@ -1,96 +1,210 @@
 {
   "_doc": "Master catalogue for the two-metric E2E coverage system. See docs/engineering/16-e2e-coverage-workflow.md for full schema rules.",
-
   "features": [
     {
       "id": "F-SESSION",
       "name": "Session bootstrap",
       "feature_implemented": true,
-      "scenarios": ["SL-01", "SL-02", "SL-03"]
+      "scenarios": [
+        "SL-01",
+        "SL-02",
+        "SL-03"
+      ]
     },
     {
       "id": "F-CLOCK",
       "name": "Game clock (tick, pause, resume, speed)",
       "feature_implemented": true,
-      "scenarios": ["GC-01", "GC-02", "HUD-02"]
+      "scenarios": [
+        "GC-01",
+        "GC-02",
+        "HUD-02"
+      ]
     },
     {
       "id": "F-NETWORK",
       "name": "Generator commit / decommit / set output",
       "feature_implemented": true,
-      "scenarios": ["CM-01", "CM-02", "CM-03"]
+      "scenarios": [
+        "CM-01",
+        "CM-02",
+        "CM-03"
+      ]
     },
     {
       "id": "F-HUD",
       "name": "Top HUD live display (load, health, price, clock pills)",
       "feature_implemented": true,
-      "scenarios": ["HUD-01"]
+      "scenarios": [
+        "HUD-01"
+      ]
     },
     {
       "id": "F-DISPATCH",
       "name": "Dispatch panel (merit order + UC schedule)",
       "feature_implemented": true,
-      "scenarios": ["DP-01", "DP-02", "DP-03"]
+      "scenarios": [
+        "DP-01",
+        "DP-02",
+        "DP-03"
+      ]
     },
     {
       "id": "F-PLANNING",
       "name": "Planning panel (N-1 violations + forecast)",
       "feature_implemented": true,
-      "scenarios": ["PL-01", "PL-02"]
+      "scenarios": [
+        "PL-01",
+        "PL-02"
+      ]
     },
     {
       "id": "F-TIMELINE",
       "name": "Timeline strip",
       "feature_implemented": true,
-      "scenarios": ["TL-01"]
+      "scenarios": [
+        "TL-01"
+      ]
     },
     {
       "id": "F-PHYSICS",
       "name": "Physics REST API (power flow, contingency)",
       "feature_implemented": true,
-      "scenarios": ["PH-01", "PH-02"]
+      "scenarios": [
+        "PH-01",
+        "PH-02"
+      ]
     },
     {
       "id": "F-INSPECTOR",
       "name": "Inspector panel (click network element)",
       "feature_implemented": true,
-      "scenarios": ["IP-01"]
+      "scenarios": [
+        "IP-01"
+      ]
     },
     {
       "id": "F-ALERTS",
       "name": "Alert toast (violation notifications)",
       "feature_implemented": true,
-      "scenarios": ["AL-01"]
+      "scenarios": [
+        "AL-01"
+      ]
     },
     {
       "id": "F-EVENTS",
       "name": "Event card panel (grid events, accept / dismiss)",
       "feature_implemented": true,
-      "scenarios": ["EV-01"]
+      "scenarios": [
+        "EV-01"
+      ]
     }
   ],
-
   "scenarios": [
-    { "id": "SL-01", "description": "App loads without JS errors",                                     "test_implemented": true  },
-    { "id": "SL-02", "description": "POST /api/sessions returns valid UUID",                            "test_implemented": true  },
-    { "id": "SL-03", "description": "First GameStateUpdate arrives within 15 s",                       "test_implemented": true  },
-    { "id": "GC-01", "description": "Tick counter increments (clock advancing at ≥1×)",                "test_implemented": true  },
-    { "id": "GC-02", "description": "Pause halts tick stream; resume restarts it",                     "test_implemented": true  },
-    { "id": "CM-01", "description": "DecommitGenerator → committed=false in next store update",        "test_implemented": true  },
-    { "id": "CM-02", "description": "CommitGenerator → committed=true after decommit baseline",        "test_implemented": true  },
-    { "id": "CM-03", "description": "SetGeneratorOutput → activePowerMw reflects new setpoint",        "test_implemented": true  },
-    { "id": "HUD-01", "description": "Pill badges (load, health, price, clock) non-empty after boot",  "test_implemented": true  },
-    { "id": "HUD-02", "description": "Speed change via 10× button reflected in store",                 "test_implemented": true  },
-    { "id": "DP-01",  "description": "Run Dispatch button opens DispatchPanel",                        "test_implemented": true  },
-    { "id": "DP-02",  "description": "Real-time tab renders at least one generator row",               "test_implemented": true  },
-    { "id": "DP-03",  "description": "Day-ahead tab renders UC schedule grid",                         "test_implemented": true  },
-    { "id": "PL-01",  "description": "Plan Day button opens PlanningPanel",                            "test_implemented": true  },
-    { "id": "PL-02",  "description": "N-1 tab shows violations table or empty state",                  "test_implemented": true  },
-    { "id": "PH-01",  "description": "POST /powerflow/run returns result with status + snapshot",      "test_implemented": true  },
-    { "id": "PH-02",  "description": "POST /contingencies/trigger responds 200 or 422",                "test_implemented": true  },
-    { "id": "TL-01",  "description": "Timeline strip and now-marker visible after bootstrap",          "test_implemented": true  },
-    { "id": "IP-01",  "description": "Clicking network element opens InspectorPanel",                  "test_implemented": false },
-    { "id": "AL-01",  "description": "Alert toast appears when a violation is triggered",              "test_implemented": false },
-    { "id": "EV-01",  "description": "Event card overlay appears and accept updates game state",       "test_implemented": false }
+    {
+      "id": "SL-01",
+      "description": "App loads without JS errors",
+      "test_implemented": true
+    },
+    {
+      "id": "SL-02",
+      "description": "POST /api/sessions returns valid UUID",
+      "test_implemented": true
+    },
+    {
+      "id": "SL-03",
+      "description": "First GameStateUpdate arrives within 15 s",
+      "test_implemented": true
+    },
+    {
+      "id": "GC-01",
+      "description": "Tick counter increments (clock advancing at ≥1×)",
+      "test_implemented": true
+    },
+    {
+      "id": "GC-02",
+      "description": "Pause halts tick stream; resume restarts it",
+      "test_implemented": true
+    },
+    {
+      "id": "CM-01",
+      "description": "DecommitGenerator → committed=false in next store update",
+      "test_implemented": true
+    },
+    {
+      "id": "CM-02",
+      "description": "CommitGenerator → committed=true after decommit baseline",
+      "test_implemented": true
+    },
+    {
+      "id": "CM-03",
+      "description": "SetGeneratorOutput → activePowerMw reflects new setpoint",
+      "test_implemented": true
+    },
+    {
+      "id": "HUD-01",
+      "description": "Pill badges (load, health, price, clock) non-empty after boot",
+      "test_implemented": true
+    },
+    {
+      "id": "HUD-02",
+      "description": "Speed change via 10× button reflected in store",
+      "test_implemented": true
+    },
+    {
+      "id": "DP-01",
+      "description": "Run Dispatch button opens DispatchPanel",
+      "test_implemented": true
+    },
+    {
+      "id": "DP-02",
+      "description": "Real-time tab renders at least one generator row",
+      "test_implemented": true
+    },
+    {
+      "id": "DP-03",
+      "description": "Day-ahead tab renders UC schedule grid",
+      "test_implemented": true
+    },
+    {
+      "id": "PL-01",
+      "description": "Plan Day button opens PlanningPanel",
+      "test_implemented": true
+    },
+    {
+      "id": "PL-02",
+      "description": "N-1 tab shows violations table or empty state",
+      "test_implemented": true
+    },
+    {
+      "id": "PH-01",
+      "description": "POST /powerflow/run returns result with status + snapshot",
+      "test_implemented": true
+    },
+    {
+      "id": "PH-02",
+      "description": "POST /contingencies/trigger responds 200 or 422",
+      "test_implemented": true
+    },
+    {
+      "id": "TL-01",
+      "description": "Timeline strip and now-marker visible after bootstrap",
+      "test_implemented": true
+    },
+    {
+      "id": "IP-01",
+      "description": "Clicking network element opens InspectorPanel",
+      "test_implemented": true
+    },
+    {
+      "id": "AL-01",
+      "description": "Alert toast appears when a violation is triggered",
+      "test_implemented": true
+    },
+    {
+      "id": "EV-01",
+      "description": "Event card overlay appears and accept updates game state",
+      "test_implemented": true
+    }
   ]
 }
