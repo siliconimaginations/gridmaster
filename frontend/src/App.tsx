@@ -11,6 +11,7 @@ import { InspectorPanel } from './ui/InspectorPanel'
 import { DispatchPanel } from './ui/DispatchPanel'
 import { PlanningPanel } from './ui/PlanningPanel'
 import { TimelineStrip } from './ui/TimelineStrip'
+import { EventCardPanel } from './ui/EventCardPanel'
 
 /**
  * Root component. Renders a full-screen Babylon.js canvas with React HUD
@@ -91,6 +92,7 @@ export default function App() {
         <BottomHud onOpenDispatch={() => setDispatchPanelOpen(true)} onOpenPlanning={() => setPlanningPanelOpen(true)} />
         <AlertToastContainer />
         <InspectorPanel />
+        <EventCardPanel />
         <DispatchPanel open={dispatchPanelOpen} onClose={() => setDispatchPanelOpen(false)} />
         <PlanningPanel open={planningPanelOpen} onClose={() => setPlanningPanelOpen(false)} />
       </div>
