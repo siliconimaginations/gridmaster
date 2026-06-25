@@ -17,16 +17,29 @@ export function installE2EBridge(): void {
     getStore: () => useGameStore.getState(),
 
     /**
+     * Executes `action` inside React's `flushSync`, guaranteeing the DOM is
+     * updated synchronously before `page.evaluate()` returns.
+     *
+     * Use this for any external state mutation that needs to be reflected in
+     * the DOM immediately (e.g. driving Zustand actions from Playwright that
+     * run outside React's event system).
+     *
+     * Background: React 18 batches updates triggered from outside its event
+     * system (e.g. from `page.evaluate`). `flushSync` forces a synchronous
+     * commit so Playwright assertions see the updated DOM as soon as this
+     * function returns.  (IP-01 fix — see PR #239.)
+     */
+    executeSync: (action: () => void) => {
+      flushSync(action)
+    },
+
+    /**
      * Selects a network element and **synchronously** flushes React so the
      * DOM reflects the new state before `page.evaluate()` returns.
      *
-     * Background: `getStore().selectElement()` called from `page.evaluate`
-     * runs outside React's event system.  React 18 batches such updates and
-     * may not flush them before the Playwright assertion runs — especially
-     * when Babylon.js's `requestAnimationFrame` loop is competing for the
-     * browser scheduler.  `flushSync` forces React to commit the update
-     * synchronously, so `inspector-panel` is guaranteed to be in the DOM by
-     * the time this function returns.  (IP-01 fix — see PR #239.)
+     * Convenience wrapper over `executeSync` for the common case of driving
+     * `selectElement` from Playwright. Prefer `executeSync` for new tests
+     * that need a different Zustand action.
      */
     flushSelect: (info: SelectedElementInfo | null) => {
       flushSync(() => {
