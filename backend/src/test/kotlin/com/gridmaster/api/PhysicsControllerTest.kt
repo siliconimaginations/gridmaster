@@ -118,10 +118,13 @@ class PhysicsControllerTest {
     @Test
     fun `GET network returns snapshot as GridNetworkWsDto`() {
         // latestDispatchResult is null by default → smc=null, systemMarginalCostPerMwh absent
+        // Test setup has exactly one generator (G1); assert its id first so the index assumption
+        // is explicit and not implicitly relying on PowSyBl's internal ordering.
         mvc.get("$BASE/network")
             .andExpect {
                 status { isOk() }
-                // WS-DTO field names (not domain GridNetwork names)
+                jsonPath("$.generators[0].id") { value("G1") }
+                // WS-DTO field names (not domain GridNetwork names — targetActivePowerMw/connected)
                 jsonPath("$.generators[0].activePowerMw") { value(80.0) }
                 jsonPath("$.generators[0].committed") { value(true) }
                 jsonPath("$.totalGenerationMw") { value(80.0) }
