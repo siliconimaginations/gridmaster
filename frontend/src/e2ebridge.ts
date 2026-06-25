@@ -1,3 +1,5 @@
+import { flushSync } from 'react-dom'
+import type { SelectedElementInfo } from './api/types'
 import { useGameStore } from './state/useGameStore'
 
 /**
@@ -13,6 +15,24 @@ export function installE2EBridge(): void {
   (window as Window & { __e2e?: unknown }).__e2e = {
     /** Returns a snapshot of the current Zustand store state. */
     getStore: () => useGameStore.getState(),
+
+    /**
+     * Selects a network element and **synchronously** flushes React so the
+     * DOM reflects the new state before `page.evaluate()` returns.
+     *
+     * Background: `getStore().selectElement()` called from `page.evaluate`
+     * runs outside React's event system.  React 18 batches such updates and
+     * may not flush them before the Playwright assertion runs — especially
+     * when Babylon.js's `requestAnimationFrame` loop is competing for the
+     * browser scheduler.  `flushSync` forces React to commit the update
+     * synchronously, so `inspector-panel` is guaranteed to be in the DOM by
+     * the time this function returns.  (IP-01 fix — see PR #239.)
+     */
+    flushSelect: (info: SelectedElementInfo | null) => {
+      flushSync(() => {
+        useGameStore.getState().selectElement(info)
+      })
+    },
 
     /**
      * Returns a Promise that resolves when `predicate(state)` is true.
