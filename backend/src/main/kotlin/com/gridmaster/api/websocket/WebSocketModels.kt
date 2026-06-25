@@ -1,9 +1,14 @@
 package com.gridmaster.api.websocket
 
+import com.gridmaster.engine.model.GridNetwork
+import com.gridmaster.engine.model.Line
+import com.gridmaster.engine.model.TwoWindingsTransformer
 import com.gridmaster.engine.powerflow.ConvergenceStatus
 import com.gridmaster.game.ClockState
 import com.gridmaster.game.command.Alert
 import java.util.UUID
+import kotlin.math.PI
+import kotlin.math.sqrt
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Server → Client
@@ -190,4 +195,111 @@ enum class ConnectionStatusType {
     RECONNECTED,
     SESSION_NOT_FOUND,
     AUTH_FAILED,
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Domain → DTO mapper
+// ─────────────────────────────────────────────────────────────────────────────
+
+private val SQRT3 = sqrt(3.0)
+
+/**
+ * Map a domain [GridNetwork] snapshot to [GridNetworkWsDto].
+ *
+ * Used by both the WebSocket tick publisher ([GameStatePublisherImpl]) and the REST
+ * `GET /network` endpoint so that clients always receive the same field names
+ * (`activePowerMw`, `committed`, etc.) regardless of transport.
+ *
+ * @param smc System marginal cost (£/MWh); null when no dispatch has run yet.
+ */
+fun GridNetwork.toNetworkWsDto(smc: Double? = null): GridNetworkWsDto {
+    val totalLoad = loads.filter { it.connected }.sumOf { it.activePowerMw }
+    val totalGen = generators.filter { it.connected }.sumOf { it.targetActivePowerMw }
+
+    val buses =
+        buses.map { bus ->
+            BusWsDto(
+                id = bus.id,
+                name = bus.name,
+                substationId = bus.regionId,
+                voltageKv = bus.nominalVoltageKv,
+                voltagePu = bus.voltageMagnitudePu ?: 1.0,
+                angleRad = bus.voltageAngleDeg?.let { it * PI / 180.0 } ?: 0.0,
+            )
+        }
+
+    val branches: List<BranchWsDto> =
+        lines.map { line ->
+            BranchWsDto(
+                id = line.id,
+                fromBusId = line.fromBusId,
+                toBusId = line.toBusId,
+                activePowerMw = line.activePowerFromMw ?: 0.0,
+                reactivePowerMvar = line.reactivePowerFromMvar ?: 0.0,
+                loadingPercent = line.loadingPercent(),
+                connected = line.connected,
+            )
+        } +
+            twoWindingsTransformers.map { twt ->
+                BranchWsDto(
+                    id = twt.id,
+                    fromBusId = twt.fromBusId,
+                    toBusId = twt.toBusId,
+                    activePowerMw = twt.activePowerFromMw ?: 0.0,
+                    reactivePowerMvar = twt.reactivePowerFromMvar ?: 0.0,
+                    loadingPercent = twt.loadingPercent(),
+                    connected = twt.connected,
+                )
+            }
+
+    val gens =
+        generators.map { gen ->
+            GeneratorWsDto(
+                id = gen.id,
+                busId = gen.busId,
+                name = gen.name,
+                activePowerMw = gen.targetActivePowerMw,
+                maxActivePowerMw = gen.maxActivePowerMw,
+                committed = gen.connected,
+                fuelType = gen.fuelType.name,
+            )
+        }
+
+    val loadDtos =
+        loads.map { load ->
+            LoadWsDto(
+                id = load.id,
+                busId = load.busId,
+                name = load.name,
+                activePowerMw = load.activePowerMw,
+                reactivePowerMvar = load.reactivePowerMvar,
+            )
+        }
+
+    return GridNetworkWsDto(
+        buses = buses,
+        branches = branches,
+        generators = gens,
+        loads = loadDtos,
+        totalLoadMw = totalLoad,
+        totalGenerationMw = totalGen,
+        systemMarginalCostPerMwh = smc,
+    )
+}
+
+private fun Line.loadingPercent(): Double {
+    val rating = ratingA ?: return 0.0
+    if (rating <= 0.0) return 0.0
+    val maxCurrent = maxOf(currentFromA ?: 0.0, currentToA ?: 0.0)
+    return maxCurrent / rating * 100.0
+}
+
+private fun TwoWindingsTransformer.loadingPercent(): Double {
+    val ratingA =
+        ratingMva?.let { mva ->
+            if (nominalVoltageFromKv > 0.0) mva * 1000.0 / (SQRT3 * nominalVoltageFromKv) else null
+        } ?: return 0.0
+    if (ratingA <= 0.0) return 0.0
+    val maxCurrent = maxOf(currentFromA ?: 0.0, currentToA ?: 0.0)
+    return maxCurrent / ratingA * 100.0
 }

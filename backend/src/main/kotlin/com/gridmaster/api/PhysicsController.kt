@@ -16,6 +16,8 @@ import com.gridmaster.engine.dispatch.DispatchableGenerator
 import com.gridmaster.engine.dispatch.LoadForecast
 import com.gridmaster.engine.dispatch.UcResult
 import com.gridmaster.engine.dispatch.UnitCommitmentService
+import com.gridmaster.api.websocket.GridNetworkWsDto
+import com.gridmaster.api.websocket.toNetworkWsDto
 import com.gridmaster.engine.model.GridNetwork
 import com.gridmaster.engine.model.NetworkMutation
 import com.gridmaster.engine.network.IidmNetworkMapper
@@ -67,13 +69,21 @@ class PhysicsController(
     // Network state
     // -------------------------------------------------------------------------
 
-    /** GET /api/sessions/{sessionId}/network — current GridNetwork snapshot. */
+    /**
+     * GET /api/sessions/{sessionId}/network — current network snapshot as [GridNetworkWsDto].
+     *
+     * Returns the same DTO shape as the WebSocket state stream ([GridNetworkWsDto]) so that
+     * REST and WS clients share identical field names ([activePowerMw], [GeneratorWsDto.committed],
+     * etc.). Eliminates the REST/WS mismatch that caused frontend race conditions when the
+     * store was seeded from REST before the first WS tick arrived.
+     */
     @GetMapping("/network")
     fun getNetwork(
         @PathVariable sessionId: String,
-    ): GridNetwork {
+    ): GridNetworkWsDto {
         val session = sessionStore.get(sessionId)
-        return session.latestSnapshot
+        val smc = session.latestDispatchResult?.systemMarginalCostPerMwh
+        return session.latestSnapshot.toNetworkWsDto(smc)
     }
 
     /**

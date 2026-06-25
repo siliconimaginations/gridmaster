@@ -116,12 +116,15 @@ class PhysicsControllerTest {
     // -----------------------------------------------------------------------
 
     @Test
-    fun `GET network returns snapshot`() {
+    fun `GET network returns snapshot as GridNetworkWsDto`() {
+        // latestDispatchResult is null by default → smc=null, systemMarginalCostPerMwh absent
         mvc.get("$BASE/network")
             .andExpect {
                 status { isOk() }
-                jsonPath("$.id") { value(SESSION_ID) }
-                jsonPath("$.name") { value("Test Network") }
+                // WS-DTO field names (not domain GridNetwork names)
+                jsonPath("$.generators[0].activePowerMw") { value(80.0) }
+                jsonPath("$.generators[0].committed") { value(true) }
+                jsonPath("$.totalGenerationMw") { value(80.0) }
             }
     }
 
