@@ -26,6 +26,12 @@ declare global {
   interface Window {
     __e2e: {
       getStore: () => StoreSnapshot
+      /**
+       * Executes `action` inside React's `flushSync` — use for any external
+       * state mutation that must be reflected in the DOM before `page.evaluate()`
+       * returns. Added in #240 (executeSync bridge helper).
+       */
+      executeSync: (action: () => void) => void
       /** Calls selectElement and synchronously flushes React (flushSync). */
       flushSelect: (info: { elementType: string; elementId: string } | null) => void
     }
@@ -51,7 +57,7 @@ test('IP-01 selecting a generator opens InspectorPanel; backdrop click closes it
   //     REST data has `connected`/`targetActivePowerMw`; WS data has `committed`/`activePowerMw`.
   //     Only WS data will pass this guard.  Mirrors the `committed === true` guard in alerts.spec.ts.
   //
-  // TODO: remove this dual-guard once #237 unifies REST and WS DTOs.
+  // TODO: remove this dual-guard once PR #243 (fix/#237) is merged into main.
   await page.waitForFunction(
     () => {
       const s = window.__e2e?.getStore()
@@ -101,3 +107,4 @@ test('IP-01 selecting a generator opens InspectorPanel; backdrop click closes it
   const selected = await page.evaluate(() => window.__e2e.getStore().selectedElement)
   expect(selected).toBeNull()
 })
+
