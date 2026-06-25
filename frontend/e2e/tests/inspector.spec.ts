@@ -41,10 +41,27 @@ test('IP-01 selecting a generator opens InspectorPanel; backdrop click closes it
     timeout: 15_000,
   })
 
-  // Wait for the first WebSocket tick so the store has a fully hydrated network
+  // Wait for the first WebSocket tick AND verify the network has WS-format data.
+  //
+  // Why both checks are needed:
+  //   - tickNumber > 0 can be satisfied by a DELTA update that carries no `network`
+  //     payload, leaving domain-model REST data (which uses `targetActivePowerMw`)
+  //     instead of the WS DTO (which uses `activePowerMw`) in the store.
+  //   - typeof activePowerMw === "number" confirms WS data is present.
+  //     REST data has `connected`/`targetActivePowerMw`; WS data has `committed`/`activePowerMw`.
+  //     Only WS data will pass this guard.  Mirrors the `committed === true` guard in alerts.spec.ts.
+  //
+  // TODO: remove this dual-guard once #237 unifies REST and WS DTOs.
   await page.waitForFunction(
-    () => (window.__e2e?.getStore().tickNumber ?? 0) > 0,
-    { timeout: 15_000 },
+    () => {
+      const s = window.__e2e?.getStore()
+      return (
+        s !== undefined &&
+        (s.tickNumber ?? 0) > 0 &&
+        typeof (s.network?.generators?.[0]?.activePowerMw) === 'number'
+      )
+    },
+    { timeout: 20_000 },
   )
 
   // Discover a generator ID from the live store
