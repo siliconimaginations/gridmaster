@@ -24,7 +24,11 @@ interface StoreSnapshot {
 
 declare global {
   interface Window {
-    __e2e: { getStore: () => StoreSnapshot }
+    __e2e: {
+      getStore: () => StoreSnapshot
+      /** Calls selectElement and synchronously flushes React (flushSync). */
+      flushSelect: (info: { elementType: string; elementId: string } | null) => void
+    }
   }
 }
 
@@ -52,33 +56,18 @@ test('IP-01 selecting a generator opens InspectorPanel; backdrop click closes it
   // Inspector should not be visible before any element is selected
   await expect(page.getByTestId('inspector-panel')).not.toBeVisible()
 
-  // Select the generator via the store bridge (simulates a Babylon.js canvas click)
+  // Select via the bridge using flushSelect, which wraps selectElement in
+  // React's flushSync.  This forces React to commit the DOM update before
+  // page.evaluate() returns, so inspector-panel is present immediately.
+  // (Plain getStore().selectElement() called from page.evaluate runs outside
+  // React's event system; React 18 batches the update and Babylon.js's rAF
+  // loop can starve the scheduler, causing the panel to never appear.)
   await page.evaluate(
-    (id) => window.__e2e.getStore().selectElement({ elementType: 'GENERATOR', elementId: id }),
+    (id) => window.__e2e.flushSelect({ elementType: 'GENERATOR', elementId: id }),
     genId,
   )
 
-  // Verify store has BOTH selectedElement and network non-null.
-  // InspectorPanel renders null when either is missing, so checking only
-  // selectedElement led to toBeVisible timeouts if network was momentarily
-  // absent (e.g. due to the REST/WS race fixed in useGameStore.connect()).
-  await page.waitForFunction(
-    () => {
-      const s = window.__e2e?.getStore()
-      return s !== undefined && s.selectedElement !== null && s.network !== null
-    },
-    { timeout: 10_000 },
-  )
-
-  // DOM-level check with a generous timeout to account for React 18 concurrent
-  // scheduling: the Zustand state update is synchronous but the React render
-  // may be deferred a few frames.
-  await page.waitForFunction(
-    () => document.querySelector('[data-testid="inspector-panel"]') !== null,
-    { timeout: 15_000 },
-  )
-
-  // Final Playwright assertion (element is already confirmed in DOM, so fast)
+  // flushSync guarantees the React render committed; panel must be in DOM now.
   const panel = page.getByTestId('inspector-panel')
   await expect(panel).toBeVisible({ timeout: 5_000 })
 
