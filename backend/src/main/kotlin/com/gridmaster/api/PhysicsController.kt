@@ -5,6 +5,8 @@ import com.gridmaster.api.dto.DispatchRequest
 import com.gridmaster.api.dto.NetworkMutationDto
 import com.gridmaster.api.dto.RunPowerFlowRequest
 import com.gridmaster.api.dto.UnitCommitmentRequest
+import com.gridmaster.api.websocket.GridNetworkWsDto
+import com.gridmaster.api.websocket.toNetworkWsDto
 import com.gridmaster.engine.contingency.ContingencyAnalysisParameters
 import com.gridmaster.engine.contingency.ContingencyAnalysisResult
 import com.gridmaster.engine.contingency.ContingencyAnalysisService
@@ -16,8 +18,6 @@ import com.gridmaster.engine.dispatch.DispatchableGenerator
 import com.gridmaster.engine.dispatch.LoadForecast
 import com.gridmaster.engine.dispatch.UcResult
 import com.gridmaster.engine.dispatch.UnitCommitmentService
-import com.gridmaster.api.websocket.GridNetworkWsDto
-import com.gridmaster.api.websocket.toNetworkWsDto
 import com.gridmaster.engine.model.GridNetwork
 import com.gridmaster.engine.model.NetworkMutation
 import com.gridmaster.engine.network.IidmNetworkMapper

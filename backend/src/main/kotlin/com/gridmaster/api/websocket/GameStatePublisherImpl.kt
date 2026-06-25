@@ -1,9 +1,9 @@
 package com.gridmaster.api.websocket
 
 import com.gridmaster.api.PhysicsSessionStore
+import com.gridmaster.engine.powerflow.EquipmentType
 import com.gridmaster.engine.powerflow.NetworkViolation
 import com.gridmaster.engine.powerflow.PowerFlowResult
-import com.gridmaster.engine.powerflow.EquipmentType
 import com.gridmaster.game.ClockState
 import com.gridmaster.game.command.Alert
 import com.gridmaster.game.event.EventCard
@@ -11,7 +11,6 @@ import org.slf4j.LoggerFactory
 import org.springframework.messaging.simp.SimpMessagingTemplate
 import org.springframework.stereotype.Component
 import java.util.concurrent.ConcurrentHashMap
-import java.util.UUID
 
 /**
  * Default [GameStatePublisher] implementation.
