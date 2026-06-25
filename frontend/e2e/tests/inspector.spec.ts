@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test'
 /**
  * IP — Inspector Panel
  *
- * IP-01: Clicking a network element opens InspectorPanel; clicking the backdrop closes it.
+ * IP-01: Selecting a network element opens InspectorPanel; clicking the backdrop closes it.
  *
  * The inspector is driven by `selectedElement` in the Zustand store.  In the
  * real game the player clicks a Babylon.js mesh; here we drive it through the
@@ -13,8 +13,8 @@ import { test, expect } from '@playwright/test'
  * @see issue #86 (component), #209 (this test)
  */
 
-// Shared store type used in page.evaluate casts throughout this file.
 interface StoreSnapshot {
+  tickNumber: number
   network: {
     generators: Array<{ id: string; activePowerMw: number; committed: boolean }>
   } | null
@@ -37,9 +37,9 @@ test('IP-01 selecting a generator opens InspectorPanel; backdrop click closes it
     timeout: 15_000,
   })
 
-  // Wait until the store has a network with at least one generator
+  // Wait for the first WebSocket tick so the store has a fully hydrated network
   await page.waitForFunction(
-    () => (window.__e2e?.getStore().network?.generators?.length ?? 0) > 0,
+    () => (window.__e2e?.getStore().tickNumber ?? 0) > 0,
     { timeout: 15_000 },
   )
 
@@ -58,14 +58,20 @@ test('IP-01 selecting a generator opens InspectorPanel; backdrop click closes it
     genId,
   )
 
-  // InspectorPanel must become visible
+  // Verify the store reflected the selection before asserting DOM visibility
+  await page.waitForFunction(
+    () => window.__e2e?.getStore().selectedElement !== null,
+    { timeout: 5_000 },
+  )
+
+  // InspectorPanel must now be visible
   const panel = page.getByTestId('inspector-panel')
   await expect(panel).toBeVisible({ timeout: 5_000 })
 
   // Header must mention the element ID so we know the right card rendered
   await expect(panel).toContainText(genId)
 
-  // Click the invisible backdrop to close the inspector (simulates a click-away)
+  // Click the invisible backdrop to close the inspector (simulates click-away)
   await page.getByTestId('inspector-backdrop').click()
 
   // Panel should disappear
