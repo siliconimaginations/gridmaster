@@ -528,7 +528,7 @@ class PhysicsControllerTest {
             contentType = MediaType.APPLICATION_JSON
             content =
                 """{"mutations":[{"type":"SET_LOAD_ACTIVE_POWER","targetId":"LD1",""" +
-                    """"parameters":{"activePowerMw":75.0,"reactivePowerMvar":15.0}}]}"""
+                """"parameters":{"activePowerMw":75.0,"reactivePowerMvar":15.0}}]}"""
         }.andExpect { status { isOk() } }
 
         verify { networkMapper.applyMutation(any(), NetworkMutation.SetLoadPower("LD1", 75.0, 15.0)) }
