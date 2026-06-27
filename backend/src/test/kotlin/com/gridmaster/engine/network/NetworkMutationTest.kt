@@ -219,4 +219,29 @@ class NetworkMutationTest {
         assertThat(network.getGenerator(TestNetworkFactory.GENERATOR_1).targetV)
             .isEqualTo(231.0, org.assertj.core.data.Offset.offset(0.01))
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // SetTapPosition
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Test
+    fun `SetTapPosition fails for unknown transformer`() {
+        val network = TestNetworkFactory.create()
+        val result = mapper.applyMutation(network, NetworkMutation.SetTapPosition("NONEXISTENT_TX", 0))
+
+        assertThat(result.isFailure).isTrue()
+        assertThat(result.exceptionOrNull()).isInstanceOf(InvalidMutationException::class.java)
+        assertThat(result.exceptionOrNull()?.message).contains("not found")
+    }
+
+    @Test
+    fun `SetTapPosition fails when transformer has no ratio tap changer`() {
+        // TestNetworkFactory TX12 is created without a ratio tap changer
+        val network = TestNetworkFactory.create()
+        val result = mapper.applyMutation(network, NetworkMutation.SetTapPosition(TestNetworkFactory.TRANSFORMER_12, 0))
+
+        assertThat(result.isFailure).isTrue()
+        assertThat(result.exceptionOrNull()).isInstanceOf(InvalidMutationException::class.java)
+        assertThat(result.exceptionOrNull()?.message).contains("no ratio tap changer")
+    }
 }
