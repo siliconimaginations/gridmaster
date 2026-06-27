@@ -601,25 +601,29 @@ class PhysicsControllerTest {
             )
         every { powerFlowService.solve(any(), any()) } returns pfResult
 
-        mvc.post("$BASE/powerflow/run") {
-            contentType = MediaType.APPLICATION_JSON
-            content = """{"mode":"DC","distributedSlack":false,"balanceType":"PROPORTIONAL_TO_LOAD"}"""
-        }.andExpect {
-            status { isOk() }
-            jsonPath("$.status") { value("CONVERGED") }
-        }
+        val asyncResult =
+            mvc.post("$BASE/powerflow/run") {
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"mode":"DC","distributedSlack":false,"balanceType":"PROPORTIONAL_TO_LOAD"}"""
+            }.andReturn()
+        mvc.perform(asyncDispatch(asyncResult))
+            .andExpect(jStatus().isOk())
+            .andExpect(jJsonPath("$.status").value("CONVERGED"))
 
         verify { powerFlowService.solve(any(), match { it.mode == SolveMode.DC }) }
     }
 
     @Test
     fun `POST powerflow run returns 400 for unknown solve mode`() {
-        mvc.post("$BASE/powerflow/run") {
-            contentType = MediaType.APPLICATION_JSON
-            content = """{"mode":"QUANTUM","distributedSlack":true,"balanceType":"PROPORTIONAL_TO_GENERATION_P_MAX"}"""
-        }.andExpect {
-            status { isBadRequest() }
-        }
+        val asyncResult =
+            mvc.post("$BASE/powerflow/run") {
+                contentType = MediaType.APPLICATION_JSON
+                content =
+                    """{"mode":"QUANTUM","distributedSlack":true,""" +
+                    """"balanceType":"PROPORTIONAL_TO_GENERATION_P_MAX"}"""
+            }.andReturn()
+        mvc.perform(asyncDispatch(asyncResult))
+            .andExpect(jStatus().isBadRequest())
     }
 
     @Test
@@ -635,10 +639,15 @@ class PhysicsControllerTest {
                 solveTimeMs = 2,
             )
 
-        mvc.post("$BASE/powerflow/run") {
-            contentType = MediaType.APPLICATION_JSON
-            content = """{"mode":"AC","distributedSlack":true,"balanceType":"PROPORTIONAL_TO_GENERATION_REMAINING_MARGIN"}"""
-        }.andExpect { status { isOk() } }
+        val asyncResult =
+            mvc.post("$BASE/powerflow/run") {
+                contentType = MediaType.APPLICATION_JSON
+                content =
+                    """{"mode":"AC","distributedSlack":true,""" +
+                    """"balanceType":"PROPORTIONAL_TO_GENERATION_REMAINING_MARGIN"}"""
+            }.andReturn()
+        mvc.perform(asyncDispatch(asyncResult))
+            .andExpect(jStatus().isOk())
     }
 
     @TestConfiguration

@@ -84,10 +84,8 @@ class GlobalExceptionHandlerTest {
 
     @Test
     fun `handleConstraintViolation returns 400 VALIDATION_ERROR with violation message`() {
-        val violation =
-            mockk<ConstraintViolation<*>> {
-                every { message } returns "size must be between 1 and 24"
-            }
+        val violation = mockk<ConstraintViolation<Any>>(relaxed = true)
+        every { violation.message } returns "size must be between 1 and 24"
         val ex = ConstraintViolationException(setOf(violation))
         val response = handler.handleConstraintViolation(ex)
         assertThat(response.statusCode).isEqualTo(HttpStatus.BAD_REQUEST)
