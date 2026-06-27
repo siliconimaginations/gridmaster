@@ -10,10 +10,14 @@ import com.gridmaster.engine.model.Load
 import com.gridmaster.engine.network.TestNetworkFactory
 import com.gridmaster.engine.powerflow.ConvergenceStatus
 import com.gridmaster.engine.powerflow.EquipmentType
+import com.gridmaster.engine.powerflow.NetworkViolation
 import com.gridmaster.engine.powerflow.PowerFlowResult
 import com.gridmaster.engine.powerflow.SolveMode
+import com.gridmaster.engine.powerflow.ViolationSeverity
 import com.gridmaster.game.ClockState
 import com.gridmaster.game.command.AlertSeverity
+import com.gridmaster.game.event.CardOption
+import com.gridmaster.game.event.EventCard
 import io.mockk.clearMocks
 import io.mockk.every
 import io.mockk.mockk
@@ -206,6 +210,176 @@ class GameStatePublisherImplTest {
         assertThat(destSlot.captured).isEqualTo("/topic/session/$sessionId/state")
     }
 
+    // -- Violation toDto coverage -----------------------------------------
+
+    @Test
+    fun `voltage low violation is mapped to VOLTAGE_LOW ViolationDto`() {
+        val payloadSlot = slot<Any>()
+        every { messagingTemplate.convertAndSend(any<String>(), capture(payloadSlot)) } returns Unit
+
+        val violation =
+            NetworkViolation.VoltageViolation(
+                busId = "b1",
+                voltagePu = 0.90,
+                limitMinPu = 0.95,
+                limitMaxPu = 1.05,
+                severity = ViolationSeverity.ALARM,
+            )
+        publisher.publishTick(
+            sessionId = sessionId,
+            tickNumber = 30L,
+            gameTimeMinutes = 300,
+            clockState = ClockState.RUNNING,
+            clockSpeedMultiplier = 1,
+            powerFlowResult = pfResult(violations = listOf(violation)),
+            newAlerts = emptyList(),
+            pendingCards = emptyList(),
+        )
+
+        val update = payloadSlot.captured as GameStateUpdate
+        assertThat(update.violations).hasSize(1)
+        val dto = update.violations!!.first()
+        assertThat(dto.elementId).isEqualTo("b1")
+        assertThat(dto.elementType).isEqualTo("BUS")
+        assertThat(dto.violationType).isEqualTo("VOLTAGE_LOW")
+        assertThat(dto.value).isEqualTo(0.90)
+        assertThat(dto.limit).isEqualTo(0.95)
+    }
+
+    @Test
+    fun `voltage high violation maps to VOLTAGE_HIGH DTO with upper limit`() {
+        val payloadSlot = slot<Any>()
+        every { messagingTemplate.convertAndSend(any<String>(), capture(payloadSlot)) } returns Unit
+
+        val violation =
+            NetworkViolation.VoltageViolation(
+                busId = "b2",
+                voltagePu = 1.08,
+                limitMinPu = 0.95,
+                limitMaxPu = 1.05,
+                severity = ViolationSeverity.CRITICAL,
+            )
+        publisher.publishTick(
+            sessionId = sessionId,
+            tickNumber = 30L,
+            gameTimeMinutes = 300,
+            clockState = ClockState.RUNNING,
+            clockSpeedMultiplier = 1,
+            powerFlowResult = pfResult(violations = listOf(violation)),
+            newAlerts = emptyList(),
+            pendingCards = emptyList(),
+        )
+
+        val update = payloadSlot.captured as GameStateUpdate
+        val dto = update.violations!!.first()
+        assertThat(dto.violationType).isEqualTo("VOLTAGE_HIGH")
+        assertThat(dto.limit).isEqualTo(1.05)
+        assertThat(dto.value).isEqualTo(1.08)
+    }
+
+    @Test
+    fun `line thermal violation maps to OVERLOAD LINE ViolationDto`() {
+        val payloadSlot = slot<Any>()
+        every { messagingTemplate.convertAndSend(any<String>(), capture(payloadSlot)) } returns Unit
+
+        val violation =
+            NetworkViolation.ThermalViolation(
+                equipmentId = "l1",
+                equipmentType = EquipmentType.LINE,
+                currentA = 550.0,
+                ratingA = 500.0,
+                loadingPercent = 110.0,
+                severity = ViolationSeverity.CRITICAL,
+            )
+        publisher.publishTick(
+            sessionId = sessionId,
+            tickNumber = 30L,
+            gameTimeMinutes = 300,
+            clockState = ClockState.RUNNING,
+            clockSpeedMultiplier = 1,
+            powerFlowResult = pfResult(violations = listOf(violation)),
+            newAlerts = emptyList(),
+            pendingCards = emptyList(),
+        )
+
+        val update = payloadSlot.captured as GameStateUpdate
+        val dto = update.violations!!.first()
+        assertThat(dto.elementId).isEqualTo("l1")
+        assertThat(dto.elementType).isEqualTo("LINE")
+        assertThat(dto.violationType).isEqualTo("OVERLOAD")
+        assertThat(dto.value).isEqualTo(110.0)
+        assertThat(dto.limit).isEqualTo(100.0)
+    }
+
+    @Test
+    fun `three-winding transformer thermal violation maps to TRANSFORMER element type`() {
+        val payloadSlot = slot<Any>()
+        every { messagingTemplate.convertAndSend(any<String>(), capture(payloadSlot)) } returns Unit
+
+        val violation =
+            NetworkViolation.ThermalViolation(
+                equipmentId = "T3-1",
+                equipmentType = EquipmentType.THREE_WINDINGS_TRANSFORMER,
+                currentA = 300.0,
+                ratingA = 262.5,
+                loadingPercent = 114.3,
+                severity = ViolationSeverity.CRITICAL,
+            )
+        publisher.publishTick(
+            sessionId = sessionId,
+            tickNumber = 30L,
+            gameTimeMinutes = 300,
+            clockState = ClockState.RUNNING,
+            clockSpeedMultiplier = 1,
+            powerFlowResult = pfResult(violations = listOf(violation)),
+            newAlerts = emptyList(),
+            pendingCards = emptyList(),
+        )
+
+        val update = payloadSlot.captured as GameStateUpdate
+        val dto = update.violations!!.first()
+        assertThat(dto.elementType).isEqualTo("TRANSFORMER")
+        assertThat(dto.violationType).isEqualTo("OVERLOAD")
+    }
+
+    @Test
+    fun `pending event cards are serialized as EventCardDto with options`() {
+        val payloadSlot = slot<Any>()
+        every { messagingTemplate.convertAndSend(any<String>(), capture(payloadSlot)) } returns Unit
+
+        val card =
+            EventCard(
+                cardId = "card-001",
+                prompt = "Extra capacity needed?",
+                options =
+                    listOf(
+                        CardOption(label = "Yes, build gas peaker", effects = emptyList(), costGbp = 500_000.0),
+                        CardOption(label = "No, manage demand", effects = emptyList(), costGbp = 0.0),
+                    ),
+            )
+        publisher.publishTick(
+            sessionId = sessionId,
+            tickNumber = 30L,
+            gameTimeMinutes = 300,
+            clockState = ClockState.RUNNING,
+            clockSpeedMultiplier = 1,
+            powerFlowResult = pfResult(),
+            newAlerts = emptyList(),
+            pendingCards = listOf(card),
+        )
+
+        val update = payloadSlot.captured as GameStateUpdate
+        assertThat(update.pendingEventCards).hasSize(1)
+        val cardDto = update.pendingEventCards!!.first()
+        assertThat(cardDto.cardId).isEqualTo("card-001")
+        assertThat(cardDto.prompt).isEqualTo("Extra capacity needed?")
+        assertThat(cardDto.options).hasSize(2)
+        assertThat(cardDto.options[0].label).isEqualTo("Yes, build gas peaker")
+        assertThat(cardDto.options[0].costGbp).isEqualTo(500_000.0)
+        assertThat(cardDto.options[0].index).isEqualTo(0)
+        assertThat(cardDto.options[1].index).isEqualTo(1)
+    }
+
     // -- Helpers --------------------------------------------------------------
 
     private fun tick30() =
@@ -261,14 +435,14 @@ class GameStatePublisherImplTest {
             snapshotAt = Instant.now(),
         )
 
-    private fun pfResult() =
+    private fun pfResult(violations: List<NetworkViolation> = emptyList()) =
         PowerFlowResult(
             status = ConvergenceStatus.CONVERGED,
             solveMode = SolveMode.AC,
             iterationCount = 3,
             snapshot = snapshot,
             slackBusIds = listOf("b1"),
-            violations = emptyList(),
+            violations = violations,
             solveTimeMs = 5,
         )
 }

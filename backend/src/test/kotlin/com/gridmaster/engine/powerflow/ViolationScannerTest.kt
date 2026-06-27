@@ -3,6 +3,7 @@ package com.gridmaster.engine.powerflow
 import com.gridmaster.engine.model.Bus
 import com.gridmaster.engine.model.GridNetwork
 import com.gridmaster.engine.model.Line
+import com.gridmaster.engine.model.ThreeWindingsTransformer
 import com.gridmaster.engine.model.TwoWindingsTransformer
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
@@ -192,6 +193,83 @@ class ViolationScannerTest {
     }
 
     // -------------------------------------------------------------------------
+    // Thermal violations — three-winding transformers
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `3W transformer thermal violation detected when leg current exceeds rating`() {
+        // ratingMva1=100 at 220 kV → ~262.5 A; current1A=300 A → 114.3 % → CRITICAL
+        val twt3 =
+            threeWt(
+                id = "T3A",
+                ratingMva1 = 100.0,
+                current1A = 300.0,
+                nominalVoltage1Kv = 220.0,
+            )
+        val snapshot = emptyNetwork().copy(threeWindingsTransformers = listOf(twt3))
+        val violations = scanner.scan(snapshot).filterIsInstance<NetworkViolation.ThermalViolation>()
+        assertThat(violations).hasSize(1)
+        assertThat(violations.first().equipmentType).isEqualTo(EquipmentType.THREE_WINDINGS_TRANSFORMER)
+        assertThat(violations.first().severity).isEqualTo(ViolationSeverity.CRITICAL)
+    }
+
+    @Test
+    fun `3W transformer reports only the worst leg`() {
+        // leg1: 230 / 262.5 A ≈ 87.6 % → below warning threshold, no violation
+        // leg2: 280 / 262.5 A ≈ 106.7 % → ALARM  (worst)
+        // leg3:  80 /  87.5 A ≈  91.4 % → WARNING
+        val twt3 =
+            threeWt(
+                id = "T3B",
+                ratingMva1 = 100.0,
+                current1A = 230.0,
+                nominalVoltage1Kv = 220.0,
+                ratingMva2 = 50.0,
+                current2A = 280.0,
+                nominalVoltage2Kv = 110.0,
+                ratingMva3 = 10.0,
+                current3A = 80.0,
+                nominalVoltage3Kv = 66.0,
+            )
+        val snapshot = emptyNetwork().copy(threeWindingsTransformers = listOf(twt3))
+        val violations = scanner.scan(snapshot).filterIsInstance<NetworkViolation.ThermalViolation>()
+        assertThat(violations).hasSize(1)
+        assertThat(violations.first().currentA).isEqualTo(280.0)
+        assertThat(violations.first().severity).isEqualTo(ViolationSeverity.ALARM)
+    }
+
+    @Test
+    fun `no thermal violation when all 3W transformer legs have null rating`() {
+        val twt3 = threeWt(id = "T3C", current1A = 300.0, current2A = 300.0, current3A = 300.0)
+        val snapshot = emptyNetwork().copy(threeWindingsTransformers = listOf(twt3))
+        assertThat(scanner.scan(snapshot).filterIsInstance<NetworkViolation.ThermalViolation>()).isEmpty()
+    }
+
+    @Test
+    fun `no thermal violation when 3W transformer leg currents are null`() {
+        val twt3 =
+            threeWt(
+                id = "T3D",
+                ratingMva1 = 100.0,
+                nominalVoltage1Kv = 220.0,
+                ratingMva2 = 50.0,
+                nominalVoltage2Kv = 110.0,
+                ratingMva3 = 10.0,
+                nominalVoltage3Kv = 66.0,
+            )
+        val snapshot = emptyNetwork().copy(threeWindingsTransformers = listOf(twt3))
+        assertThat(scanner.scan(snapshot).filterIsInstance<NetworkViolation.ThermalViolation>()).isEmpty()
+    }
+
+    @Test
+    fun `mvaToAmps returns zero at zero voltage and no violation is generated`() {
+        // nominalVoltage1Kv=0.0 → mvaToAmps returns 0.0 → thermalViolation skips (ratingA <= 0)
+        val twt3 = threeWt(id = "T3E", ratingMva1 = 100.0, current1A = 300.0, nominalVoltage1Kv = 0.0)
+        val snapshot = emptyNetwork().copy(threeWindingsTransformers = listOf(twt3))
+        assertThat(scanner.scan(snapshot).filterIsInstance<NetworkViolation.ThermalViolation>()).isEmpty()
+    }
+
+    // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
 
@@ -215,6 +293,40 @@ class ViolationScannerTest {
         resistanceOhm = 0.1,
         reactanceOhm = 1.0,
         shuntCapacitanceSiemens = 0.0,
+    )
+
+    private fun threeWt(
+        id: String,
+        ratingMva1: Double? = null,
+        current1A: Double? = null,
+        nominalVoltage1Kv: Double = 220.0,
+        ratingMva2: Double? = null,
+        current2A: Double? = null,
+        nominalVoltage2Kv: Double = 110.0,
+        ratingMva3: Double? = null,
+        current3A: Double? = null,
+        nominalVoltage3Kv: Double = 66.0,
+    ) = ThreeWindingsTransformer(
+        id = id,
+        name = id,
+        bus1Id = "B1",
+        bus2Id = "B2",
+        bus3Id = "B3",
+        ratingMva1 = ratingMva1,
+        current1A = current1A,
+        nominalVoltage1Kv = nominalVoltage1Kv,
+        ratingMva2 = ratingMva2,
+        current2A = current2A,
+        nominalVoltage2Kv = nominalVoltage2Kv,
+        ratingMva3 = ratingMva3,
+        current3A = current3A,
+        nominalVoltage3Kv = nominalVoltage3Kv,
+        resistanceOhm1 = 0.1,
+        reactanceOhm1 = 1.0,
+        resistanceOhm2 = 0.1,
+        reactanceOhm2 = 1.0,
+        resistanceOhm3 = 0.1,
+        reactanceOhm3 = 1.0,
     )
 
     private fun emptyNetwork() =
