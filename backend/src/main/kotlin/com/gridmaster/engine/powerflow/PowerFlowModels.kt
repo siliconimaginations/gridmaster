@@ -2,6 +2,9 @@ package com.gridmaster.engine.powerflow
 
 import com.gridmaster.engine.model.GridNetwork
 
+/** Square root of 3; used for MVA to A conversion: I = S * 1000 / (SQRT3 * V_kV). */
+const val SQRT3 = 1.7320508075688772
+
 /**
  * Parameters for a single power flow solve.
  * Defaults represent normal game-tick AC operation with distributed slack.
