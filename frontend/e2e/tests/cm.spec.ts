@@ -36,9 +36,9 @@ test.beforeAll(async ({ request }) => {
   const networkRes = await request.get(`/api/sessions/${id}/network`, {
     headers: { Authorization: `Bearer ${token}` },
   })
-  // GET /network returns GridNetwork domain model with `connected` (not `committed`)
-  const network = await networkRes.json() as { generators: Array<{ id: string; connected: boolean; maxActivePowerMw: number }> }
-  const gen = network.generators.find((g) => g.connected)
+  // GET /network now returns GridNetworkWsDto with `committed` (aligned with WS stream since PR #243)
+  const network = await networkRes.json() as { generators: Array<{ id: string; committed: boolean; maxActivePowerMw: number }> }
+  const gen = network.generators.find((g) => g.committed)
   committedGenId = gen?.id ?? ''
   committedGenMaxMw = gen?.maxActivePowerMw ?? 100
 
