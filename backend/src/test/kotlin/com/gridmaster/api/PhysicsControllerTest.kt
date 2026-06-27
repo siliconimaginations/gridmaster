@@ -433,6 +433,223 @@ class PhysicsControllerTest {
     }
 
     // Provides mocks to the Spring context
+
+    @Test
+    fun `POST mutations applies SET_GENERATOR_VOLTAGE`() {
+        val iidmNetwork = mockSession.iidmNetwork
+        every { networkMapper.applyMutation(any(), any<NetworkMutation.SetGeneratorVoltage>()) } returns Result.success(iidmNetwork)
+        every { networkMapper.toGridNetwork(any()) } returns mockSnapshot
+
+        mvc.post("$BASE/network/mutations") {
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"mutations":[{"type":"SET_GENERATOR_VOLTAGE","targetId":"G1","parameters":{"targetVoltagePu":1.02}}]}"""
+        }.andExpect { status { isOk() } }
+
+        verify { networkMapper.applyMutation(any(), NetworkMutation.SetGeneratorVoltage("G1", 1.02)) }
+    }
+
+    @Test
+    fun `POST mutations applies TRIP_LINE`() {
+        val iidmNetwork = mockSession.iidmNetwork
+        every { networkMapper.applyMutation(any(), any<NetworkMutation.TripLine>()) } returns Result.success(iidmNetwork)
+        every { networkMapper.toGridNetwork(any()) } returns mockSnapshot
+
+        mvc.post("$BASE/network/mutations") {
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"mutations":[{"type":"TRIP_LINE","targetId":"L1","parameters":{}}]}"""
+        }.andExpect { status { isOk() } }
+
+        verify { networkMapper.applyMutation(any(), NetworkMutation.TripLine("L1")) }
+    }
+
+    @Test
+    fun `POST mutations applies CONNECT_LINE`() {
+        val iidmNetwork = mockSession.iidmNetwork
+        every { networkMapper.applyMutation(any(), any<NetworkMutation.ConnectLine>()) } returns Result.success(iidmNetwork)
+        every { networkMapper.toGridNetwork(any()) } returns mockSnapshot
+
+        mvc.post("$BASE/network/mutations") {
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"mutations":[{"type":"CONNECT_LINE","targetId":"L1","parameters":{}}]}"""
+        }.andExpect { status { isOk() } }
+
+        verify { networkMapper.applyMutation(any(), NetworkMutation.ConnectLine("L1")) }
+    }
+
+    @Test
+    fun `POST mutations applies TRIP_GENERATOR`() {
+        val iidmNetwork = mockSession.iidmNetwork
+        every { networkMapper.applyMutation(any(), any<NetworkMutation.TripGenerator>()) } returns Result.success(iidmNetwork)
+        every { networkMapper.toGridNetwork(any()) } returns mockSnapshot
+
+        mvc.post("$BASE/network/mutations") {
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"mutations":[{"type":"TRIP_GENERATOR","targetId":"G1","parameters":{}}]}"""
+        }.andExpect { status { isOk() } }
+
+        verify { networkMapper.applyMutation(any(), NetworkMutation.TripGenerator("G1")) }
+    }
+
+    @Test
+    fun `POST mutations applies CONNECT_GENERATOR`() {
+        val iidmNetwork = mockSession.iidmNetwork
+        every { networkMapper.applyMutation(any(), any<NetworkMutation.ConnectGenerator>()) } returns Result.success(iidmNetwork)
+        every { networkMapper.toGridNetwork(any()) } returns mockSnapshot
+
+        mvc.post("$BASE/network/mutations") {
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"mutations":[{"type":"CONNECT_GENERATOR","targetId":"G1","parameters":{}}]}"""
+        }.andExpect { status { isOk() } }
+
+        verify { networkMapper.applyMutation(any(), NetworkMutation.ConnectGenerator("G1")) }
+    }
+
+    @Test
+    fun `POST mutations applies SET_LOAD_ACTIVE_POWER without reactive power`() {
+        val iidmNetwork = mockSession.iidmNetwork
+        every { networkMapper.applyMutation(any(), any<NetworkMutation.SetLoadPower>()) } returns Result.success(iidmNetwork)
+        every { networkMapper.toGridNetwork(any()) } returns mockSnapshot
+
+        mvc.post("$BASE/network/mutations") {
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"mutations":[{"type":"SET_LOAD_ACTIVE_POWER","targetId":"LD1","parameters":{"activePowerMw":75.0}}]}"""
+        }.andExpect { status { isOk() } }
+
+        verify { networkMapper.applyMutation(any(), NetworkMutation.SetLoadPower("LD1", 75.0, null)) }
+    }
+
+    @Test
+    fun `POST mutations applies SET_LOAD_ACTIVE_POWER with reactive power`() {
+        val iidmNetwork = mockSession.iidmNetwork
+        every { networkMapper.applyMutation(any(), any<NetworkMutation.SetLoadPower>()) } returns Result.success(iidmNetwork)
+        every { networkMapper.toGridNetwork(any()) } returns mockSnapshot
+
+        mvc.post("$BASE/network/mutations") {
+            contentType = MediaType.APPLICATION_JSON
+            content =
+                """{"mutations":[{"type":"SET_LOAD_ACTIVE_POWER","targetId":"LD1",""" +
+                """"parameters":{"activePowerMw":75.0,"reactivePowerMvar":15.0}}]}"""
+        }.andExpect { status { isOk() } }
+
+        verify { networkMapper.applyMutation(any(), NetworkMutation.SetLoadPower("LD1", 75.0, 15.0)) }
+    }
+
+    @Test
+    fun `POST mutations applies CONNECT_LOAD`() {
+        val iidmNetwork = mockSession.iidmNetwork
+        every { networkMapper.applyMutation(any(), any<NetworkMutation.ConnectLoad>()) } returns Result.success(iidmNetwork)
+        every { networkMapper.toGridNetwork(any()) } returns mockSnapshot
+
+        mvc.post("$BASE/network/mutations") {
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"mutations":[{"type":"CONNECT_LOAD","targetId":"LD1","parameters":{}}]}"""
+        }.andExpect { status { isOk() } }
+
+        verify { networkMapper.applyMutation(any(), NetworkMutation.ConnectLoad("LD1")) }
+    }
+
+    @Test
+    fun `POST mutations applies DISCONNECT_LOAD`() {
+        val iidmNetwork = mockSession.iidmNetwork
+        every { networkMapper.applyMutation(any(), any<NetworkMutation.DisconnectLoad>()) } returns Result.success(iidmNetwork)
+        every { networkMapper.toGridNetwork(any()) } returns mockSnapshot
+
+        mvc.post("$BASE/network/mutations") {
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"mutations":[{"type":"DISCONNECT_LOAD","targetId":"LD1","parameters":{}}]}"""
+        }.andExpect { status { isOk() } }
+
+        verify { networkMapper.applyMutation(any(), NetworkMutation.DisconnectLoad("LD1")) }
+    }
+
+    @Test
+    fun `POST mutations applies SET_SHUNT_SECTION_COUNT`() {
+        val iidmNetwork = mockSession.iidmNetwork
+        every { networkMapper.applyMutation(any(), any<NetworkMutation.SetShuntSections>()) } returns Result.success(iidmNetwork)
+        every { networkMapper.toGridNetwork(any()) } returns mockSnapshot
+
+        mvc.post("$BASE/network/mutations") {
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"mutations":[{"type":"SET_SHUNT_SECTION_COUNT","targetId":"SH1","parameters":{"sectionCount":3}}]}"""
+        }.andExpect { status { isOk() } }
+
+        verify { networkMapper.applyMutation(any(), NetworkMutation.SetShuntSections("SH1", 3)) }
+    }
+
+    @Test
+    fun `POST mutations returns 400 INVALID_MUTATION when required parameter is missing`() {
+        mvc.post("$BASE/network/mutations") {
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"mutations":[{"type":"SET_GENERATOR_OUTPUT","targetId":"G1","parameters":{}}]}"""
+        }.andExpect {
+            status { isBadRequest() }
+            jsonPath("$.error") { value("INVALID_MUTATION") }
+        }
+    }
+
+    @Test
+    fun `POST powerflow run with DC mode and PROPORTIONAL_TO_LOAD balance type`() {
+        val pfResult =
+            PowerFlowResult(
+                status = ConvergenceStatus.CONVERGED,
+                solveMode = SolveMode.DC,
+                iterationCount = 0,
+                snapshot = mockSnapshot,
+                slackBusIds = emptyList(),
+                violations = emptyList(),
+                solveTimeMs = 1,
+            )
+        every { powerFlowService.solve(any(), any()) } returns pfResult
+
+        val asyncResult =
+            mvc.post("$BASE/powerflow/run") {
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"mode":"DC","distributedSlack":false,"balanceType":"PROPORTIONAL_TO_LOAD"}"""
+            }.andReturn()
+        mvc.perform(asyncDispatch(asyncResult))
+            .andExpect(jStatus().isOk())
+            .andExpect(jJsonPath("$.status").value("CONVERGED"))
+
+        verify { powerFlowService.solve(any(), match { it.mode == SolveMode.DC }) }
+    }
+
+    @Test
+    fun `POST powerflow run returns 400 for unknown solve mode`() {
+        val asyncResult =
+            mvc.post("$BASE/powerflow/run") {
+                contentType = MediaType.APPLICATION_JSON
+                content =
+                    """{"mode":"QUANTUM","distributedSlack":true,""" +
+                    """"balanceType":"PROPORTIONAL_TO_GENERATION_P_MAX"}"""
+            }.andReturn()
+        mvc.perform(asyncDispatch(asyncResult))
+            .andExpect(jStatus().isBadRequest())
+    }
+
+    @Test
+    fun `POST powerflow run with PROPORTIONAL_TO_GENERATION_REMAINING_MARGIN balance type`() {
+        every { powerFlowService.solve(any(), any()) } returns
+            PowerFlowResult(
+                status = ConvergenceStatus.CONVERGED,
+                solveMode = SolveMode.AC,
+                iterationCount = 3,
+                snapshot = mockSnapshot,
+                slackBusIds = listOf("B1"),
+                violations = emptyList(),
+                solveTimeMs = 2,
+            )
+
+        val asyncResult =
+            mvc.post("$BASE/powerflow/run") {
+                contentType = MediaType.APPLICATION_JSON
+                content =
+                    """{"mode":"AC","distributedSlack":true,""" +
+                    """"balanceType":"PROPORTIONAL_TO_GENERATION_REMAINING_MARGIN"}"""
+            }.andReturn()
+        mvc.perform(asyncDispatch(asyncResult))
+            .andExpect(jStatus().isOk())
+    }
+
     @TestConfiguration
     class Mocks {
         @Bean fun sessionStore() = mockk<PhysicsSessionStore>(relaxed = true)
