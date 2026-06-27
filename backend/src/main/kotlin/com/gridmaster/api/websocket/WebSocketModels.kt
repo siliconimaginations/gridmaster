@@ -4,11 +4,11 @@ import com.gridmaster.engine.model.GridNetwork
 import com.gridmaster.engine.model.Line
 import com.gridmaster.engine.model.TwoWindingsTransformer
 import com.gridmaster.engine.powerflow.ConvergenceStatus
+import com.gridmaster.engine.powerflow.SQRT3
 import com.gridmaster.game.ClockState
 import com.gridmaster.game.command.Alert
 import java.util.UUID
 import kotlin.math.PI
-import kotlin.math.sqrt
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Server → Client
@@ -200,8 +200,6 @@ enum class ConnectionStatusType {
 // ─────────────────────────────────────────────────────────────────────────────
 // Domain → DTO mapper
 // ─────────────────────────────────────────────────────────────────────────────
-
-private val SQRT3 = sqrt(3.0)
 
 /**
  * Map a domain [GridNetwork] snapshot to [GridNetworkWsDto].
