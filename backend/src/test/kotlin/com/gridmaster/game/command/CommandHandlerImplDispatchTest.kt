@@ -68,8 +68,13 @@ class CommandHandlerImplDispatchTest {
 
         handler =
             CommandHandlerImpl(
-                sessionStore, networkMapper, powerFlowService, contingencyService,
-                dispatchService, tickEngine, eventEngine,
+                sessionStore,
+                networkMapper,
+                powerFlowService,
+                contingencyService,
+                dispatchService,
+                tickEngine,
+                eventEngine,
             )
     }
 
