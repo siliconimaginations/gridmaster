@@ -84,12 +84,13 @@ class CommandHandlerImpl(
                 return noMutationResult(session.latestSnapshot, session.latestPowerFlowResult, command)
             }
             is PlayerCommand.RespondToEventCard -> {
-                val optionIndex = command.optionId.toIntOrNull()
-                    ?: return rejectedResult(
-                        session,
-                        command,
-                        "optionId must be a numeric string, got: '${command.optionId}'",
-                    )
+                val optionIndex =
+                    command.optionId.toIntOrNull()
+                        ?: return rejectedResult(
+                            session,
+                            command,
+                            "optionId must be a numeric string, got: '${command.optionId}'",
+                        )
                 eventEngine.resolveCard(sessionId, command.cardId, optionIndex)
                 return noMutationResult(session.latestSnapshot, session.latestPowerFlowResult, command)
             }
