@@ -96,7 +96,9 @@
       "name": "Event card panel (grid events, accept / dismiss)",
       "feature_implemented": true,
       "scenarios": [
-        "EV-01"
+        "EV-01",
+        "EV-02",
+        "EV-03"
       ]
     }
   ],
@@ -203,7 +205,17 @@
     },
     {
       "id": "EV-01",
-      "description": "Event card overlay appears and accept updates game state",
+      "description": "Event card overlay appears (WARNING), shows correct label, Apply clears card",
+      "test_implemented": true
+    },
+    {
+      "id": "EV-02",
+      "description": "CRITICAL severity card shows critical label and panel modifier",
+      "test_implemented": true
+    },
+    {
+      "id": "EV-03",
+      "description": "Apply button disabled until option selected; enabled after selection",
       "test_implemented": true
     }
   ]
