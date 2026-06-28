@@ -57,7 +57,7 @@ object PresetNetworkFactory {
     fun create(networkPreset: String): Network =
         when (networkPreset) {
             "tutorial" -> buildTutorialNetwork()
-            "ieee14" -> IeeeCdfNetworkFactory.create14Solved() // #46
+            "ieee14" -> buildIeee14Network()
             "freeplay50" -> buildFreePlay50Network() // #47
             else -> throw IllegalArgumentException(
                 "Unknown network preset: '$networkPreset'. " +
@@ -68,6 +68,45 @@ object PresetNetworkFactory {
     // -------------------------------------------------------------------------
     // Private builders
     // -------------------------------------------------------------------------
+
+    /**
+     * Returns the pre-solved IEEE 14-bus network with realistic generator MW limits.
+     *
+     * [IeeeCdfNetworkFactory.create14Solved] initialises generator minP/maxP from the
+     * standard CDF file, which contains no explicit MW limits — PowSyBl therefore
+     * defaults them to ±9999 MW.  Those sentinel values are meaningless in the game
+     * context (Dispatch panel shows "9999 MW", LP solver has no useful bounds).
+     *
+     * Post-processing clamps each generator to a realistic operating range:
+     * - `maxP` is capped to 1.5× the solved-case setpoint (floor 50 MW for
+     *   zero-dispatch synchronous condensers at buses 3, 6, and 8).
+     * - `minP` is floored at 0 MW (conventional machines cannot export negatively).
+     * - `targetP` is clamped to stay within `[minP, maxP]`.
+     */
+    private fun buildIeee14Network(): Network =
+        IeeeCdfNetworkFactory.create14Solved().also { network ->
+            network.generators.forEach { gen ->
+                if (gen.maxP > 1_000.0) {
+                    // Derive a realistic cap from the solved-case operating point:
+                    // 1.5× provides operating headroom while avoiding sentinel values.
+                    // A 50 MW floor handles synchronous condensers (buses 3, 6, 8)
+                    // whose solved-case targetP is 0 MW.
+                    val realisticMax =
+                        if (gen.targetP > 5.0) {
+                            (gen.targetP * 1.5).coerceAtMost(500.0)
+                        } else {
+                            50.0
+                        }
+                    gen.setMaxP(realisticMax)
+                }
+                if (gen.minP < 0.0) {
+                    gen.setMinP(0.0)
+                }
+                // Keep the initial setpoint within the updated [minP, maxP] window.
+                val clamped = gen.targetP.coerceIn(gen.minP, gen.maxP)
+                if (clamped != gen.targetP) gen.setTargetP(clamped)
+            }
+        }
 
     private fun buildTutorialNetwork(): Network {
         val network = NetworkFactory.findDefault().createNetwork("tutorial-network", "tutorial")
