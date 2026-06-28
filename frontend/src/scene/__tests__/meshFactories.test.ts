@@ -68,7 +68,7 @@ vi.mock('@babylonjs/core', () => {
 import { Color3, Vector3 } from '@babylonjs/core'
 import type { BranchDto, GeneratorDto, LoadDto, ViolationDto } from '../../api/types'
 import { cityTier, createCityMesh } from '../meshes/cityMesh'
-import { createGeneratorMesh, generatorStatus } from '../meshes/generatorMesh'
+import { createGeneratorMesh, generatorStatus, towerColour } from '../meshes/generatorMesh'
 import { lineColour } from '../meshes/lineMesh'
 import { createFlowParticles, resetDotTexture } from '../meshes/particleFlow'
 
@@ -100,6 +100,37 @@ describe('generatorStatus', () => {
   })
 })
 
+describe('towerColour', () => {
+  it('offline → dark charcoal regardless of fuel type', () => {
+    const c = towerColour('GAS', 'offline') as Color3
+    // Dark charcoal: all channels < 0.25
+    expect(c.r).toBeLessThan(0.25)
+    expect(c.g).toBeLessThan(0.25)
+    expect(c.b).toBeLessThan(0.25)
+  })
+  it('fault → red override regardless of fuel type', () => {
+    const c = towerColour('WIND', 'fault') as Color3
+    // Red: r > 0.8, b < 0.4
+    expect(c.r).toBeGreaterThan(0.8)
+    expect(c.b).toBeLessThan(0.4)
+  })
+  it('online GAS → steel blue (b dominant)', () => {
+    const c = towerColour('GAS', 'online') as Color3
+    expect(c.b).toBeGreaterThan(0.7)
+  })
+  it('online SOLAR → golden yellow (r+g high, b low)', () => {
+    const c = towerColour('SOLAR', 'online') as Color3
+    expect(c.r).toBeGreaterThan(0.8)
+    expect(c.b).toBeLessThan(0.3)
+  })
+  it('unknown fuel → falls back to default warm grey', () => {
+    const c = towerColour('UNKNOWN_FUEL', 'online') as Color3
+    // warm grey ≈ (0.61, 0.64, 0.686) — all channels similar, mid-range
+    expect(c.r).toBeGreaterThan(0.5)
+    expect(Math.abs(c.r - c.g)).toBeLessThan(0.1)
+  })
+})
+
 describe('createGeneratorMesh', () => {
   it('returns tower and ring meshes', () => {
     const { tower, ring } = createGeneratorMesh(mockScene, new Vector3(0,0,0), makeGen(true, 100))
@@ -118,6 +149,20 @@ describe('createGeneratorMesh', () => {
     // grey: all channels similar and low saturation
     const c = mat.diffuseColor as Color3
     expect(Math.abs(c.r - c.g)).toBeLessThan(0.1)
+  })
+  it('tower body is dark charcoal for offline generator', () => {
+    const { tower } = createGeneratorMesh(mockScene, new Vector3(0,0,0), makeGen(false, 0))
+    const mat = tower.material as InstanceType<typeof import('@babylonjs/core').StandardMaterial>
+    const c = mat.diffuseColor as Color3
+    expect(c.r).toBeLessThan(0.25)
+    expect(c.g).toBeLessThan(0.25)
+  })
+  it('tower body reflects GAS fuel type for online generator', () => {
+    const gasGen: GeneratorDto = { ...makeGen(true, 100), fuelType: 'GAS' }
+    const { tower } = createGeneratorMesh(mockScene, new Vector3(0,0,0), gasGen)
+    const mat = tower.material as InstanceType<typeof import('@babylonjs/core').StandardMaterial>
+    // GAS = (0.4, 0.6, 0.85) — blue channel dominant
+    expect((mat.diffuseColor as Color3).b).toBeGreaterThan(0.7)
   })
 })
 
