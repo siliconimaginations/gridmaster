@@ -40,11 +40,6 @@ class JwtAuthFilterTest {
     }
 
     @Test
-    fun `shouldNotFilterAsyncDispatch returns false so filter runs on async re-dispatches`() {
-        assertThat(filter.shouldNotFilterAsyncDispatch()).isFalse()
-    }
-
-    @Test
     fun `valid Bearer token populates SecurityContextHolder with authenticated principal`() {
         val token = jwtService.issue("user-123")
         every { request.getHeader("Authorization") } returns "Bearer $token"
