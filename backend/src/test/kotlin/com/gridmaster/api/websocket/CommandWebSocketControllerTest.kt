@@ -293,9 +293,10 @@ class CommandWebSocketControllerTest {
             snapshot = mockSnapshot,
             powerFlowResult = pfResult(),
             newAlerts = emptyList(),
-            commandOutcomes = listOf(
-                CommandOutcome(commandType = "cmd", success = false, rejectionReason = "Rejected"),
-            ),
+            commandOutcomes =
+                listOf(
+                    CommandOutcome(commandType = "cmd", success = false, rejectionReason = "Rejected"),
+                ),
         )
 
     private fun pfResult() =
