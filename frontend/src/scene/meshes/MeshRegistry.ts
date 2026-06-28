@@ -92,7 +92,7 @@ export class MeshRegistry {
         existing.tower.position.z = pos.z
         existing.ring.position.x = pos.x
         existing.ring.position.z = pos.z
-        updateGeneratorStatus(existing.ring, generatorStatus(gen, violations))
+        updateGeneratorStatus(existing, gen.fuelType, generatorStatus(gen, violations))
       } else {
         const genMeshes = createGeneratorMesh(this.scene, new Vector3(pos.x, 0, pos.z), gen, violations)
         genMeshes.tower.metadata = { elementType: 'GENERATOR', elementId: gen.id }
@@ -199,7 +199,7 @@ export class MeshRegistry {
   updateViolations(violations: readonly ViolationDto[]): void {
     for (const [genId, meshes] of this.generators) {
       const dto = this.generatorDtos.get(genId)
-      if (dto) updateGeneratorStatus(meshes.ring, generatorStatus(dto, violations))
+      if (dto) updateGeneratorStatus(meshes, dto.fuelType, generatorStatus(dto, violations))
     }
     for (const [subId, meshes] of this.substations) {
       const busIds = this.subBusIdSets.get(subId) ?? new Set<string>()
