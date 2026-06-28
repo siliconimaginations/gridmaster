@@ -100,7 +100,14 @@ test('CM-02 toggle generator on → committed=true after decommit baseline', asy
     { timeout: 20_000 },
   )
 
-  // Step 2: Commit it back and assert
+  // Step 2: Commit it back and assert.
+  // Capture the tick number immediately before sending so the assertion is
+  // gated on a state update that arrived *after* the command, not a stale
+  // in-flight update.
+  const tickBeforeCommit = await page.evaluate(() => {
+    return (window as { __e2e: { getStore: () => { tickNumber: number } } }).__e2e.getStore().tickNumber
+  })
+
   await page.evaluate((id) => {
     ;(window as { __e2e: { getStore: () => { sendCommand: (cmd: unknown) => void } } }).__e2e
       .getStore()
@@ -108,14 +115,21 @@ test('CM-02 toggle generator on → committed=true after decommit baseline', asy
   }, committedGenId)
 
   await page.waitForFunction(
-    (id) => {
-      const { network } = (window as {
-        __e2e: { getStore: () => { network: { generators: Array<{ id: string; committed: boolean }> } | null } }
+    ([id, minTick]) => {
+      const store = (window as {
+        __e2e: {
+          getStore: () => {
+            tickNumber: number
+            network: { generators: Array<{ id: string; committed: boolean }> } | null
+          }
+        }
       }).__e2e.getStore()
-      return network?.generators.find((g) => g.id === id && g.committed) !== undefined
+      // Require a tick that postdates the CommitGenerator command
+      if (store.tickNumber <= (minTick as number)) return false
+      return store.network?.generators.find((g) => g.id === (id as string) && g.committed) !== undefined
     },
-    committedGenId,
-    { timeout: 20_000 },
+    [committedGenId, tickBeforeCommit] as [string, number],
+    { timeout: 30_000 },
   )
 })
 
