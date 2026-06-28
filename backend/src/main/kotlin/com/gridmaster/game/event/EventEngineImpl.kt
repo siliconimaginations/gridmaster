@@ -141,7 +141,7 @@ class EventEngineImpl : EventEngine {
             log.info(
                 "EventEngine: session {} resolved card '{}' (id={}) → option [{}] '{}'",
                 sessionId,
-                card.prompt,
+                card.description,
                 cardId,
                 optionIndex,
                 card.options[optionIndex].label,
@@ -243,7 +243,9 @@ class EventEngineImpl : EventEngine {
                         severity = EventSeverity.INFO,
                         card =
                             EventCard(
-                                prompt = "Card choice",
+                                title = "Player card choice applied",
+                                description = "Card choice",
+                                severity = EventSeverity.INFO,
                                 options = emptyList(),
                             ),
                     ),
@@ -519,7 +521,9 @@ private object BuiltInCatalogue {
                 severity = EventSeverity.INFO,
                 card =
                     EventCard(
-                        prompt = "Accept renewable subsidy?",
+                        title = "Government offers renewable energy subsidy",
+                        description = "Accept renewable subsidy?",
+                        severity = EventSeverity.INFO,
                         options =
                             listOf(
                                 CardOption(
@@ -547,7 +551,9 @@ private object BuiltInCatalogue {
                 severity = EventSeverity.WARNING,
                 card =
                     EventCard(
-                        prompt = "Support carbon tax increase?",
+                        title = "Carbon tax increase proposed",
+                        description = "Support carbon tax increase?",
+                        severity = EventSeverity.WARNING,
                         options =
                             listOf(
                                 CardOption(

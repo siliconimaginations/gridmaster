@@ -81,6 +81,7 @@ interface EventEngine {
      *
      * @param cardId The [EventCard.cardId] of the card to resolve (unique per card instance).
      * @throws IllegalArgumentException if [optionIndex] is out of range.
+     * @see com.gridmaster.api.websocket.EventCardOptionDto.id
      * @throws IllegalStateException if [sessionId] has no pending cards or the card is not found.
      */
     fun resolveCard(

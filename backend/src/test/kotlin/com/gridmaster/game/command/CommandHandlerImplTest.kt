@@ -268,7 +268,7 @@ class CommandHandlerImplTest {
     fun `RespondToEventCard delegates to EventEngine`() {
         val result =
             handler.handle(
-                PlayerCommand.RespondToEventCard(sessionId, cardId = "card-uuid", optionIndex = 1),
+                PlayerCommand.RespondToEventCard(sessionId, cardId = "card-uuid", optionId = "1"),
                 userId,
             )
         assertThat(result.success).isTrue()

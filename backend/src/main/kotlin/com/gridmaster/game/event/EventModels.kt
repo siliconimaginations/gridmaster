@@ -151,11 +151,17 @@ sealed class EventEffect {
 /**
  * A decision card surfaced to the player when a [PolicyEvent] fires.
  * The player must choose one [CardOption] before the simulation advances.
+ *
+ * @param title      Short header shown in the card panel (typically the parent event's description).
+ * @param description Body text — the question or situation presented to the player.
+ * @param severity   Visual severity indicator inherited from the parent [PolicyEvent].
  */
 data class EventCard(
     /** Unique identifier used to look up this card in [EventEngine.resolveCard]. */
     val cardId: String = java.util.UUID.randomUUID().toString(),
-    val prompt: String,
+    val title: String = "",
+    val description: String,
+    val severity: EventSeverity = EventSeverity.INFO,
     val options: List<CardOption>,
 )
 

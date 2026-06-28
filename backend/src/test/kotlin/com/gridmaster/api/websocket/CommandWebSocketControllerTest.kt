@@ -193,7 +193,7 @@ class CommandWebSocketControllerTest {
 
     @Test
     fun `handleCommand deserializes RespondToEventCard`() {
-        val msg = PlayerCommandMessage("RespondToEventCard", mapOf("cardId" to "card-uuid-1", "optionIndex" to "0"))
+        val msg = PlayerCommandMessage("RespondToEventCard", mapOf("cardId" to "card-uuid-1", "optionId" to "0"))
         val ack = controller.handleCommand(sessionId, msg, authedHeaders())
         assertThat(ack.success).isTrue()
     }
