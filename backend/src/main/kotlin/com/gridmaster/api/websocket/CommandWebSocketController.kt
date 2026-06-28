@@ -210,7 +210,7 @@ class CommandWebSocketController(
             "ResumeClock" ->
                 PlayerCommand.ResumeClock(sessionId)
             "RespondToEventCard" ->
-                PlayerCommand.RespondToEventCard(sessionId, str("cardId"), int("optionIndex"))
+                PlayerCommand.RespondToEventCard(sessionId, str("cardId"), str("optionId"))
             else -> error("Unknown commandType: ${msg.commandType}")
         }
     }

@@ -117,12 +117,13 @@ sealed class PlayerCommand {
 
     /**
      * Respond to a pending [com.gridmaster.game.event.EventCard].
-     * [cardId] identifies the card; [optionIndex] selects the chosen option.
+     * [cardId] identifies the card; [optionId] is the string key of the chosen option
+     * (e.g. "0", "1") matching [com.gridmaster.api.websocket.EventCardOptionDto.id].
      */
     data class RespondToEventCard(
         override val sessionId: String,
         val cardId: String,
-        val optionIndex: Int,
+        val optionId: String,
     ) : PlayerCommand()
 }
 

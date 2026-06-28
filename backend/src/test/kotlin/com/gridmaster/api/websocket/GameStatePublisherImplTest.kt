@@ -350,7 +350,9 @@ class GameStatePublisherImplTest {
         val card =
             EventCard(
                 cardId = "card-001",
-                prompt = "Extra capacity needed?",
+                title = "Extra capacity event",
+                description = "Extra capacity needed?",
+                severity = com.gridmaster.game.event.EventSeverity.WARNING,
                 options =
                     listOf(
                         CardOption(label = "Yes, build gas peaker", effects = emptyList(), costGbp = 500_000.0),
@@ -371,13 +373,15 @@ class GameStatePublisherImplTest {
         val update = payloadSlot.captured as GameStateUpdate
         assertThat(update.pendingEventCards).hasSize(1)
         val cardDto = update.pendingEventCards!!.first()
-        assertThat(cardDto.cardId).isEqualTo("card-001")
-        assertThat(cardDto.prompt).isEqualTo("Extra capacity needed?")
+        assertThat(cardDto.id).isEqualTo("card-001")
+        assertThat(cardDto.title).isEqualTo("Extra capacity event")
+        assertThat(cardDto.description).isEqualTo("Extra capacity needed?")
+        assertThat(cardDto.severity).isEqualTo("WARNING")
         assertThat(cardDto.options).hasSize(2)
+        assertThat(cardDto.options[0].id).isEqualTo("0")
         assertThat(cardDto.options[0].label).isEqualTo("Yes, build gas peaker")
         assertThat(cardDto.options[0].costGbp).isEqualTo(500_000.0)
-        assertThat(cardDto.options[0].index).isEqualTo(0)
-        assertThat(cardDto.options[1].index).isEqualTo(1)
+        assertThat(cardDto.options[1].id).isEqualTo("1")
     }
 
     // -- Helpers --------------------------------------------------------------

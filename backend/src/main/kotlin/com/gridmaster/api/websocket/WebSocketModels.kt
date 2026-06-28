@@ -132,14 +132,19 @@ data class AlertDto(
 }
 
 data class EventCardDto(
-    val cardId: String,
-    val prompt: String,
+    val id: String,
+    val title: String,
+    val description: String,
+    val severity: String,
     val options: List<EventCardOptionDto>,
 )
 
 data class EventCardOptionDto(
-    val index: Int,
+    /** String key matching [com.gridmaster.game.event.CardOption] position (e.g. "0", "1"). */
+    val id: String,
     val label: String,
+    /** Short category tag displayed in the option chip (empty when not applicable). */
+    val tag: String,
     val costGbp: Double,
 )
 

@@ -253,10 +253,12 @@ private fun NetworkViolation.toDto(): ViolationDto =
 
 private fun EventCard.toDto(): EventCardDto =
     EventCardDto(
-        cardId = cardId,
-        prompt = prompt,
+        id = cardId,
+        title = title,
+        description = description,
+        severity = severity.name,
         options =
             options.mapIndexed { idx, opt ->
-                EventCardOptionDto(index = idx, label = opt.label, costGbp = opt.costGbp)
+                EventCardOptionDto(id = idx.toString(), label = opt.label, tag = "", costGbp = opt.costGbp)
             },
     )

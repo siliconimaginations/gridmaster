@@ -324,7 +324,7 @@ class EventEngineImplTest {
         engine.register(sessionId, EventConfig(randomSeed = 42))
         val card =
             EventCard(
-                prompt = "Accept subsidy?",
+                description = "Accept subsidy?",
                 options = listOf(CardOption("Yes", emptyList()), CardOption("No", emptyList())),
             )
         val event = PolicyEvent("pol-1", description = "Subsidy offered", severity = EventSeverity.INFO, card = card)
@@ -332,7 +332,7 @@ class EventEngineImplTest {
         engine.onTick(ctx(100), snapshot)
 
         assertThat(engine.pendingCards(sessionId)).hasSize(1)
-        assertThat(engine.pendingCards(sessionId)[0].prompt).isEqualTo("Accept subsidy?")
+        assertThat(engine.pendingCards(sessionId)[0].description).isEqualTo("Accept subsidy?")
     }
 
     @Test
@@ -340,7 +340,7 @@ class EventEngineImplTest {
         engine.register(sessionId, EventConfig(randomSeed = 42))
         val card =
             EventCard(
-                prompt = "Accept subsidy?",
+                description = "Accept subsidy?",
                 options = listOf(CardOption("Yes", emptyList()), CardOption("No", emptyList())),
             )
         val event = PolicyEvent("pol-2", description = "Subsidy", severity = EventSeverity.INFO, card = card)
@@ -355,7 +355,7 @@ class EventEngineImplTest {
     @Test
     fun `resolveCard with invalid optionIndex throws`() {
         engine.register(sessionId, EventConfig(randomSeed = 42))
-        val card = EventCard(prompt = "Prompt?", options = listOf(CardOption("Only option", emptyList())))
+        val card = EventCard(description = "Prompt?", options = listOf(CardOption("Only option", emptyList())))
         val event = PolicyEvent("pol-3", description = "Policy", severity = EventSeverity.INFO, card = card)
         engine.schedule(sessionId, event, 100)
         engine.onTick(ctx(100), snapshot)
@@ -368,7 +368,7 @@ class EventEngineImplTest {
     @Test
     fun `resolveCard with unknown cardId throws`() {
         engine.register(sessionId, EventConfig(randomSeed = 42))
-        val card = EventCard(prompt = "Unknown?", options = listOf(CardOption("Option", emptyList())))
+        val card = EventCard(description = "Unknown?", options = listOf(CardOption("Option", emptyList())))
         val event = PolicyEvent("pol-4", description = "Policy", severity = EventSeverity.INFO, card = card)
         engine.schedule(sessionId, event, 100)
         engine.onTick(ctx(100), snapshot)
@@ -381,8 +381,8 @@ class EventEngineImplTest {
     fun `resolveCard two cards with identical prompts resolved independently by cardId`() {
         engine.register(sessionId, EventConfig(randomSeed = 42))
         // Both cards have the same prompt — previously ambiguous, now disambiguated by cardId
-        val card1 = EventCard(prompt = "Same prompt?", options = listOf(CardOption("Option A", emptyList())))
-        val card2 = EventCard(prompt = "Same prompt?", options = listOf(CardOption("Option B", emptyList())))
+        val card1 = EventCard(description = "Same prompt?", options = listOf(CardOption("Option A", emptyList())))
+        val card2 = EventCard(description = "Same prompt?", options = listOf(CardOption("Option B", emptyList())))
         engine.schedule(sessionId, PolicyEvent("pol-5a", description = "P5a", severity = EventSeverity.INFO, card = card1), 100)
         engine.schedule(sessionId, PolicyEvent("pol-5b", description = "P5b", severity = EventSeverity.INFO, card = card2), 100)
         engine.onTick(ctx(100), snapshot)
@@ -406,7 +406,7 @@ class EventEngineImplTest {
                 effects = listOf(EventEffect.ScaleGeneratorCost(fuelType = FuelType.GAS, factor = 0.8)),
                 durationMinutes = 60,
             )
-        val card = EventCard(prompt = "Accept temporary subsidy?", options = listOf(temporaryOption))
+        val card = EventCard(description = "Accept temporary subsidy?", options = listOf(temporaryOption))
         val event = PolicyEvent("pol-dur-1", description = "Temp policy", severity = EventSeverity.INFO, card = card)
         engine.schedule(sessionId, event, 100)
         engine.onTick(ctx(100), snapshot)
@@ -435,7 +435,7 @@ class EventEngineImplTest {
         // not during the tick that fires the event. This test locks in that contract.
         val card =
             EventCard(
-                prompt = "Accept subsidy?",
+                description = "Accept subsidy?",
                 options = listOf(CardOption("Yes", listOf(EventEffect.ScaleGeneratorCost(FuelType.GAS, 0.8)))),
             )
         val event = PolicyEvent("pol-no-mut", description = "Contract test", severity = EventSeverity.INFO, card = card)
