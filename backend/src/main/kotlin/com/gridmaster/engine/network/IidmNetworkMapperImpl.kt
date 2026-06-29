@@ -326,7 +326,11 @@ class IidmNetworkMapperImpl(
                     val line =
                         network.getLine(mutation.lineId)
                             ?: throw InvalidMutationException("Line not found: ${mutation.lineId}")
-                    if (!line.terminal1.connect() || !line.terminal2.connect()) {
+                    line.terminal1.connect()
+                    line.terminal2.connect()
+                    // connect() returns false when already connected OR when reconnection fails;
+                    // check isConnected to distinguish the failure case (#253)
+                    if (!line.terminal1.isConnected || !line.terminal2.isConnected) {
                         throw InvalidMutationException("Line ${mutation.lineId} terminal could not be reconnected")
                     }
                 }
@@ -342,7 +346,10 @@ class IidmNetworkMapperImpl(
                     val gen =
                         network.getGenerator(mutation.generatorId)
                             ?: throw InvalidMutationException("Generator not found: ${mutation.generatorId}")
-                    if (!gen.terminal.connect()) {
+                    gen.terminal.connect()
+                    // connect() returns false when already connected OR when reconnection fails;
+                    // check isConnected to distinguish the failure case (#253)
+                    if (!gen.terminal.isConnected) {
                         throw InvalidMutationException("Generator ${mutation.generatorId} terminal could not be reconnected")
                     }
                 }
@@ -372,7 +379,10 @@ class IidmNetworkMapperImpl(
                     val load =
                         network.getLoad(mutation.loadId)
                             ?: throw InvalidMutationException("Load not found: ${mutation.loadId}")
-                    if (!load.terminal.connect()) {
+                    load.terminal.connect()
+                    // connect() returns false when already connected OR when reconnection fails;
+                    // check isConnected to distinguish the failure case (#253)
+                    if (!load.terminal.isConnected) {
                         throw InvalidMutationException("Load ${mutation.loadId} terminal could not be reconnected")
                     }
                 }
