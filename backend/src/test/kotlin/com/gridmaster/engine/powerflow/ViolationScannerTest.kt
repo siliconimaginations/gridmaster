@@ -299,13 +299,13 @@ class ViolationScannerTest {
         id: String,
         ratingMva1: Double? = null,
         current1A: Double? = null,
-        nominalVoltage1Kv: Double = 220.0,
+        nominalVoltage1Kv: Double = 33.0, // UK distribution HV; lower default catches math bugs earlier (#255)
         ratingMva2: Double? = null,
         current2A: Double? = null,
-        nominalVoltage2Kv: Double = 110.0,
+        nominalVoltage2Kv: Double = 11.0,
         ratingMva3: Double? = null,
         current3A: Double? = null,
-        nominalVoltage3Kv: Double = 66.0,
+        nominalVoltage3Kv: Double = 0.415,
     ) = ThreeWindingsTransformer(
         id = id,
         name = id,

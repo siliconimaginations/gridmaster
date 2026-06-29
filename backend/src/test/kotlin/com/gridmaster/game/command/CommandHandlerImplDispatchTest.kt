@@ -23,6 +23,7 @@ import com.gridmaster.game.TickEngine
 import com.gridmaster.game.event.EventEngine
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -81,13 +82,14 @@ class CommandHandlerImplDispatchTest {
     @Test
     fun `RunEconomicDispatch calls dispatchService and applies generator targets as mutations`() {
         val capturedMutations = mutableListOf<NetworkMutation>()
+        val totalLoadSlot = slot<Double>()
         every { networkMapper.applyMutation(any(), capture(capturedMutations)) } returns Result.success(session.iidmNetwork)
-        val dispatchResult = singleTargetResult("g1", 90.0)
-        every { dispatchService.economicDispatch(any(), any(), any()) } returns dispatchResult
+        every { dispatchService.economicDispatch(any(), capture(totalLoadSlot), any()) } returns singleTargetResult("g1", 90.0)
 
         val result = handler.handle(PlayerCommand.RunEconomicDispatch(sessionId, totalLoadMw = 90.0), userId)
 
         assertThat(result.success).isTrue()
+        assertThat(totalLoadSlot.captured).isEqualTo(90.0) // exact totalLoadMw forwarded to dispatch service (#258)
         assertThat(capturedMutations).hasSize(1)
         val mutation = capturedMutations[0] as NetworkMutation.SetGeneratorOutput
         assertThat(mutation.generatorId).isEqualTo("g1")
@@ -97,13 +99,16 @@ class CommandHandlerImplDispatchTest {
     @Test
     fun `RunEconomicDispatch with multiple targets applies all mutations in order`() {
         val capturedMutations = mutableListOf<NetworkMutation>()
+        val generatorsSlot = slot<List<com.gridmaster.engine.dispatch.DispatchableGenerator>>()
         every { networkMapper.applyMutation(any(), capture(capturedMutations)) } returns Result.success(session.iidmNetwork)
-        val dispatchResult = multiTargetResult(listOf("g1" to 80.0, "g2" to 50.0), 130.0)
-        every { dispatchService.economicDispatch(any(), any(), any()) } returns dispatchResult
+        every { dispatchService.economicDispatch(capture(generatorsSlot), any(), any()) } returns
+            multiTargetResult(listOf("g1" to 80.0, "g2" to 50.0), 130.0)
 
         val result = handler.handle(PlayerCommand.RunEconomicDispatch(sessionId, totalLoadMw = 130.0), userId)
 
         assertThat(result.success).isTrue()
+        assertThat(generatorsSlot.captured).hasSize(2) // snapshot has exactly 2 generators (#258)
+        assertThat(generatorsSlot.captured.map { it.id }).containsExactly("g1", "g2")
         assertThat(capturedMutations).hasSize(2)
         assertThat((capturedMutations[0] as NetworkMutation.SetGeneratorOutput).generatorId).isEqualTo("g1")
         assertThat((capturedMutations[1] as NetworkMutation.SetGeneratorOutput).generatorId).isEqualTo("g2")
