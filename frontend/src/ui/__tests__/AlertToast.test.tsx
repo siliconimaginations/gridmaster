@@ -21,10 +21,12 @@ function makeAlert(overrides: Partial<AlertDto> = {}): AlertDto {
   }
 }
 
-function mockAlerts(alerts: AlertDto[]) {
+const dismissLocalAlertMock = vi.fn()
+
+function mockAlerts(alerts: AlertDto[], localAlerts: AlertDto[] = []) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   vi.mocked(useGameStore).mockImplementation((selector?: (s: any) => any) => {
-    const state = { alerts }
+    const state = { alerts, localAlerts, dismissLocalAlert: dismissLocalAlertMock }
     return selector ? selector(state) : state
   })
 }
