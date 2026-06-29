@@ -54,9 +54,21 @@ describe('TopHud', () => {
     expect(screen.getByTestId('pill-load')).toHaveTextContent('500 MW')
   })
 
-  it('shows — /MWh for price (deferred)', () => {
+  it('shows — /MWh when systemMarginalCostPerMwh is null', () => {
     render(<TopHud />)
-    expect(screen.getByTestId('pill-price')).toHaveTextContent('— /MWh')
+    expect(screen.getByTestId('hud-price')).toHaveTextContent('— /MWh')
+  })
+
+  it('shows formatted price when systemMarginalCostPerMwh is set (#283)', () => {
+    mockStore({ network: { ...makeNetwork(500), systemMarginalCostPerMwh: 99.4 } })
+    render(<TopHud />)
+    expect(screen.getByTestId('hud-price')).toHaveTextContent('£99/MWh')
+  })
+
+  it('shows — /MWh when price is zero (pre-dispatch)', () => {
+    mockStore({ network: { ...makeNetwork(500), systemMarginalCostPerMwh: 0 } })
+    render(<TopHud />)
+    expect(screen.getByTestId('hud-price')).toHaveTextContent('— /MWh')
   })
 
   it('health pill shows "Grid healthy" with no violations', () => {

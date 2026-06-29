@@ -59,6 +59,8 @@ export interface GridNetworkDto {
   branches: BranchDto[]
   generators: GeneratorDto[]
   loads: LoadDto[]
+  /** System marginal cost set by the last dispatch solve (£/MWh). Null until first dispatch. */
+  systemMarginalCostPerMwh?: number | null
 }
 
 // ── Violations & alerts ───────────────────────────────────────────────────────

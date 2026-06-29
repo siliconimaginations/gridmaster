@@ -26,6 +26,11 @@ export function TopHud() {
 
   const health = useMemo(() => gridHealthStatus(violations), [violations])
   const displayedLoad = useMemo(() => totalLoadMw(network), [network])
+  const displayedPrice = useMemo(() => {
+    const smc = network?.systemMarginalCostPerMwh
+    if (smc == null || smc <= 0) return null
+    return `£${Math.round(smc)}/MWh`
+  }, [network])
 
   const severityClass: Record<HealthSeverity, string> = {
     ok: styles.severityOk,
@@ -49,11 +54,10 @@ export function TopHud() {
         <span data-testid="hud-total-load">{displayedLoad}</span>
       </div>
 
-      {/* Price — deferred until backend sends systemMarginalPrice */}
-      {/* TODO: wire to store once GameStateUpdate carries price field */}
+      {/* Price — system marginal cost from last dispatch solve (#283) */}
       <div className={styles.pill} data-testid="pill-price">
         <span className={styles.label}>Price</span>
-        — /MWh
+        <span data-testid="hud-price">{displayedPrice ?? '— /MWh'}</span>
       </div>
 
       {/* Health */}
