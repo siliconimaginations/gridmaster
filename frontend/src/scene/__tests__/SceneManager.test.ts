@@ -23,7 +23,7 @@ vi.mock('@babylonjs/core', () => {
 })
 
 // ── Sub-module mocks (no GPU needed) ─────────────────────────────────────────
-vi.mock('../camera', () => ({ createIsometricCamera: vi.fn() }))
+vi.mock('../camera', () => ({ createIsometricCamera: vi.fn(), updateCameraForNetwork: vi.fn() }))
 vi.mock('../ground', () => ({ createGround: vi.fn() }))
 vi.mock('../lighting', () => ({ createSceneLighting: vi.fn() }))
 

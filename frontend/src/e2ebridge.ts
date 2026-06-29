@@ -15,7 +15,7 @@ export function installE2EBridge(): void {
   // The E2EBridge type is declared via the global Window augmentation in
   // e2e/shared/e2e-bridge.ts; production builds tree-shake this entire module.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ;(window as any).__e2e = {
+  (window as any).__e2e = {
     /** Returns a snapshot of the current Zustand store state. */
     getStore: () => useGameStore.getState(),
 
