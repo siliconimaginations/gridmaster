@@ -147,17 +147,31 @@ class PresetNetworkFactoryTest {
      * The generator attributes are supplied by the caller so each test can exercise
      * a different boundary condition without PowSyBl's IEEE CDF parser.
      */
-    private fun networkWithGenerator(minP: Double, maxP: Double, targetP: Double) =
-        NetworkFactory.findDefault().createNetwork("test-net", "test").also { n ->
-            val s = n.newSubstation().setId("S1").add()
-            val vl = s.newVoltageLevel().setId("VL1").setNominalV(220.0)
-                .setTopologyKind(TopologyKind.BUS_BREAKER).add()
-            vl.busBreakerView.newBus().setId("B1").add()
-            vl.newGenerator().setId("G1").setBus("B1").setConnectableBus("B1")
-                .setMinP(minP).setMaxP(maxP).setTargetP(targetP)
-                .setTargetQ(0.0).setTargetV(220.0).setVoltageRegulatorOn(true)
+    private fun networkWithGenerator(
+        minP: Double,
+        maxP: Double,
+        targetP: Double,
+    ) = NetworkFactory.findDefault().createNetwork("test-net", "test").also { n ->
+        val s = n.newSubstation().setId("S1").add()
+        val vl =
+            s.newVoltageLevel()
+                .setId("VL1")
+                .setNominalV(220.0)
+                .setTopologyKind(TopologyKind.BUS_BREAKER)
                 .add()
-        }
+        vl.busBreakerView.newBus().setId("B1").add()
+        vl.newGenerator()
+            .setId("G1")
+            .setBus("B1")
+            .setConnectableBus("B1")
+            .setMinP(minP)
+            .setMaxP(maxP)
+            .setTargetP(targetP)
+            .setTargetQ(0.0)
+            .setTargetV(220.0)
+            .setVoltageRegulatorOn(true)
+            .add()
+    }
 
     @Test
     fun `normalizeGeneratorBounds clamps sentinel maxP over 1000 using targetP-derived cap`() {
