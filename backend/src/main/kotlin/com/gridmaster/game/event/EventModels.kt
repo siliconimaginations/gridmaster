@@ -171,6 +171,8 @@ data class EventCard(
  * @param label Short label displayed on the option button.
  * @param effects Effects applied to the session if this option is chosen.
  * @param costGbp One-time cost charged to the player's budget (default 0).
+ * @param tag Short category chip displayed in the option button (e.g. "Economic", "Technical").
+ *   Empty string means no chip is shown.
  */
 data class CardOption(
     val label: String,
@@ -181,6 +183,7 @@ data class CardOption(
      * Null = permanent (never expires).
      */
     val durationMinutes: Int? = null,
+    val tag: String = "",
 )
 
 // ─────────────────────────────────────────────────────────────────────────────

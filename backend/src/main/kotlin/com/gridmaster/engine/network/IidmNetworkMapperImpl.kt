@@ -328,6 +328,11 @@ class IidmNetworkMapperImpl(
                             ?: throw InvalidMutationException("Line not found: ${mutation.lineId}")
                     line.terminal1.connect()
                     line.terminal2.connect()
+                    // connect() returns false when already connected OR when reconnection fails;
+                    // check isConnected to distinguish the failure case (#253)
+                    if (!line.terminal1.isConnected || !line.terminal2.isConnected) {
+                        throw InvalidMutationException("Line ${mutation.lineId} terminal could not be reconnected")
+                    }
                 }
 
                 is NetworkMutation.TripGenerator -> {
@@ -342,6 +347,11 @@ class IidmNetworkMapperImpl(
                         network.getGenerator(mutation.generatorId)
                             ?: throw InvalidMutationException("Generator not found: ${mutation.generatorId}")
                     gen.terminal.connect()
+                    // connect() returns false when already connected OR when reconnection fails;
+                    // check isConnected to distinguish the failure case (#253)
+                    if (!gen.terminal.isConnected) {
+                        throw InvalidMutationException("Generator ${mutation.generatorId} terminal could not be reconnected")
+                    }
                 }
 
                 is NetworkMutation.SetTapPosition -> {
@@ -370,6 +380,11 @@ class IidmNetworkMapperImpl(
                         network.getLoad(mutation.loadId)
                             ?: throw InvalidMutationException("Load not found: ${mutation.loadId}")
                     load.terminal.connect()
+                    // connect() returns false when already connected OR when reconnection fails;
+                    // check isConnected to distinguish the failure case (#253)
+                    if (!load.terminal.isConnected) {
+                        throw InvalidMutationException("Load ${mutation.loadId} terminal could not be reconnected")
+                    }
                 }
 
                 is NetworkMutation.DisconnectLoad -> {
