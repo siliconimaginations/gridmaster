@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import '../../shared/e2e-bridge'
+import '../shared/e2e-bridge'
 
 /**
  * CM — Command / Network Mutation

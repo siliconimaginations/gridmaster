@@ -1,4 +1,4 @@
-import '../../shared/e2e-bridge'
+import '../shared/e2e-bridge'
 import type { Page } from '@playwright/test'
 
 /**
