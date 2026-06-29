@@ -7,7 +7,9 @@ import { MeshBuilder } from '@babylonjs/core'
 import type { BranchDto, BusDto, GeneratorDto, GridNetworkDto, LoadDto, ViolationDto } from '../../api/types'
 import { MeshRegistry } from '../meshes/MeshRegistry'
 
-const mockScene = {} as never
+const mockScene = {
+  onBeforeRenderObservable: { add: vi.fn(), removeCallback: vi.fn() },
+} as never
 
 const makeBus = (id: string): BusDto => ({ id, name: id, voltageKv: 220, voltagePu: 1, angleRad: 0, substationId: `s_${id}` })
 const makeGen = (id: string): GeneratorDto => ({ id, busId: 'b1', name: id, activePowerMw: 100, maxActivePowerMw: 200, committed: true, fuelType: 'GAS' })
