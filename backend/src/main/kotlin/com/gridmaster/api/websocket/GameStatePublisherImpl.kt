@@ -259,6 +259,6 @@ private fun EventCard.toDto(): EventCardDto =
         severity = severity.name,
         options =
             options.mapIndexed { idx, opt ->
-                EventCardOptionDto(id = idx.toString(), label = opt.label, tag = "", costGbp = opt.costGbp)
+                EventCardOptionDto(id = idx.toString(), label = opt.label, tag = opt.tag, costGbp = opt.costGbp)
             },
     )
