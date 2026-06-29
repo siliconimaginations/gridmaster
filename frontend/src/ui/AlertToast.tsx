@@ -51,35 +51,57 @@ function dedupeByElementId(alerts: AlertDto[] | null | undefined): AlertDto[] {
  * Renders a stack of up to {@link MAX_VISIBLE} dismissible alert toasts in the
  * bottom-right corner of the HUD.
  *
- * Reads `alerts` from the Zustand store and applies:
- * - De-duplication by `elementId` (keeps most recent per element).
- * - User-initiated dismissal (× button).
- * - Auto-dismiss after a severity-specific wall-clock delay.
+ * Sources:
+ * - `alerts` — server-pushed alert events (e.g. overloads, frequency deviation).
+ * - `localAlerts` — ephemeral client-generated feedback (e.g. rejected commands,
+ *    unit-commitment success). These are not overwritten by server GameStateUpdates,
+ *    so they survive the next FULL replacement. (#282, #273)
+ *
+ * Both are merged before de-duplication and display.
+ * Local alert dismissal is propagated back to the store via `dismissLocalAlert`
+ * so the alert is truly removed (not just hidden behind a local `dismissed` set).
  *
  * @see docs/ux/03-alert-toasts.md
- * @see issue #85
+ * @see issue #85, #282, #273
  */
 export function AlertToastContainer() {
-  const alerts = useGameStore(useShallow((s) => s.alerts))
-  const [dismissed, setDismissed] = useState<Set<string>>(new Set())
+  const { alerts, localAlerts, dismissLocalAlert } = useGameStore(
+    useShallow((s) => ({
+      alerts: s.alerts,
+      localAlerts: s.localAlerts,
+      dismissLocalAlert: s.dismissLocalAlert,
+    })),
+  )
+
+  // Track which server alert ids have been manually dismissed by the user.
+  // (Local alerts are dismissed by removing them from the store instead.)
+  const [dismissedServerIds, setDismissedServerIds] = useState<Set<string>>(new Set())
   const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+
+  // Build the merged list: server alerts first (oldest context), then local (newest feedback).
+  const merged = useMemo(
+    () => dedupeByElementId([...alerts, ...localAlerts]),
+    [alerts, localAlerts],
+  )
+
+  const localAlertIds = useMemo(() => new Set(localAlerts.map((a) => a.id)), [localAlerts])
 
   const visible = useMemo(
     () =>
-      dedupeByElementId(alerts)
-        .filter((a) => !dismissed.has(a.id))
+      merged
+        .filter((a) => !dismissedServerIds.has(a.id))
         .slice(0, MAX_VISIBLE),
-    [alerts, dismissed],
+    [merged, dismissedServerIds],
   )
 
   // Start auto-dismiss timers for newly visible alerts; prune timers for
   // alerts that have left the store entirely.
   useEffect(() => {
-    const storeIds = new Set(alerts.map((a) => a.id))
+    const allIds = new Set(merged.map((a) => a.id))
 
-    // Clear timers for alerts no longer in the store
+    // Clear timers for alerts no longer in any store slice
     for (const [id, t] of timers.current.entries()) {
-      if (!storeIds.has(id)) {
+      if (!allIds.has(id)) {
         clearTimeout(t)
         timers.current.delete(id)
       }
@@ -90,14 +112,20 @@ export function AlertToastContainer() {
       if (timers.current.has(alert.id)) continue
       const delay = AUTO_DISMISS_MS[alert.severity]
       if (delay !== null) {
+        const isLocal = localAlertIds.has(alert.id)
+        const id = alert.id
         const t = setTimeout(() => {
-          setDismissed((prev) => new Set([...prev, alert.id]))
-          timers.current.delete(alert.id)
+          if (isLocal) {
+            dismissLocalAlert(id)
+          } else {
+            setDismissedServerIds((prev) => new Set([...prev, id]))
+          }
+          timers.current.delete(id)
         }, delay)
         timers.current.set(alert.id, t)
       }
     }
-  }, [alerts, visible])
+  }, [merged, visible, localAlertIds, dismissLocalAlert])
 
   // Clean up all timers on unmount
   useEffect(() => {
@@ -113,7 +141,11 @@ export function AlertToastContainer() {
       clearTimeout(t)
       timers.current.delete(id)
     }
-    setDismissed((prev) => new Set([...prev, id]))
+    if (localAlertIds.has(id)) {
+      dismissLocalAlert(id)
+    } else {
+      setDismissedServerIds((prev) => new Set([...prev, id]))
+    }
   }
 
   if (visible.length === 0) return null
