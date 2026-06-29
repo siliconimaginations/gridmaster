@@ -82,6 +82,34 @@ export function gridHealthStatus(violations: ViolationDto[]): GridHealth {
   return { label: 'N-1 risks', severity: 'warning' }
 }
 
+// ── Trend arrows (#274) ───────────────────────────────────────────────────────
+
+export type TrendDirection = 'up' | 'down' | 'flat'
+
+/**
+ * Derives trend direction from a history array of numeric values.
+ *
+ * Compares the oldest value in the window against the newest. A change of
+ * ≥ 2% of the oldest value (or ≥ 1 unit when the oldest value is near zero)
+ * is considered a meaningful trend. Otherwise the trend is flat.
+ *
+ * @param history - Recent values in chronological order (oldest first). Must
+ *   have at least 2 entries; returns `'flat'` otherwise.
+ */
+export function computeTrend(history: number[]): TrendDirection {
+  if (history.length < 2) return 'flat'
+  const oldest = history[0]
+  const newest = history[history.length - 1]
+  const delta = newest - oldest
+  const threshold = Math.max(Math.abs(oldest) * 0.02, 1)
+  if (delta > threshold) return 'up'
+  if (delta < -threshold) return 'down'
+  return 'flat'
+}
+
+/** Unicode arrow character for a trend direction. */
+export const TREND_GLYPH: Record<TrendDirection, string> = { up: '↑', down: '↓', flat: '—' }
+
 // ── Speed steps ───────────────────────────────────────────────────────────────
 
 /** Speed multiplier options shown in the BottomHud speed selector. */

@@ -23,6 +23,8 @@ function mockStore(overrides: Record<string, unknown> = {}) {
   vi.mocked(useGameStore).mockImplementation((selector?: (s: any) => any) => {
     const state = {
       gameTimeMinutes: 90,
+      tickNumber: 0,
+      clockState: 'RUNNING',
       network: makeNetwork(500),
       violations: [],
       ...overrides,
@@ -98,5 +100,18 @@ describe('TopHud', () => {
     mockStore({ network: null })
     render(<TopHud />)
     expect(screen.getByTestId('pill-load')).toHaveTextContent('— MW')
+  })
+
+  it('trend arrows are rendered for load and health pills (#274)', () => {
+    render(<TopHud />)
+    expect(screen.getByTestId('hud-load-trend')).toBeInTheDocument()
+    expect(screen.getByTestId('hud-health-trend')).toBeInTheDocument()
+  })
+
+  it('load and health trend arrows show — on first render (insufficient history)', () => {
+    render(<TopHud />)
+    // tickNumber=0 is skipped by the effect; history is empty → flat
+    expect(screen.getByTestId('hud-load-trend')).toHaveTextContent('—')
+    expect(screen.getByTestId('hud-health-trend')).toHaveTextContent('—')
   })
 })
