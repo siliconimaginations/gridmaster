@@ -12,14 +12,14 @@
  */
 
 import { Scene, StandardMaterial, Vector3 } from '@babylonjs/core'
-import type { AbstractMesh, ParticleSystem } from '@babylonjs/core'
+import type { AbstractMesh } from '@babylonjs/core'
 import type { GeneratorDto, GridNetworkDto, ViolationDto } from '../../api/types'
 import { layoutBuses } from '../layout/busLayout'
 import { createGeneratorMesh, generatorStatus, updateGeneratorStatus } from './generatorMesh'
 import { createSubstationMesh, substationStatus, updateSubstationStatus } from './substationMesh'
 import { createCityMesh, cityTier, TIER_CONFIG } from './cityMesh'
 import { createLineMesh, lineColour } from './lineMesh'
-import { createFlowParticles, updateFlowParticles, resetDotTexture } from './particleFlow'
+import { createFlowParticles, FlowDash, updateFlowParticles, resetDotTexture } from './particleFlow'
 
 type GeneratorMeshes = ReturnType<typeof createGeneratorMesh>
 type SubstationMeshes = ReturnType<typeof createSubstationMesh>
@@ -59,7 +59,7 @@ export class MeshRegistry {
   /** Cached substation→busId mapping for violation-only ring updates. */
   private subBusIdSets = new Map<string, Set<string>>()
   private lines = new Map<string, LineMeshes>()
-  private particles = new Map<string, ParticleSystem>()
+  private particles = new Map<string, FlowDash>()
 
   constructor(private readonly scene: Scene) {}
 

@@ -31,7 +31,10 @@ vi.mock('@babylonjs/core', () => {
     specularColor: Color3 | undefined
     ambientColor: Color3 | undefined
     emissiveColor: Color3 | undefined
+    emissiveTexture: unknown = null
+    backFaceCulling = true
     disableLighting = false
+    dispose = vi.fn()
     constructor(public name: string, _s: unknown) {}
   }
   const mesh = () => ({
@@ -58,8 +61,14 @@ vi.mock('@babylonjs/core', () => {
     dispose = vi.fn()
   }
   class DynamicTexture {
+    wrapU = 0; wrapV = 0; uOffset = 0; hasAlpha = false
     constructor(_n: string, _s: unknown, _scene: unknown) {}
-    getContext() { return { clearRect: vi.fn(), fillStyle: '', beginPath: vi.fn(), arc: vi.fn(), fill: vi.fn() } }
+    getContext() {
+      return {
+        clearRect: vi.fn(), fillRect: vi.fn(),
+        fillStyle: '', beginPath: vi.fn(), arc: vi.fn(), fill: vi.fn(),
+      }
+    }
     update = vi.fn()
   }
   return { Color3, Color4, Vector3, StandardMaterial, MeshBuilder, ParticleSystem, DynamicTexture }
@@ -72,7 +81,9 @@ import { createGeneratorMesh, generatorStatus, towerColour } from '../meshes/gen
 import { createLineMesh, lineColour } from '../meshes/lineMesh'
 import { createFlowParticles, resetDotTexture } from '../meshes/particleFlow'
 
-const mockScene = {} as never
+const mockScene = {
+  onBeforeRenderObservable: { add: vi.fn(), removeCallback: vi.fn() },
+} as never
 
 // ── generatorMesh ─────────────────────────────────────────────────────────────
 
@@ -236,21 +247,34 @@ describe('lineColour', () => {
   })
 })
 
-// ── particleFlow ──────────────────────────────────────────────────────────────
+// ── particleFlow (FlowDash) ───────────────────────────────────────────────────
 
 describe('createFlowParticles', () => {
   beforeEach(() => resetDotTexture())
 
   it('returns null for disconnected branch', () => {
-    const ps = createFlowParticles(mockScene, new Vector3(), new Vector3(10,0,0), makeBranch(false, 50))
-    expect(ps).toBeNull()
+    const dash = createFlowParticles(mockScene, new Vector3(), new Vector3(10,0,0), makeBranch(false, 50))
+    expect(dash).toBeNull()
   })
   it('returns null for zero-flow branch', () => {
     const branch = { ...makeBranch(true, 0), activePowerMw: 0 }
     expect(createFlowParticles(mockScene, new Vector3(), new Vector3(10,0,0), branch)).toBeNull()
   })
-  it('returns a ParticleSystem for active branch', () => {
-    const ps = createFlowParticles(mockScene, new Vector3(), new Vector3(10,0,0), makeBranch(true, 50))
-    expect(ps).not.toBeNull()
+  it('returns a FlowDash for an active branch', () => {
+    const dash = createFlowParticles(mockScene, new Vector3(), new Vector3(10,0,0), makeBranch(true, 50))
+    expect(dash).not.toBeNull()
+  })
+  it('FlowDash.start() registers a scene observer', () => {
+    const dash = createFlowParticles(mockScene, new Vector3(), new Vector3(10,0,0), makeBranch(true, 50))
+    dash!.start()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((mockScene as any).onBeforeRenderObservable.add).toHaveBeenCalled()
+  })
+  it('FlowDash.dispose() removes the scene observer', () => {
+    const dash = createFlowParticles(mockScene, new Vector3(), new Vector3(10,0,0), makeBranch(true, 50))
+    dash!.start()
+    dash!.dispose()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((mockScene as any).onBeforeRenderObservable.removeCallback).toHaveBeenCalled()
   })
 })
