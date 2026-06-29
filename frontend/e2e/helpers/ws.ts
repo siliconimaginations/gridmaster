@@ -1,3 +1,4 @@
+import '../../shared/e2e-bridge'
 import type { Page } from '@playwright/test'
 
 /**
@@ -16,12 +17,12 @@ import type { Page } from '@playwright/test'
  * ```ts
  * // Async: use page.evaluate (awaits Promise returned by __e2e.waitFor)
  * await page.evaluate(() =>
- *   (window as any).__e2e.waitFor((s: any) => s.clockState === 'PAUSED')
+ *   window.__e2e.waitFor((s: any) => s.clockState === 'PAUSED')
  * )
  *
  * // Sync: use page.waitForFunction (polls synchronous boolean efficiently)
  * await page.waitForFunction(
- *   () => (window as any).__e2e?.getStore().tickNumber > 0,
+ *   () => window.__e2e?.getStore().tickNumber > 0,
  *   { timeout: 10_000 },
  * )
  * ```
@@ -32,14 +33,14 @@ import type { Page } from '@playwright/test'
 /** Waits until clock state matches the expected value. */
 export const waitForClockState = (page: Page, state: string): Promise<void> =>
   page.evaluate(
-    (s) => (window as { __e2e?: { waitFor: (p: (store: { clockState: string }) => boolean) => Promise<void> } }).__e2e!.waitFor((store) => store.clockState === s),
+    (s) => window.__e2e.waitFor((store) => store.clockState === s),
     state,
   )
 
 /** Waits until tickNumber has advanced past `baseline`. */
 export const waitForTick = (page: Page, baseline: number): Promise<unknown> =>
   page.waitForFunction(
-    (n) => (window as { __e2e?: { getStore: () => { tickNumber: number } } }).__e2e?.getStore().tickNumber ?? 0 > n,
+    (n) => (window.__e2e?.getStore().tickNumber ?? 0) > n,
     baseline,
     { timeout: 10_000 },
   )

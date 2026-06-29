@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import '../../shared/e2e-bridge'
 
 /**
  * CM — Command / Network Mutation
@@ -57,17 +58,13 @@ test('CM-01 toggle generator off → committed=false in next store update', asyn
 
   // Send DecommitGenerator command through the app's own store
   await page.evaluate((id) => {
-    ;(window as { __e2e: { getStore: () => { sendCommand: (cmd: unknown) => void } } }).__e2e
-      .getStore()
-      .sendCommand({ commandType: 'DecommitGenerator', payload: { generatorId: id } })
+    window.__e2e.getStore().sendCommand({ commandType: 'DecommitGenerator', payload: { generatorId: id } })
   }, committedGenId)
 
   // Wait for the store to reflect committed=false from the server update
   await page.waitForFunction(
     (id) => {
-      const { network } = (window as {
-        __e2e: { getStore: () => { network: { generators: Array<{ id: string; committed: boolean }> } | null } }
-      }).__e2e.getStore()
+      const { network } = window.__e2e.getStore()
       return network?.generators.find((g) => g.id === id && !g.committed) !== undefined
     },
     committedGenId,
@@ -84,16 +81,12 @@ test('CM-02 toggle generator on → committed=true after decommit baseline', asy
 
   // Step 1: Decommit to establish a clean baseline
   await page.evaluate((id) => {
-    ;(window as { __e2e: { getStore: () => { sendCommand: (cmd: unknown) => void } } }).__e2e
-      .getStore()
-      .sendCommand({ commandType: 'DecommitGenerator', payload: { generatorId: id } })
+    window.__e2e.getStore().sendCommand({ commandType: 'DecommitGenerator', payload: { generatorId: id } })
   }, committedGenId)
 
   await page.waitForFunction(
     (id) => {
-      const { network } = (window as {
-        __e2e: { getStore: () => { network: { generators: Array<{ id: string; committed: boolean }> } | null } }
-      }).__e2e.getStore()
+      const { network } = window.__e2e.getStore()
       return network?.generators.find((g) => g.id === id && !g.committed) !== undefined
     },
     committedGenId,
@@ -104,26 +97,15 @@ test('CM-02 toggle generator on → committed=true after decommit baseline', asy
   // Capture the tick number immediately before sending so the assertion is
   // gated on a state update that arrived *after* the command, not a stale
   // in-flight update.
-  const tickBeforeCommit = await page.evaluate(() => {
-    return (window as { __e2e: { getStore: () => { tickNumber: number } } }).__e2e.getStore().tickNumber
-  })
+  const tickBeforeCommit = await page.evaluate(() => window.__e2e.getStore().tickNumber)
 
   await page.evaluate((id) => {
-    ;(window as { __e2e: { getStore: () => { sendCommand: (cmd: unknown) => void } } }).__e2e
-      .getStore()
-      .sendCommand({ commandType: 'CommitGenerator', payload: { generatorId: id } })
+    window.__e2e.getStore().sendCommand({ commandType: 'CommitGenerator', payload: { generatorId: id } })
   }, committedGenId)
 
   await page.waitForFunction(
     ([id, minTick]) => {
-      const store = (window as {
-        __e2e: {
-          getStore: () => {
-            tickNumber: number
-            network: { generators: Array<{ id: string; committed: boolean }> } | null
-          }
-        }
-      }).__e2e.getStore()
+      const store = window.__e2e.getStore()
       // Require a tick that postdates the CommitGenerator command
       if (store.tickNumber <= (minTick as number)) return false
       return store.network?.generators.find((g) => g.id === (id as string) && g.committed) !== undefined
@@ -150,7 +132,7 @@ test('CM-03 SetGeneratorOutput → activePowerMw reflects new setpoint', async (
 
   // Wait for at least one tick so network is populated
   await page.waitForFunction(
-    () => (window as { __e2e: { getStore: () => { tickNumber: number } } }).__e2e.getStore().tickNumber > 0,
+    () => window.__e2e.getStore().tickNumber > 0,
     { timeout: 15_000 },
   )
 
@@ -159,9 +141,7 @@ test('CM-03 SetGeneratorOutput → activePowerMw reflects new setpoint', async (
 
   await page.evaluate(
     ([id, mw]) => {
-      ;(window as { __e2e: { getStore: () => { sendCommand: (cmd: unknown) => void } } }).__e2e
-        .getStore()
-        .sendCommand({ commandType: 'SetGeneratorOutput', payload: { generatorId: id, targetMw: mw } })
+      window.__e2e.getStore().sendCommand({ commandType: 'SetGeneratorOutput', payload: { generatorId: id, targetMw: mw } })
     },
     [committedGenId, targetMw] as [string, number],
   )
@@ -169,13 +149,7 @@ test('CM-03 SetGeneratorOutput → activePowerMw reflects new setpoint', async (
   // Wait for the server to apply the mutation and broadcast the new setpoint
   await page.waitForFunction(
     ([id, mw]) => {
-      const { network } = (window as {
-        __e2e: {
-          getStore: () => {
-            network: { generators: Array<{ id: string; activePowerMw: number }> } | null
-          }
-        }
-      }).__e2e.getStore()
+      const { network } = window.__e2e.getStore()
       const gen = network?.generators.find((g) => g.id === id)
       // Allow ±1 MW tolerance for floating-point rounding in the power flow solve
       return gen !== undefined && Math.abs(gen.activePowerMw - (mw as number)) < 1.0
@@ -187,9 +161,7 @@ test('CM-03 SetGeneratorOutput → activePowerMw reflects new setpoint', async (
   // Final assertion: value is stable in the store after the wait
   const actualMw = await page.evaluate(
     (id) => {
-      const { network } = (window as {
-        __e2e: { getStore: () => { network: { generators: Array<{ id: string; activePowerMw: number }> } | null } }
-      }).__e2e.getStore()
+      const { network } = window.__e2e.getStore()
       return network?.generators.find((g) => g.id === id)?.activePowerMw ?? -1
     },
     committedGenId,
