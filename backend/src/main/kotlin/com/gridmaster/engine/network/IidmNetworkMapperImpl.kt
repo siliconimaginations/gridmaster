@@ -326,8 +326,9 @@ class IidmNetworkMapperImpl(
                     val line =
                         network.getLine(mutation.lineId)
                             ?: throw InvalidMutationException("Line not found: ${mutation.lineId}")
-                    if (!line.terminal1.connect() || !line.terminal2.connect())
+                    if (!line.terminal1.connect() || !line.terminal2.connect()) {
                         throw InvalidMutationException("Line ${mutation.lineId} terminal could not be reconnected")
+                    }
                 }
 
                 is NetworkMutation.TripGenerator -> {
@@ -341,8 +342,9 @@ class IidmNetworkMapperImpl(
                     val gen =
                         network.getGenerator(mutation.generatorId)
                             ?: throw InvalidMutationException("Generator not found: ${mutation.generatorId}")
-                    if (!gen.terminal.connect())
+                    if (!gen.terminal.connect()) {
                         throw InvalidMutationException("Generator ${mutation.generatorId} terminal could not be reconnected")
+                    }
                 }
 
                 is NetworkMutation.SetTapPosition -> {
@@ -370,8 +372,9 @@ class IidmNetworkMapperImpl(
                     val load =
                         network.getLoad(mutation.loadId)
                             ?: throw InvalidMutationException("Load not found: ${mutation.loadId}")
-                    if (!load.terminal.connect())
+                    if (!load.terminal.connect()) {
                         throw InvalidMutationException("Load ${mutation.loadId} terminal could not be reconnected")
+                    }
                 }
 
                 is NetworkMutation.DisconnectLoad -> {
