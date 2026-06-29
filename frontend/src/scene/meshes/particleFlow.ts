@@ -70,6 +70,8 @@ export function resetDotTexture(): void {
 export class FlowDash {
   private readonly mesh: ReturnType<typeof MeshBuilder.CreateTube>
   private readonly mat: StandardMaterial
+  /** Stored separately so uOffset can be set without casting through BaseTexture. */
+  private readonly tex: DynamicTexture
   private uOffset = 0
   private speed: number
   private direction: 1 | -1
@@ -85,8 +87,9 @@ export class FlowDash {
     this.mesh = MeshBuilder.CreateTube(`flow_dash_${dto.id}`, { path, radius: FLOW_TUBE_RADIUS }, scene)
     this.mesh.isPickable = false
 
+    this.tex = getDashTexture(scene)
     this.mat = new StandardMaterial(`flow_dash_mat_${dto.id}`, scene)
-    this.mat.emissiveTexture = getDashTexture(scene)
+    this.mat.emissiveTexture = this.tex
     this.mat.disableLighting = true
     this.mat.backFaceCulling = false
     this.mesh.material = this.mat
@@ -103,9 +106,7 @@ export class FlowDash {
       const dt = Math.min((now - last) / 1000, 0.1)   // cap dt at 100 ms
       last = now
       this.uOffset = ((this.uOffset + this.speed * this.direction * dt) % 1 + 1) % 1
-      if (this.mat.emissiveTexture) {
-        this.mat.emissiveTexture.uOffset = this.uOffset
-      }
+      this.tex.uOffset = this.uOffset
     }
     this.scene.onBeforeRenderObservable.add(this.renderCallback)
   }
