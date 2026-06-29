@@ -69,7 +69,7 @@ import { Color3, Vector3 } from '@babylonjs/core'
 import type { BranchDto, GeneratorDto, LoadDto, ViolationDto } from '../../api/types'
 import { cityTier, createCityMesh } from '../meshes/cityMesh'
 import { createGeneratorMesh, generatorStatus, towerColour } from '../meshes/generatorMesh'
-import { lineColour } from '../meshes/lineMesh'
+import { createLineMesh, lineColour } from '../meshes/lineMesh'
 import { createFlowParticles, resetDotTexture } from '../meshes/particleFlow'
 
 const mockScene = {} as never
@@ -194,6 +194,25 @@ describe('createCityMesh', () => {
 const makeBranch = (connected: boolean, loadingPercent: number): BranchDto => ({
   id: 'br1', fromBusId: 'b1', toBusId: 'b2',
   activePowerMw: 100, reactivePowerMvar: 10, connected, loadingPercent,
+})
+
+describe('createLineMesh', () => {
+  it('returns tube, hitMesh, and pylons', () => {
+    const result = createLineMesh(mockScene, new Vector3(0,4,0), new Vector3(10,4,0), makeBranch(true, 50))
+    expect(result.tube).toBeDefined()
+    expect(result.hitMesh).toBeDefined()
+    expect(result.pylons).toBeDefined()
+  })
+  it('tube.isPickable is false — selection handled by hitMesh', () => {
+    const { tube } = createLineMesh(mockScene, new Vector3(0,4,0), new Vector3(10,4,0), makeBranch(true, 50))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((tube as any).isPickable).toBe(false)
+  })
+  it('hitMesh.isPickable is true', () => {
+    const { hitMesh } = createLineMesh(mockScene, new Vector3(0,4,0), new Vector3(10,4,0), makeBranch(true, 50))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((hitMesh as any).isPickable).toBe(true)
+  })
 })
 
 describe('lineColour', () => {

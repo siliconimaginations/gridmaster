@@ -77,7 +77,7 @@ export class MeshRegistry {
     pruneMap(this.cities, new Set(network.loads.map((l) => l.id)),
       (meshes) => disposeAll(meshes))
     pruneMap(this.lines, new Set(network.branches.map((b) => b.id)),
-      ({ tube, pylons }) => { tube.dispose(); disposeAll(pylons) })
+      ({ tube, hitMesh, pylons }) => { tube.dispose(); hitMesh.dispose(); disposeAll(pylons) })
     pruneMap(this.particles, new Set(network.branches.map((b) => b.id)),
       (ps) => ps.dispose())
 
@@ -175,7 +175,8 @@ export class MeshRegistry {
         if (mat) mat.diffuseColor = lineColour(branch)
       } else {
         const lineMeshes = createLineMesh(this.scene, from, to, branch)
-        lineMeshes.tube.metadata = { elementType: 'LINE', elementId: branch.id }
+        // tube is not pickable; hitMesh is the pick target (#272)
+        lineMeshes.hitMesh.metadata = { elementType: 'LINE', elementId: branch.id }
         this.lines.set(branch.id, lineMeshes)
       }
 
@@ -219,7 +220,7 @@ export class MeshRegistry {
     this.cityPositions.clear()
     this.generatorDtos.clear()
     this.subBusIdSets.clear()
-    this.lines.forEach(({ tube, pylons }) => { tube.dispose(); disposeAll(pylons) })
+    this.lines.forEach(({ tube, hitMesh, pylons }) => { tube.dispose(); hitMesh.dispose(); disposeAll(pylons) })
     this.lines.clear()
     this.particles.forEach((ps) => ps.dispose())
     this.particles.clear()
