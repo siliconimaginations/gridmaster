@@ -77,7 +77,7 @@ vi.mock('@babylonjs/core', () => {
 import { Color3, Vector3 } from '@babylonjs/core'
 import type { BranchDto, GeneratorDto, LoadDto, ViolationDto } from '../../api/types'
 import { cityTier, createCityMesh } from '../meshes/cityMesh'
-import { createGeneratorMesh, generatorStatus, towerColour } from '../meshes/generatorMesh'
+import { createGeneratorMesh, generatorStatus, towerColour, updateGeneratorStatus } from '../meshes/generatorMesh'
 import { createLineMesh, lineColour } from '../meshes/lineMesh'
 import { createFlowParticles, resetDotTexture } from '../meshes/particleFlow'
 
@@ -290,5 +290,37 @@ describe('createFlowParticles', () => {
     dash!.dispose()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     expect((mockScene as any).onBeforeRenderObservable.removeCallback).toHaveBeenCalled()
+  })
+})
+
+// ── updateGeneratorStatus ─────────────────────────────────────────────────────
+
+describe('updateGeneratorStatus', () => {
+  it('updates tower diffuseColor to fault red', () => {
+    const gasGen: GeneratorDto = { ...makeGen(true, 100), fuelType: 'GAS' }
+    const meshes = createGeneratorMesh(mockScene, new Vector3(), gasGen)
+    updateGeneratorStatus(meshes, 'GAS', 'fault')
+    // fault override = Color3(0.90, 0.25, 0.25) — red dominant
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((meshes.tower.material as any).diffuseColor.r).toBeGreaterThan(0.8)
+  })
+
+  it('updates tower diffuseColor to fuel colour when online', () => {
+    const gasGen: GeneratorDto = { ...makeGen(true, 100), fuelType: 'GAS' }
+    const meshes = createGeneratorMesh(mockScene, new Vector3(), gasGen)
+    updateGeneratorStatus(meshes, 'GAS', 'online')
+    // GAS online = Color3(0.4, 0.6, 0.85) — blue dominant
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((meshes.tower.material as any).diffuseColor.b).toBeGreaterThan(0.7)
+  })
+
+  it('updates ring diffuseColor to match status', () => {
+    const gen = makeGen(true, 100)
+    const meshes = createGeneratorMesh(mockScene, new Vector3(), gen)
+    updateGeneratorStatus(meshes, 'GAS', 'offline')
+    // offline ring = Color3(0.42, 0.45, 0.5) — grey, low saturation
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const c = (meshes.ring.material as any).diffuseColor as Color3
+    expect(Math.abs(c.r - c.g)).toBeLessThan(0.1)
   })
 })
