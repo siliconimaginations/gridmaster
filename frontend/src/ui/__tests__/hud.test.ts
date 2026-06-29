@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { GridNetworkDto, ViolationDto } from '../../api/types'
-import { calculateTotalLoadMw, formatGameTime, gridHealthStatus, totalLoadMw } from '../hud'
+import { calculateTotalLoadMw, computeTrend, formatGameTime, gridHealthStatus, totalLoadMw } from '../hud'
 
 // ── formatGameTime ────────────────────────────────────────────────────────────
 
@@ -102,5 +102,45 @@ describe('gridHealthStatus', () => {
     const result = gridHealthStatus([makeViolation('VOLTAGE_HIGH', 1.1, 1.05)])
     expect(result.label).toBe('N-1 risks')
     expect(result.severity).toBe('warning')
+  })
+})
+
+// ── computeTrend (#274) ───────────────────────────────────────────────────────
+
+describe('computeTrend', () => {
+  it('returns flat with fewer than 2 samples', () => {
+    expect(computeTrend([])).toBe('flat')
+    expect(computeTrend([500])).toBe('flat')
+  })
+
+  it('returns flat when values are identical', () => {
+    expect(computeTrend([500, 500, 500])).toBe('flat')
+  })
+
+  it('returns flat when change is below 2% threshold', () => {
+    // 500 → 509 is 1.8% — below threshold
+    expect(computeTrend([500, 505, 509])).toBe('flat')
+  })
+
+  it('returns up when values increase by more than 2%', () => {
+    // 500 → 560 is 12% increase
+    expect(computeTrend([500, 520, 540, 560])).toBe('up')
+  })
+
+  it('returns down when values decrease by more than 2%', () => {
+    // 600 → 540 is 10% decrease
+    expect(computeTrend([600, 580, 560, 540])).toBe('down')
+  })
+
+  it('compares only first vs last entry (ignores middle values)', () => {
+    // Spike in middle but net flat
+    expect(computeTrend([500, 9999, 501])).toBe('flat')
+  })
+
+  it('uses absolute threshold of 1 when oldest value is near zero', () => {
+    // 0 → 2: delta 2, threshold max(0*0.02, 1) = 1 → up
+    expect(computeTrend([0, 1, 2])).toBe('up')
+    // 0 → 0: flat
+    expect(computeTrend([0, 0, 0])).toBe('flat')
   })
 })
