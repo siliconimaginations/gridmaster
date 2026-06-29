@@ -33,6 +33,16 @@ interface GameStore {
 
   // Alert slice
   alerts: AlertDto[]
+  /**
+   * Client-generated ephemeral alerts (command feedback, speed revert notices).
+   * Not overwritten by server GameStateUpdates; self-managed via pushLocalAlert /
+   * dismissLocalAlert. (#282, #273)
+   */
+  localAlerts: AlertDto[]
+  /** Push a client-generated ephemeral alert. */
+  pushLocalAlert: (alert: AlertDto) => void
+  /** Remove a specific local alert by id (called by AlertToastContainer on dismiss/auto-expire). */
+  dismissLocalAlert: (id: string) => void
   pendingEventCards: EventCardDto[]
 
   /** 24-element boolean array — true if any generator is committed for that hour. Null until the player runs a UC schedule. */
@@ -93,6 +103,7 @@ const INITIAL_GAME_STATE = {
   clockState: 'STOPPED' as ClockState,
   clockSpeedMultiplier: 1,
   alerts: [] as AlertDto[],
+  localAlerts: [] as AlertDto[],
   pendingEventCards: [] as EventCardDto[],
   ucSchedule: null as boolean[] | null,
 } as const satisfies Partial<GameStore>
@@ -112,6 +123,16 @@ export const useGameStore = create<GameStore>()(subscribeWithSelector((set, get)
   // ── setUcSchedule ────────────────────────────────────────────────────────────
   setUcSchedule: (schedule: boolean[] | null) => {
     set({ ucSchedule: schedule })
+  },
+
+  // ── pushLocalAlert ───────────────────────────────────────────────────────────
+  pushLocalAlert: (alert: AlertDto) => {
+    set((state) => ({ localAlerts: [...state.localAlerts, alert] }))
+  },
+
+  // ── dismissLocalAlert ────────────────────────────────────────────────────────
+  dismissLocalAlert: (id: string) => {
+    set((state) => ({ localAlerts: state.localAlerts.filter((a) => a.id !== id) }))
   },
 
   // ── applyUpdate ─────────────────────────────────────────────────────────────
@@ -258,12 +279,51 @@ function _handleServerStatus(msg: ServerStatusMessage): void {
  * from the server will also arrive soon (the server publishes one after every
  * successful command), so we only need to repair failures.
  */
+function _makeLocalAlert(
+  severity: AlertDto['severity'],
+  message: string,
+  elementId?: string,
+): AlertDto {
+  return {
+    id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    severity,
+    message,
+    elementId: elementId ?? null,
+    timestampMs: Date.now(),
+    acknowledged: false,
+  }
+}
+
 function _handleAck(ack: CommandAck, get: () => GameStore): void {
-  if (ack.success) return
+  const store = useGameStore.getState()
+
+  if (ack.success) {
+    // Show an INFO toast for RunUnitCommitment so the player gets feedback that
+    // the schedule was applied — server FULL updates don't contain a banner for this. (#273)
+    if (ack.commandType === 'RunUnitCommitment') {
+      store.pushLocalAlert(
+        _makeLocalAlert('INFO', 'Unit commitment schedule applied successfully.'),
+      )
+    }
+    return
+  }
 
   console.warn(
     `[useGameStore] Command ${ack.commandType} rejected at tick ${ack.appliedAtTick}: ${ack.rejectionReason}`,
   )
+
+  // Inject a WARNING toast explaining the rejection so players aren't confused by
+  // silent speed reverts or other command failures. (#282)
+  const reason = ack.rejectionReason ? ` — ${ack.rejectionReason}` : ''
+  if (ack.commandType === 'SetClockSpeed') {
+    store.pushLocalAlert(
+      _makeLocalAlert('WARNING', `Clock speed change rejected${reason}. Speed was reverted.`),
+    )
+  } else {
+    store.pushLocalAlert(
+      _makeLocalAlert('WARNING', `Command failed: ${ack.commandType}${reason}`),
+    )
+  }
 
   const { sessionId } = get()
   if (!sessionId) return
