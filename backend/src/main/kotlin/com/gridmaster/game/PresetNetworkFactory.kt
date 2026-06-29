@@ -66,6 +66,36 @@ object PresetNetworkFactory {
         }
 
     // -------------------------------------------------------------------------
+    // Post-load normalisation
+    // -------------------------------------------------------------------------
+
+    /**
+     * Normalises generator MW limits on any [Network] loaded from persisted IIDM XML.
+     *
+     * Corrects the sentinel ±9999 MW values that PowSyBl writes when the CDF source
+     * file has no explicit MW limits (IEEE 14-bus).  Safe to call on any network:
+     * generators whose limits are already within a realistic range (<1000 MW) are
+     * left unchanged.
+     *
+     * Called during session load so that sessions created before PR #275 are
+     * automatically corrected on next resume without requiring the user to delete.
+     *
+     * @see com.gridmaster.game.GameSessionService.load
+     */
+    fun normalizeGeneratorBounds(network: Network) {
+        network.generators.forEach { gen ->
+            if (gen.maxP > 1_000.0) {
+                val realisticMax =
+                    if (gen.targetP > 5.0) (gen.targetP * 1.5).coerceAtMost(500.0) else 50.0
+                gen.setMaxP(realisticMax)
+            }
+            if (gen.minP < 0.0) gen.setMinP(0.0)
+            val clamped = gen.targetP.coerceIn(gen.minP, gen.maxP)
+            if (clamped != gen.targetP) gen.setTargetP(clamped)
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // Private builders
     // -------------------------------------------------------------------------
 

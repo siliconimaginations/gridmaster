@@ -106,6 +106,9 @@ class GameSessionService(
         // Re-hydrate physics store if the session is not already live.
         if (physicsSessionStore.find(sessionId) == null) {
             val network = deserializeNetwork(entity.iidmXml)
+            // Lazily correct any sentinel ±9999 MW limits from sessions created before PR #275.
+            // Safe to call on any network — generators with realistic bounds are unchanged.
+            PresetNetworkFactory.normalizeGeneratorBounds(network)
             val snapshot = networkMapper.toGridNetwork(network)
             physicsSessionStore.create(sessionId, network, snapshot)
             log.info("Re-hydrated session {} into PhysicsSessionStore", sessionId)
