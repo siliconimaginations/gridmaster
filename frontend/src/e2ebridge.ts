@@ -12,7 +12,10 @@ import { useGameStore } from './state/useGameStore'
  * @see docs/engineering/15-e2e-ci.md
  */
 export function installE2EBridge(): void {
-  (window as Window & { __e2e?: unknown }).__e2e = {
+  // The E2EBridge type is declared via the global Window augmentation in
+  // e2e/shared/e2e-bridge.ts; production builds tree-shake this entire module.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ;(window as any).__e2e = {
     /** Returns a snapshot of the current Zustand store state. */
     getStore: () => useGameStore.getState(),
 

@@ -1,3 +1,4 @@
+import '../../shared/e2e-bridge'
 import { test, expect } from '@playwright/test'
 
 /**
@@ -19,7 +20,7 @@ test('HUD-01 pill badges show values after bootstrap', async ({ page }) => {
 
   // Wait for first WS update so pills are populated
   await page.waitForFunction(
-    () => (window as { __e2e?: { getStore: () => { tickNumber: number } } }).__e2e?.getStore().tickNumber ?? 0 > 0,
+    () => (window.__e2e?.getStore().tickNumber ?? 0) > 0,
     { timeout: 15_000 },
   )
 
@@ -46,20 +47,14 @@ test('HUD-02 clicking 10× speed updates store clockSpeedMultiplier', async ({ p
 
   // Store must reflect the new multiplier within 5 s
   await page.waitForFunction(
-    () =>
-      (window as { __e2e: { getStore: () => { clockSpeedMultiplier: number } } }).__e2e
-        .getStore()
-        .clockSpeedMultiplier === 10,
+    () => window.__e2e.getStore().clockSpeedMultiplier === 10,
     { timeout: 5_000 },
   )
 
   // Reset to 1× so we don't leave a modified speed behind
   await page.getByTestId('btn-speed-1').click()
   await page.waitForFunction(
-    () =>
-      (window as { __e2e: { getStore: () => { clockSpeedMultiplier: number } } }).__e2e
-        .getStore()
-        .clockSpeedMultiplier === 1,
+    () => window.__e2e.getStore().clockSpeedMultiplier === 1,
     { timeout: 5_000 },
   )
 })

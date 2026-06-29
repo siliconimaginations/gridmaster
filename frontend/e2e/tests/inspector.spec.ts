@@ -1,3 +1,4 @@
+import '../../shared/e2e-bridge'
 import { test, expect } from '@playwright/test'
 
 /**
@@ -12,31 +13,6 @@ import { test, expect } from '@playwright/test'
  * @see docs/ux/02-component-inspector.md
  * @see issue #86 (component), #209 (this test)
  */
-
-interface StoreSnapshot {
-  tickNumber: number
-  network: {
-    generators: Array<{ id: string; activePowerMw: number; committed: boolean }>
-  } | null
-  selectedElement: { elementType: string; elementId: string } | null
-  selectElement: (info: { elementType: string; elementId: string } | null) => void
-}
-
-declare global {
-  interface Window {
-    __e2e: {
-      getStore: () => StoreSnapshot
-      /**
-       * Executes `action` inside React's `flushSync` — use for any external
-       * state mutation that must be reflected in the DOM before `page.evaluate()`
-       * returns. Added in #240 (executeSync bridge helper).
-       */
-      executeSync: (action: () => void) => void
-      /** Calls selectElement and synchronously flushes React (flushSync). */
-      flushSelect: (info: { elementType: string; elementId: string } | null) => void
-    }
-  }
-}
 
 test('IP-01 selecting a generator opens InspectorPanel; backdrop click closes it', async ({ page }) => {
   await page.goto('/')

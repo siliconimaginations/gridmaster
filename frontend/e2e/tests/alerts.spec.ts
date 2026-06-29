@@ -1,3 +1,4 @@
+import '../../shared/e2e-bridge'
 import { test, expect } from '@playwright/test'
 
 /**
@@ -18,25 +19,6 @@ import { test, expect } from '@playwright/test'
  * @see docs/ux/03-alert-toasts.md
  * @see issue #85 (component), #210 (this test)
  */
-
-interface GeneratorDto {
-  id: string
-  committed: boolean
-  maxActivePowerMw: number
-}
-
-interface StoreSnapshot {
-  tickNumber: number
-  network: { generators: GeneratorDto[] } | null
-  alerts: Array<{ id: string; severity: string; elementId: string | null; message: string }>
-  sendCommand: (msg: { commandType: string; payload: Record<string, unknown> }) => void
-}
-
-declare global {
-  interface Window {
-    __e2e: { getStore: () => StoreSnapshot }
-  }
-}
 
 test('AL-01 decommitting a large generator triggers a visible alert toast', async ({ page }) => {
   await page.goto('/')

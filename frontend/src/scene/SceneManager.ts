@@ -1,6 +1,6 @@
-import { Engine, PointerEventTypes, Scene } from '@babylonjs/core'
+import { ArcRotateCamera, Engine, PointerEventTypes, Scene } from '@babylonjs/core'
 import type { GridNetworkDto, SelectedElementInfo, ViolationDto } from '../api/types'
-import { createIsometricCamera } from './camera'
+import { createIsometricCamera, updateCameraForNetwork } from './camera'
 import { createGround } from './ground'
 import { createSceneLighting } from './lighting'
 import { MeshRegistry } from './meshes/MeshRegistry'
@@ -29,8 +29,10 @@ export class SceneManager {
   readonly engine: Engine
   readonly scene: Scene
 
+  private readonly camera: ArcRotateCamera
   private readonly meshRegistry: MeshRegistry
   private currentViolations: readonly ViolationDto[] = []
+  private cameraCentred = false
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -47,7 +49,7 @@ export class SceneManager {
     this.scene = new Scene(this.engine)
 
     // Wire up sub-systems as specified in the design doc
-    createIsometricCamera(this.scene, canvas)
+    this.camera = createIsometricCamera(this.scene, canvas)
     createSceneLighting(this.scene)
     createGround(this.scene)
 
@@ -81,6 +83,13 @@ export class SceneManager {
     const finalViolations = network ? violations : []
     this.currentViolations = finalViolations
     this.meshRegistry.updateNetwork(network, finalViolations)
+
+    // Centre the camera on the first network snapshot so every node is reachable (#268).
+    // Only runs once — subsequent updates leave the camera where the player positioned it.
+    if (network && !this.cameraCentred) {
+      this.cameraCentred = true
+      updateCameraForNetwork(this.camera, network)
+    }
   }
 
   /**

@@ -1,3 +1,4 @@
+import '../../shared/e2e-bridge'
 import { test, expect } from '@playwright/test'
 
 /**
@@ -48,12 +49,10 @@ test('SL-03 first GameStateUpdate arrives within 15 s', async ({ page }) => {
 
   // Wait until the __e2e bridge reports at least one tick
   await page.waitForFunction(
-    () => (window as { __e2e?: { getStore: () => { tickNumber: number } } }).__e2e?.getStore().tickNumber ?? 0 > 0,
+    () => (window.__e2e?.getStore().tickNumber ?? 0) > 0,
     { timeout: 15_000 },
   )
 
-  const tick = await page.evaluate(
-    () => (window as { __e2e: { getStore: () => { tickNumber: number } } }).__e2e.getStore().tickNumber,
-  )
+  const tick = await page.evaluate(() => window.__e2e.getStore().tickNumber)
   expect(tick).toBeGreaterThan(0)
 })

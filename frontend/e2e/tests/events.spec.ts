@@ -1,3 +1,4 @@
+import '../../shared/e2e-bridge'
 import { test, expect } from '@playwright/test'
 
 /**
@@ -23,23 +24,6 @@ interface EventCardDto {
   description: string
   severity: 'CRITICAL' | 'WARNING' | 'INFO'
   options: Array<{ id: string; label: string; tag: string; costGbp: number }>
-}
-
-declare global {
-  interface Window {
-    __e2e: {
-      getStore: () => {
-        tickNumber: number
-        gameTimeMinutes: number
-        clockState: string
-        clockSpeedMultiplier: number
-        pendingEventCards: EventCardDto[]
-        applyUpdate: (update: object) => void
-        sessionId: string | null
-      }
-      executeSync: (action: () => void) => void
-    }
-  }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
