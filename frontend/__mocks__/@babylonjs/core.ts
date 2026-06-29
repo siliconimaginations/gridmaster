@@ -34,7 +34,10 @@ export class StandardMaterial {
   specularColor: Color3 | undefined
   ambientColor: Color3 | undefined
   emissiveColor: Color3 | undefined
+  emissiveTexture: unknown = null
+  backFaceCulling = true
   disableLighting = false
+  dispose = vi.fn()
   constructor(public name: string, _s: unknown) {}
 }
 
@@ -44,6 +47,8 @@ const makeMesh = () => ({
   dispose: vi.fn(),
   rotation: new Vector3(),
   receiveShadows: false,
+  isVisible: true,
+  isPickable: true,
 })
 
 export const MeshBuilder = {
@@ -75,14 +80,13 @@ export class ParticleSystem {
 }
 
 export class DynamicTexture {
+  wrapU = 0; wrapV = 0; uOffset = 0; hasAlpha = false
   constructor(_n: string, _s: unknown, _scene: unknown) {}
   getContext() {
     return {
-      clearRect: vi.fn(),
+      clearRect: vi.fn(), fillRect: vi.fn(),
       fillStyle: '',
-      beginPath: vi.fn(),
-      arc: vi.fn(),
-      fill: vi.fn(),
+      beginPath: vi.fn(), arc: vi.fn(), fill: vi.fn(),
     }
   }
   update = vi.fn()
