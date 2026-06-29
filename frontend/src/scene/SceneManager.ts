@@ -1,4 +1,4 @@
-import { ArcRotateCamera, Engine, PointerEventTypes, Scene } from '@babylonjs/core'
+import { ArcRotateCamera, Color3, Color4, Engine, PointerEventTypes, Scene } from '@babylonjs/core'
 import type { GridNetworkDto, SelectedElementInfo, ViolationDto } from '../api/types'
 import { createIsometricCamera, updateCameraForNetwork } from './camera'
 import { createGround } from './ground'
@@ -47,6 +47,11 @@ export class SceneManager {
     })
 
     this.scene = new Scene(this.engine)
+
+    // Sky-blue clear colour — replaces the default opaque black (#270)
+    this.scene.clearColor = new Color4(0.53, 0.71, 0.85, 1)
+    // Uniform scene ambient lift so even unlit faces stay readable
+    this.scene.ambientColor = new Color3(0.25, 0.25, 0.28)
 
     // Wire up sub-systems as specified in the design doc
     this.camera = createIsometricCamera(this.scene, canvas)

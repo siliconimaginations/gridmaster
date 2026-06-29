@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 let capturedPointerHandler: ((pi: { type: number }) => void) | null = null
 
 vi.mock('@babylonjs/core', () => {
+  class Color3 { constructor(public r = 0, public g = 0, public b = 0) {} }
+  class Color4 { constructor(public r = 0, public g = 0, public b = 0, public a = 1) {} }
   class Engine {
     runRenderLoop = vi.fn()
     resize = vi.fn()
@@ -15,11 +17,13 @@ vi.mock('@babylonjs/core', () => {
     dispose = vi.fn()
     pointerX = 10
     pointerY = 20
+    clearColor: unknown = null
+    ambientColor: unknown = null
     onPointerObservable = { add: vi.fn((fn: (pi: { type: number }) => void) => { capturedPointerHandler = fn }) }
     pick = vi.fn().mockReturnValue({ pickedMesh: null })
     constructor(_engine: unknown) {}
   }
-  return { Engine, Scene, PointerEventTypes: { POINTERUP: 4 } }
+  return { Color3, Color4, Engine, Scene, PointerEventTypes: { POINTERUP: 4 } }
 })
 
 // ── Sub-module mocks (no GPU needed) ─────────────────────────────────────────
