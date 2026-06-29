@@ -326,13 +326,8 @@ class IidmNetworkMapperImpl(
                     val line =
                         network.getLine(mutation.lineId)
                             ?: throw InvalidMutationException("Line not found: ${mutation.lineId}")
-                    line.terminal1.connect()
-                    line.terminal2.connect()
-                    // connect() returns false when already connected OR when reconnection fails;
-                    // check isConnected to distinguish the failure case (#253)
-                    if (!line.terminal1.isConnected || !line.terminal2.isConnected) {
-                        throw InvalidMutationException("Line ${mutation.lineId} terminal could not be reconnected")
-                    }
+                    ensureConnected(line.terminal1, "Line ${mutation.lineId} terminal1")
+                    ensureConnected(line.terminal2, "Line ${mutation.lineId} terminal2")
                 }
 
                 is NetworkMutation.TripGenerator -> {
@@ -346,12 +341,7 @@ class IidmNetworkMapperImpl(
                     val gen =
                         network.getGenerator(mutation.generatorId)
                             ?: throw InvalidMutationException("Generator not found: ${mutation.generatorId}")
-                    gen.terminal.connect()
-                    // connect() returns false when already connected OR when reconnection fails;
-                    // check isConnected to distinguish the failure case (#253)
-                    if (!gen.terminal.isConnected) {
-                        throw InvalidMutationException("Generator ${mutation.generatorId} terminal could not be reconnected")
-                    }
+                    ensureConnected(gen.terminal, "Generator ${mutation.generatorId}")
                 }
 
                 is NetworkMutation.SetTapPosition -> {
@@ -379,12 +369,7 @@ class IidmNetworkMapperImpl(
                     val load =
                         network.getLoad(mutation.loadId)
                             ?: throw InvalidMutationException("Load not found: ${mutation.loadId}")
-                    load.terminal.connect()
-                    // connect() returns false when already connected OR when reconnection fails;
-                    // check isConnected to distinguish the failure case (#253)
-                    if (!load.terminal.isConnected) {
-                        throw InvalidMutationException("Load ${mutation.loadId} terminal could not be reconnected")
-                    }
+                    ensureConnected(load.terminal, "Load ${mutation.loadId}")
                 }
 
                 is NetworkMutation.DisconnectLoad -> {
@@ -416,6 +401,24 @@ class IidmNetworkMapperImpl(
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
+
+    /**
+     * Calls [terminal].connect() and verifies the terminal is actually connected afterward.
+     *
+     * PowSyBl's [com.powsybl.iidm.network.Terminal.connect] returns `false` both when the
+     * terminal is already connected AND when reconnection genuinely fails, so its return value
+     * cannot be used to detect failures.  Checking [com.powsybl.iidm.network.Terminal.isConnected]
+     * after the call is the only reliable approach (#253, #304).
+     */
+    private fun ensureConnected(
+        terminal: com.powsybl.iidm.network.Terminal,
+        elementId: String,
+    ) {
+        terminal.connect()
+        if (!terminal.isConnected) {
+            throw InvalidMutationException("$elementId terminal could not be reconnected")
+        }
+    }
 
     private fun Double.orNull(): Double? = if (isNaN() || isInfinite()) null else this
 

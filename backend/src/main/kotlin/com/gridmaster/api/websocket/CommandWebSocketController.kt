@@ -46,6 +46,15 @@ class CommandWebSocketController(
         @Payload message: PlayerCommandMessage,
         headerAccessor: SimpMessageHeaderAccessor,
     ): CommandAck {
+        if (message.commandType.isBlank()) {
+            return CommandAck(
+                commandType = message.commandType,
+                success = false,
+                rejectionReason = "commandType must not be blank",
+                appliedAtTick = -1,
+            )
+        }
+
         val userId =
             headerAccessor.user?.name
                 ?: return CommandAck(

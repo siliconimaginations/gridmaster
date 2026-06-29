@@ -70,6 +70,19 @@ class CommandWebSocketControllerTest {
         every { eventEngine.pendingCards(sessionId) } returns emptyList()
     }
 
+    // ── Blank commandType (#257) ──────────────────────────────────────────────
+
+    @Test
+    fun `handleCommand returns failure ack when commandType is blank`() {
+        val msg = PlayerCommandMessage("", emptyMap())
+
+        val ack = controller.handleCommand(sessionId, msg, authedHeaders())
+
+        assertThat(ack.success).isFalse()
+        assertThat(ack.rejectionReason).isEqualTo("commandType must not be blank")
+        assertThat(ack.appliedAtTick).isEqualTo(-1L)
+    }
+
     // ── Unauthenticated ───────────────────────────────────────────────────────
 
     @Test
