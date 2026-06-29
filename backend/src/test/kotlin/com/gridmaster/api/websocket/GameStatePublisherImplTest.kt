@@ -381,9 +381,9 @@ class GameStatePublisherImplTest {
         assertThat(cardDto.options[0].id).isEqualTo("0")
         assertThat(cardDto.options[0].label).isEqualTo("Yes, build gas peaker")
         assertThat(cardDto.options[0].costGbp).isEqualTo(500_000.0)
-        assertThat(cardDto.options[0].tag).isEqualTo("Economic")  // tag propagated from CardOption (#262)
+        assertThat(cardDto.options[0].tag).isEqualTo("Economic") // tag propagated from CardOption (#262)
         assertThat(cardDto.options[1].id).isEqualTo("1")
-        assertThat(cardDto.options[1].tag).isEqualTo("")  // default empty tag
+        assertThat(cardDto.options[1].tag).isEqualTo("") // default empty tag
     }
 
     // -- Helpers --------------------------------------------------------------
