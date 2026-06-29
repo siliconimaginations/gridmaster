@@ -1,4 +1,4 @@
-import '../../shared/e2e-bridge'
+import '../shared/e2e-bridge'
 import { test, expect } from '@playwright/test'
 
 /**
