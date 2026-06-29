@@ -81,10 +81,24 @@ export function towerColour(fuelType: string, status: GeneratorStatus): Color3 {
 // ── Mesh creation ─────────────────────────────────────────────────────────────
 
 /**
+ * Fuel types that render with a chimney stack on top of their tower (#270).
+ * Thermal generators have a distinct industrial silhouette vs. renewables.
+ */
+const CHIMNEY_FUELS = new Set(['COAL', 'GAS', 'CCGT', 'NUCLEAR'])
+
+/** Dark soot colour for chimney stacks. */
+const CHIMNEY_COLOUR = new Color3(0.18, 0.18, 0.20)
+
+/**
  * Creates a generator mesh assembly at `position`.
  *
- * Returns `{ tower, ring }` so both can be repositioned and recoloured
- * independently on each tick without recreating geometry.
+ * For thermal generators (COAL, GAS, CCGT, NUCLEAR) a narrower chimney
+ * cylinder is added on top of the main tower to give a recognisable industrial
+ * silhouette (#270).
+ *
+ * Returns `{ tower, chimney, ring }` where `chimney` is `null` for non-thermal
+ * fuel types. The tower and ring can be recoloured on each tick via
+ * {@link updateGeneratorStatus} without recreating geometry.
  */
 export function createGeneratorMesh(
   scene: Scene,
@@ -94,15 +108,26 @@ export function createGeneratorMesh(
 ) {
   const status = generatorStatus(dto, violations)
 
+  // Main body — cylindrical tower (height 4, centred at position.y)
   const tower = MeshBuilder.CreateCylinder(`gen_tower_${dto.id}`, { diameter: 3, height: 4 }, scene)
   tower.position = position.clone()
   tower.material = createToonMaterial(scene, towerColour(dto.fuelType, status), `gen_tower_mat_${dto.id}`)
 
+  // Chimney stack — only for thermal fuel types
+  // Tower top = position.y + 2; chimney (height 3) centred at position.y + 3.5
+  let chimney: ReturnType<typeof MeshBuilder.CreateCylinder> | null = null
+  if (CHIMNEY_FUELS.has(dto.fuelType.toUpperCase())) {
+    chimney = MeshBuilder.CreateCylinder(`gen_chimney_${dto.id}`, { diameter: 1.0, height: 3 }, scene)
+    chimney.position = new Vector3(position.x, position.y + 3.5, position.z)
+    chimney.material = createToonMaterial(scene, CHIMNEY_COLOUR, `gen_chimney_mat_${dto.id}`)
+  }
+
+  // Status ring at base
   const ring = MeshBuilder.CreateTorus(`gen_ring_${dto.id}`, { diameter: 3.6, thickness: 0.2 }, scene)
   ring.position = position.clone()
   ring.material = createToonMaterial(scene, STATUS[status], `gen_ring_mat_${dto.id}`)
 
-  return { tower, ring }
+  return { tower, chimney, ring }
 }
 
 // ── Status update ─────────────────────────────────────────────────────────────
@@ -113,7 +138,7 @@ export function createGeneratorMesh(
  * Called on every game tick for existing meshes to keep the scene in sync with
  * the generator's operational state without recreating geometry.
  *
- * @param meshes  The `{ tower, ring }` pair returned by {@link createGeneratorMesh}.
+ * @param meshes  The `{ tower, chimney, ring }` returned by {@link createGeneratorMesh}.
  * @param fuelType The generator's fuel type string (e.g. `"GAS"`, `"COAL"`).
  * @param status  The derived {@link GeneratorStatus} for this tick.
  */
@@ -128,4 +153,5 @@ export function updateGeneratorStatus(
   if (meshes.ring.material) {
     (meshes.ring.material as StandardMaterial).diffuseColor = STATUS[status]
   }
+  // Chimney colour is static — no update needed
 }

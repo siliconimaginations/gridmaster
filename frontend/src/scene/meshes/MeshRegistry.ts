@@ -71,7 +71,7 @@ export class MeshRegistry {
 
     // ── Remove ghost elements ────────────────────────────────────────────────
     pruneMap(this.generators, new Set(network.generators.map((g) => g.id)),
-      ({ tower, ring }) => { tower.dispose(); ring.dispose() })
+      ({ tower, chimney, ring }) => { tower.dispose(); chimney?.dispose(); ring.dispose() })
     pruneMap(this.substations, new Set(network.buses.map((b) => b.substationId).filter((id): id is string => !!id)),
       ({ building, ring }) => { building.dispose(); ring.dispose() })
     pruneMap(this.cities, new Set(network.loads.map((l) => l.id)),
@@ -90,6 +90,10 @@ export class MeshRegistry {
         // Keep mesh in sync with bus position (bus layout may change)
         existing.tower.position.x = pos.x
         existing.tower.position.z = pos.z
+        if (existing.chimney) {
+          existing.chimney.position.x = pos.x
+          existing.chimney.position.z = pos.z
+        }
         existing.ring.position.x = pos.x
         existing.ring.position.z = pos.z
         updateGeneratorStatus(existing, gen.fuelType, generatorStatus(gen, violations))
@@ -211,7 +215,7 @@ export class MeshRegistry {
 
   /** Dispose all element meshes and particle systems. */
   disposeAll(): void {
-    this.generators.forEach(({ tower, ring }) => { tower.dispose(); ring.dispose() })
+    this.generators.forEach(({ tower, chimney, ring }) => { tower.dispose(); chimney?.dispose(); ring.dispose() })
     this.generators.clear()
     this.substations.forEach(({ building, ring }) => { building.dispose(); ring.dispose() })
     this.substations.clear()

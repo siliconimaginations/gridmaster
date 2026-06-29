@@ -175,6 +175,20 @@ describe('createGeneratorMesh', () => {
     // GAS = (0.4, 0.6, 0.85) — blue channel dominant
     expect((mat.diffuseColor as Color3).b).toBeGreaterThan(0.7)
   })
+  it('chimney is non-null for thermal fuel types (#270)', () => {
+    for (const fuel of ['COAL', 'GAS', 'CCGT', 'NUCLEAR']) {
+      const gen: GeneratorDto = { ...makeGen(true, 100), fuelType: fuel }
+      const { chimney } = createGeneratorMesh(mockScene, new Vector3(0,0,0), gen)
+      expect(chimney, `expected chimney for ${fuel}`).not.toBeNull()
+    }
+  })
+  it('chimney is null for renewable fuel types (#270)', () => {
+    for (const fuel of ['WIND', 'SOLAR', 'HYDRO']) {
+      const gen: GeneratorDto = { ...makeGen(true, 100), fuelType: fuel }
+      const { chimney } = createGeneratorMesh(mockScene, new Vector3(0,0,0), gen)
+      expect(chimney, `expected no chimney for ${fuel}`).toBeNull()
+    }
+  })
 })
 
 // ── cityMesh ──────────────────────────────────────────────────────────────────
