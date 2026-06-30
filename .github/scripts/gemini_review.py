@@ -206,7 +206,14 @@ def _call_model_once(model_name: str, diff: str, truncated: bool) -> str:
 
     prompt = PROMPT_TEMPLATE.format(diff=diff) + notice
     response = model.generate_content(prompt)
-    return response.text
+    try:
+        return response.text
+    except ValueError as exc:
+        # Candidates list is empty — usually a safety-filter block. Treat as
+        # a transient failure so call_gemini() can fall through to the next model.
+        raise RuntimeError(
+            f"Response blocked or empty (prompt_feedback={response.prompt_feedback}): {exc}"
+        ) from exc
 
 
 def call_gemini(diff: str, truncated: bool) -> tuple[str, str]:
