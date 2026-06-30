@@ -65,7 +65,7 @@ describe('installE2EBridge', () => {
 
   it('flushSelect calls selectElement with the provided info', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ;(window as any).__e2e.flushSelect(null)
+    (window as any).__e2e.flushSelect(null)
     expect(mockState.selectElement).toHaveBeenCalledWith(null)
   })
 

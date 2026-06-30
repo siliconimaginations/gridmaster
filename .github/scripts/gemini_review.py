@@ -29,29 +29,33 @@ from github import Github
 # Configuration
 # ---------------------------------------------------------------------------
 
-# Models tried in order. On ResourceExhausted (quota) OR any API error (e.g. model
-# not yet available), the outer loop falls through to the next candidate.
-# The PR comment names which model was actually used.
+# Models tried in round-robin order. All models in a round are attempted before
+# any backoff is applied. Lower-RPD-headroom models go first; Gemma candidates last.
 #
 # Order rationale: lite/budget models first (higher free-tier RPD headroom),
-# flagship models last (lower RPD but better review quality as fallback).
-# All are confirmed stable API IDs as of 2026-06 (ai.google.dev/gemini-api/docs/models).
+# flagship models in the middle, Gemma models at the end (unverified API IDs —
+# verify against https://ai.google.dev/gemini-api/docs/models before relying on them).
+# All confirmed stable API IDs are from ai.google.dev/gemini-api/docs/models (2026-06).
 MODELS = [
     "gemini-2.5-flash-lite",  # 2.5 lite — fastest, most budget-friendly; highest free-tier RPD in 2.5 family
-    "gemini-3.1-flash-lite",  # 3.1 lite — newest stable lite model; likely high free-tier RPD
+    "gemini-3.1-flash-lite",  # 3.1 lite — newest stable lite model; high free-tier RPD
     "gemini-3.5-flash",       # 3.5 flagship — best quality, stable; lower free-tier RPD
     "gemini-2.5-flash",       # 2.5 flash — proven baseline; 20 RPD on free tier
+    # Gemma 4 — free tier, Unlimited TPM; API IDs verified 2026-06-30 via list_models()
+    "gemma-4-26b-a4b-it",     # Gemma 4 26B activation-4-bit (instruction-tuned) — free tier, Unlimited TPM
+    "gemma-4-31b-it",         # Gemma 4 31B (instruction-tuned) — free tier, Unlimited TPM
 ]
 
 # Hard cap on diff characters sent to Gemini.
 # Kept at 60k to stay comfortably within free-tier per-request token limits.
 MAX_DIFF_CHARS = 60_000
 
-# Retry settings for 429 / ResourceExhausted errors (free-tier rate limits).
-# Applied per model; the outer loop advances to the next model only after all
-# retries on the current one are exhausted.
-MAX_RETRIES = 4
-INITIAL_BACKOFF_SECONDS = 15  # doubles each retry: 15, 30, 60, 120
+# Round-based retry parameters.
+# Strategy: try every model in MODELS once (one "round") before applying backoff.
+# This avoids waiting 15–120 s on a single exhausted model when a healthy one is next.
+# Round backoff sequence (seconds): 30 → 60 → 120 (3 gaps for 4 rounds).
+MAX_ROUNDS = 4
+INITIAL_ROUND_BACKOFF_SECONDS = 30
 
 # Allowlist of extensions to send to Gemini for review.
 # Only these types are reviewed; binary blobs, lock files (package-lock.json),
@@ -189,11 +193,8 @@ def get_filtered_diff(base_sha: str, head_sha: str) -> tuple[str, bool]:
 # ---------------------------------------------------------------------------
 
 
-def call_gemini(model_name: str, diff: str, truncated: bool) -> str:
-    """Call one specific model. Raises on failure (quota or API error) so the
-    caller can fall through to the next model. ResourceExhausted is retried with
-    exponential backoff; other errors propagate immediately after one attempt."""
-    genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+def _call_model_once(model_name: str, diff: str, truncated: bool) -> str:
+    """Single attempt at one model. Raises ResourceExhausted or any Exception on failure."""
     model = genai.GenerativeModel(model_name)
 
     notice = (
@@ -204,24 +205,59 @@ def call_gemini(model_name: str, diff: str, truncated: bool) -> str:
     )
 
     prompt = PROMPT_TEMPLATE.format(diff=diff) + notice
+    response = model.generate_content(prompt)
+    try:
+        return response.text
+    except ValueError as exc:
+        # Candidates list is empty — usually a safety-filter block. Treat as
+        # a transient failure so call_gemini() can fall through to the next model.
+        raise RuntimeError(
+            f"Response blocked or empty (prompt_feedback={response.prompt_feedback}): {exc}"
+        ) from exc
 
-    backoff = INITIAL_BACKOFF_SECONDS
-    for attempt in range(1, MAX_RETRIES + 1):
-        try:
-            response = model.generate_content(prompt)
-            return response.text
-        except ResourceExhausted as exc:
-            if attempt < MAX_RETRIES:
+
+def call_gemini(diff: str, truncated: bool) -> tuple[str, str]:
+    """
+    Round-based rotation over MODELS.
+
+    Each round tries every model exactly once. If all models fail in a round,
+    back off before the next round (backoff doubles each round: 30s, 60s, 120s).
+
+    Returns (review_text, used_model_name) on the first success.
+    Raises RuntimeError when all MAX_ROUNDS rounds are exhausted.
+    """
+    round_backoff = INITIAL_ROUND_BACKOFF_SECONDS
+
+    for round_num in range(1, MAX_ROUNDS + 1):
+        for model_name in MODELS:
+            print(f"[Round {round_num}] Trying {model_name}…", file=sys.stderr)
+            try:
+                review = _call_model_once(model_name, diff, truncated)
+                return review, model_name
+            except ResourceExhausted:
                 print(
-                    f"[{model_name}] Rate limit hit (attempt {attempt}/{MAX_RETRIES}). "
-                    f"Retrying in {backoff}s…",
+                    f"[{model_name}] Quota exhausted — trying next model.",
                     file=sys.stderr,
                 )
-                time.sleep(backoff)
-                backoff *= 2
-                continue
-            # All retries exhausted for this model — let caller try next model.
-            raise
+            except Exception as exc:
+                print(
+                    f"[{model_name}] API error ({exc.__class__.__name__}: {exc}) — trying next model.",
+                    file=sys.stderr,
+                )
+
+        # All models failed this round
+        if round_num < MAX_ROUNDS:
+            print(
+                f"All models failed in round {round_num}/{MAX_ROUNDS} — "
+                f"backing off {round_backoff}s before round {round_num + 1}…",
+                file=sys.stderr,
+            )
+            time.sleep(round_backoff)
+            round_backoff *= 2
+
+    raise RuntimeError(
+        f"All {len(MODELS)} models exhausted after {MAX_ROUNDS} rounds."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -249,6 +285,12 @@ def post_or_update_comment(review: str) -> None:
 
 
 def main() -> None:
+    if "GEMINI_API_KEY" not in os.environ:
+        raise RuntimeError("Missing required environment variable: GEMINI_API_KEY")
+
+    # Configure once — shared across all _call_model_once() calls.
+    genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+
     base_sha = os.environ["BASE_SHA"]
     head_sha = os.environ["HEAD_SHA"]
 
@@ -259,45 +301,28 @@ def main() -> None:
         print("No reviewable changes in this diff (all changed files are excluded).")
         return
 
-    print(f"Sending {len(diff):,} chars to Gemini (trying {len(MODELS)} model(s))…")
+    print(
+        f"Sending {len(diff):,} chars to Gemini "
+        f"({len(MODELS)} models, up to {MAX_ROUNDS} rounds)…"
+    )
 
-    used_model: str | None = None
-    for model_name in MODELS:
-        print(f"Trying {model_name}…", file=sys.stderr)
-        try:
-            review = call_gemini(model_name, diff, truncated)
-            used_model = model_name
-            break
-        except ResourceExhausted:
-            print(
-                f"[{model_name}] Quota exhausted after all retries — trying next model.",
-                file=sys.stderr,
-            )
-            continue
-        except Exception as exc:
-            # Non-quota error (e.g. model not found, auth issue) — skip to next model.
-            print(
-                f"[{model_name}] API error ({exc.__class__.__name__}: {exc}) — trying next model.",
-                file=sys.stderr,
-            )
-            continue
-
-    if used_model is None:
-        # All models exhausted — post a soft notice rather than failing the job.
+    try:
+        review_text, used_model = call_gemini(diff, truncated)
+    except RuntimeError:
         gh = Github(os.environ["GITHUB_TOKEN"])
         repo = gh.get_repo(os.environ["GITHUB_REPOSITORY"])
         pr = repo.get_pull(int(os.environ["PR_NUMBER"]))
         pr.create_issue_comment(
             f"{REVIEW_HEADER}\n\n"
             "> ⏸️ Gemini review skipped — free-tier quota exhausted on all models "
-            f"({', '.join(MODELS)}). "
+            f"({', '.join(MODELS)}) across {MAX_ROUNDS} rounds. "
             "No action required; this does not block merge."
         )
-        print("All models quota-exhausted — soft notice posted, job exits 0.")
+        print("All models/rounds exhausted — soft notice posted, job exits 0.")
         return
 
     # Append the model attribution footer to the review body.
-    review_with_attribution = review.rstrip() + f"\n\n---\n*Review by `{used_model}`*"
+    review_with_attribution = review_text.rstrip() + f"\n\n---\n*Review by `{used_model}`*"
     post_or_update_comment(review_with_attribution)
 
 
