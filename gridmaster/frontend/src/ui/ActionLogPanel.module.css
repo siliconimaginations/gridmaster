@@ -1,0 +1,107 @@
+/* frontend/src/ui/ActionLogPanel.module.css */
+
+.root {
+  position: fixed;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: row;
+  pointer-events: auto; /* override global HUD pointer-events: none */
+}
+
+.toggle {
+  width: 28px;
+  height: 80px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  border-radius: 8px 0 0 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.toggle:hover {
+  background: rgba(0, 0, 0, 0.75);
+}
+
+.panel {
+  width: 320px;
+  max-height: 70vh;
+  background: rgba(0, 0, 0, 0.8);
+  border-radius: 8px 0 0 8px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+
+.header h2 {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #fff;
+  font-weight: 600;
+}
+
+.clearBtn {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 2px 4px;
+}
+
+.clearBtn:hover {
+  color: #fff;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.entry {
+  display: grid;
+  grid-template-columns: 60px 20px 1fr;
+  gap: 4px;
+  padding: 5px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.85);
+  align-items: center;
+}
+
+.entry:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.time {
+  color: rgba(255, 255, 255, 0.45);
+  font-variant-numeric: tabular-nums;
+}
+
+.icon {
+  text-align: center;
+}
+
+.text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
