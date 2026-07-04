@@ -139,9 +139,8 @@ describe('NodeLayer', () => {
     // Find the 'pointertap' listener registered on the group
     const group = layer.container.children[0]
     // Simulate: call the handler registered via group.on('pointertap', ...)
-    const onCall = (group.on as ReturnType<typeof vi.fn>).mock.calls.find(
-      ([event]: [string]) => event === 'pointertap'
-    )
+    const calls = (group.on as ReturnType<typeof vi.fn>).mock.calls as [string, () => void][]
+    const onCall = calls.find((call) => call[0] === 'pointertap')
     expect(onCall).toBeDefined()
     onCall![1]() // invoke handler
     expect(cb).toHaveBeenCalledWith(expect.objectContaining({ id: 'A' }))
