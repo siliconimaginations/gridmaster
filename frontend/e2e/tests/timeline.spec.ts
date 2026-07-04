@@ -10,12 +10,14 @@ import { test, expect } from '@playwright/test'
 
 test('TL-01 timeline strip and now-marker are visible after bootstrap', async ({ page }) => {
   await page.goto('/')
+  // Use a generous timeout — the backend cold-start (Spring Boot + PowSyBl
+  // initialisation) can take 20–25 s in a freshly allocated CI runner.
   await page.waitForSelector('[data-testid="bootstrap-overlay"]', {
     state: 'hidden',
-    timeout: 15_000,
+    timeout: 30_000,
   })
 
   // Timeline renders as part of the main layout regardless of game state
-  await expect(page.getByTestId('timeline-strip')).toBeVisible({ timeout: 5_000 })
-  await expect(page.getByTestId('timeline-now')).toBeVisible({ timeout: 5_000 })
+  await expect(page.getByTestId('timeline-strip')).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByTestId('timeline-now')).toBeVisible({ timeout: 10_000 })
 })

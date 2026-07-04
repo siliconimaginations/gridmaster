@@ -126,7 +126,7 @@ jobs:
           cp .github/badges/e2e-pass.svg /tmp/badges/e2e-pass.svg
           if git ls-remote --exit-code --heads origin ci/badges >/dev/null 2>&1; then
             git fetch origin ci/badges:refs/remotes/origin/ci/badges
-            git checkout -b ci/badges FETCH_HEAD
+            git checkout -f -b ci/badges FETCH_HEAD
           else
             git checkout --orphan ci/badges
             git rm -rf . --quiet 2>/dev/null || true
