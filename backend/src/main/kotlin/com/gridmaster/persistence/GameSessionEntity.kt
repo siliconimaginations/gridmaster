@@ -39,4 +39,6 @@ data class GameSessionEntity(
     val createdAt: Instant = Instant.now(),
     val updatedAt: Instant = Instant.now(),
     val completedAt: Instant? = null,
+    /** Final average health score (0-100) when the session ended; null while active. */
+    val finalScore: Int? = null,
 )

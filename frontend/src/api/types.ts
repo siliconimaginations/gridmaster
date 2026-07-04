@@ -113,6 +113,16 @@ export interface GameStateUpdate {
   violations?: ViolationDto[]
   alerts?: AlertDto[]
   pendingEventCards?: EventCardDto[]
+  /** Server-computed 0-100 grid health score for this tick. */
+  healthScore?: number
+}
+
+/** Sent in a ConnectionStatus message when type === 'GAME_OVER'. */
+export interface GameOverDto {
+  finalHealthScore: number
+  gridTimeManagedMinutes: number
+  averageHealthScore: number
+  eventsHandledCount: number
 }
 
 /**

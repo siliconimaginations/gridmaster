@@ -45,6 +45,7 @@ class GameStatePublisherImpl(
         powerFlowResult: PowerFlowResult,
         newAlerts: List<Alert>,
         pendingCards: List<EventCard>,
+        healthScore: Int?,
     ) {
         val isFull = tickNumber % GameStatePublisher.FULL_STATE_INTERVAL_TICKS == 0L
         val state = sessionState.getOrPut(sessionId) { SessionPublishState() }
@@ -59,6 +60,7 @@ class GameStatePublisherImpl(
                 powerFlowResult,
                 newAlerts,
                 pendingCards,
+                healthScore = healthScore,
             )
         } else {
             doPublishDelta(
@@ -71,6 +73,7 @@ class GameStatePublisherImpl(
                 powerFlowResult,
                 newAlerts,
                 pendingCards,
+                healthScore = healthScore,
             )
         }
     }
@@ -97,7 +100,37 @@ class GameStatePublisherImpl(
                 ),
             )
         }
-        doPublishFull(sessionId, tickNumber, gameTimeMinutes, clockState, clockSpeedMultiplier, powerFlowResult, newAlerts, pendingCards)
+        doPublishFull(
+            sessionId,
+            tickNumber,
+            gameTimeMinutes,
+            clockState,
+            clockSpeedMultiplier,
+            powerFlowResult,
+            newAlerts,
+            pendingCards,
+            healthScore = null,
+        )
+    }
+
+    override fun publishGameOver(
+        sessionId: String,
+        dto: GameOverDto,
+    ) {
+        val dest = "/topic/session/$sessionId/state"
+        try {
+            messagingTemplate.convertAndSend(
+                dest,
+                ConnectionStatus(
+                    type = ConnectionStatusType.GAME_OVER,
+                    sessionId = sessionId,
+                    gameOver = dto,
+                ),
+            )
+            log.info("Published GAME_OVER for session {}", sessionId)
+        } catch (ex: Exception) {
+            log.error("Failed to publish GAME_OVER for session {}: {}", sessionId, ex.message, ex)
+        }
     }
 
     override fun clearSession(sessionId: String) {
@@ -117,6 +150,7 @@ class GameStatePublisherImpl(
         powerFlowResult: PowerFlowResult,
         newAlerts: List<Alert>,
         pendingCards: List<EventCard>,
+        healthScore: Int? = null,
     ) {
         val smc = sessionStore.find(sessionId)?.latestDispatchResult?.systemMarginalCostPerMwh
         val networkDto = powerFlowResult.snapshot.toNetworkWsDto(smc)
@@ -133,6 +167,7 @@ class GameStatePublisherImpl(
                 violations = powerFlowResult.violations.map { it.toDto() },
                 alerts = newAlerts.map { AlertDto.from(it) },
                 pendingEventCards = pendingCards.map { it.toDto() },
+                healthScore = healthScore,
             )
 
         val state = sessionState.getOrPut(sessionId) { SessionPublishState() }
@@ -153,6 +188,7 @@ class GameStatePublisherImpl(
         powerFlowResult: PowerFlowResult,
         newAlerts: List<Alert>,
         pendingCards: List<EventCard>,
+        healthScore: Int? = null,
     ) {
         val smc = sessionStore.find(sessionId)?.latestDispatchResult?.systemMarginalCostPerMwh
         // Computed every DELTA tick for hash-comparison; O(N) single-pass, negligible at
@@ -184,6 +220,7 @@ class GameStatePublisherImpl(
                 violations = if (violationsChanged) violations else null,
                 alerts = alertsToSend,
                 pendingEventCards = if (cardsChanged) cards else null,
+                healthScore = healthScore,
             )
 
         if (networkChanged) state.lastNetworkHash = networkDto.hashCode()

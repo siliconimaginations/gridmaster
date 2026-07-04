@@ -41,6 +41,7 @@ interface GameStatePublisher {
         powerFlowResult: PowerFlowResult,
         newAlerts: List<Alert>,
         pendingCards: List<EventCard>,
+        healthScore: Int? = null,
     )
 
     /**
@@ -59,6 +60,16 @@ interface GameStatePublisher {
         newAlerts: List<Alert>,
         pendingCards: List<EventCard>,
         missedTicks: Long? = null,
+    )
+
+    /**
+     * Publish a GAME_OVER lifecycle message to all subscribers of [sessionId].
+     *
+     * Called by [com.gridmaster.game.TickEngineImpl] when the game-over condition is met.
+     */
+    fun publishGameOver(
+        sessionId: String,
+        dto: GameOverDto,
     )
 
     /**

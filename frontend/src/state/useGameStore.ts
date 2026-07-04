@@ -9,6 +9,7 @@ import type {
   CommandAck,
   ConnectionStatus,
   EventCardDto,
+  GameOverDto,
   GameStateUpdate,
   GridNetworkDto,
   PlayerCommandMessage,
@@ -55,6 +56,10 @@ interface GameStore {
   sessionId: string | null
   /** Flipped to true when the server sends SESSION_NOT_FOUND; bootstrap re-runs on this. */
   sessionInvalidated: boolean
+  /** Non-null when the server has sent GAME_OVER. Shows the GameOverPanel. */
+  gameOver: GameOverDto | null
+  /** Server-computed 0-100 health score from the last tick. */
+  healthScore: number | null
 
   // Selection slice
   selectedElement: SelectedElementInfo | null
@@ -106,6 +111,8 @@ const INITIAL_GAME_STATE = {
   localAlerts: [] as AlertDto[],
   pendingEventCards: [] as EventCardDto[],
   ucSchedule: null as boolean[] | null,
+  gameOver: null as GameOverDto | null,
+  healthScore: null as number | null,
 } as const satisfies Partial<GameStore>
 
 // ── Store ─────────────────────────────────────────────────────────────────────
@@ -149,6 +156,7 @@ export const useGameStore = create<GameStore>()(subscribeWithSelector((set, get)
         violations: update.violations ?? [],
         alerts: update.alerts ?? [],
         pendingEventCards: update.pendingEventCards ?? [],
+        healthScore: update.healthScore ?? null,
       })
     } else {
       // DELTA: clock fields are always present — set them unconditionally.
@@ -165,6 +173,7 @@ export const useGameStore = create<GameStore>()(subscribeWithSelector((set, get)
         violations: update.violations ?? undefined,
         alerts: update.alerts ?? undefined,
         pendingEventCards: update.pendingEventCards ?? undefined,
+        healthScore: update.healthScore ?? undefined,
       })
       set({ ...clockUpdate, ...optionalUpdate })
     }
@@ -212,7 +221,7 @@ export const useGameStore = create<GameStore>()(subscribeWithSelector((set, get)
     wsClient?.disconnect()
     wsClient = null
     // Resets all game state to initial values so a future session starts clean
-    set({ ...INITIAL_GAME_STATE, connectionStatus: 'disconnected', sessionId: null, sessionInvalidated: false, selectedElement: null })
+    set({ ...INITIAL_GAME_STATE, connectionStatus: 'disconnected', sessionId: null, sessionInvalidated: false, selectedElement: null, gameOver: null, healthScore: null })
   },
 
   // ── selectElement ────────────────────────────────────────────────────────────
@@ -266,6 +275,9 @@ function _handleServerStatus(msg: ServerStatusMessage): void {
     clearStoredSessionId()
     useGameStore.getState().disconnect()
     useGameStore.setState({ sessionInvalidated: true })
+  } else if (msg.type === 'GAME_OVER' && msg.gameOver) {
+    console.info('[useGameStore] Server reported GAME_OVER', msg.gameOver)
+    useGameStore.setState({ gameOver: msg.gameOver, clockState: 'STOPPED' })
   }
 }
 

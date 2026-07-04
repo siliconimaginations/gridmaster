@@ -1,15 +1,16 @@
 import { Client, IMessage } from '@stomp/stompjs'
 import SockJS from 'sockjs-client'
-import type { CommandAck, ConnectionStatus, GameStateUpdate, PlayerCommandMessage } from './types'
+import type { CommandAck, ConnectionStatus, GameOverDto, GameStateUpdate, PlayerCommandMessage } from './types'
 
 /** Server-initiated lifecycle message (distinct from the transport ConnectionStatus). */
 export interface ServerStatusMessage {
-  type: 'CONNECTED' | 'RECONNECTED' | 'SESSION_NOT_FOUND' | 'AUTH_FAILED'
+  type: 'CONNECTED' | 'RECONNECTED' | 'SESSION_NOT_FOUND' | 'AUTH_FAILED' | 'GAME_OVER'
   sessionId?: string
   missedTicks?: number
+  gameOver?: GameOverDto
 }
 
-const SERVER_STATUS_TYPES = new Set(['CONNECTED', 'RECONNECTED', 'SESSION_NOT_FOUND', 'AUTH_FAILED'])
+const SERVER_STATUS_TYPES = new Set(['CONNECTED', 'RECONNECTED', 'SESSION_NOT_FOUND', 'AUTH_FAILED', 'GAME_OVER'])
 
 // Relative /ws path lets Vite's proxy forward the WebSocket to localhost:8080 in dev.
 // Set VITE_WS_URL for production deployments.

@@ -37,6 +37,8 @@ data class GameStateUpdate(
     val alerts: List<AlertDto>? = null,
     /** Non-null when pending event cards changed (new card arrived or card resolved). */
     val pendingEventCards: List<EventCardDto>? = null,
+    /** Server-computed 0-100 grid health score for this tick. */
+    val healthScore: Int? = null,
 )
 
 enum class UpdateType { FULL, DELTA }
@@ -193,6 +195,8 @@ data class ConnectionStatus(
     val sessionId: String? = null,
     /** Number of ticks the client missed during disconnection (RECONNECTED only). */
     val missedTicks: Long? = null,
+    /** Non-null when type == GAME_OVER. */
+    val gameOver: GameOverDto? = null,
 )
 
 enum class ConnectionStatusType {
@@ -200,7 +204,23 @@ enum class ConnectionStatusType {
     RECONNECTED,
     SESSION_NOT_FOUND,
     AUTH_FAILED,
+    GAME_OVER,
 }
+
+/**
+ * Payload carried in a [ConnectionStatus] with type [ConnectionStatusType.GAME_OVER].
+ *
+ * @param finalHealthScore   The last recorded per-tick health (0-100).
+ * @param gridTimeManagedMinutes  Total simulated grid-minutes the session ran.
+ * @param averageHealthScore Rolling average health over the session (0-100).
+ * @param eventsHandledCount Number of event cards resolved by the player.
+ */
+data class GameOverDto(
+    val finalHealthScore: Int,
+    val gridTimeManagedMinutes: Long,
+    val averageHealthScore: Int,
+    val eventsHandledCount: Int,
+)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Domain → DTO mapper

@@ -32,4 +32,10 @@ interface GameSessionJpaRepository : JpaRepository<GameSessionEntity, String> {
         userId: String,
         mode: GameMode,
     ): List<GameSessionEntity>
+
+    /**
+     * Return completed sessions (completedAt non-null) for [userId], ordered by completedAt descending.
+     * Used by the leaderboard / score history endpoint.
+     */
+    fun findAllByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(userId: String): List<GameSessionEntity>
 }
