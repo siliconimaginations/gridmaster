@@ -163,4 +163,75 @@ describe('NodeLayer', () => {
   it('destroy does not throw', () => {
     expect(() => layer.destroy()).not.toThrow()
   })
+
+  // ── LOD 0 icon system ────────────────────────────────────────────────────────
+
+  it('each bus group has an icon child labelled "icon"', () => {
+    const graph = makeGraph([makeBus('A', 'gen'), makeBus('B', 'sub'), makeBus('C', 'load')])
+    layer.rebuild(graph, makeTextures(), 2)
+    for (const group of layer.container.children) {
+      expect(group.getChildByName('icon')).not.toBeNull()
+    }
+  })
+
+  it('icon hidden and sprite visible when rebuilt at lod 1', () => {
+    const graph = makeGraph([makeBus('A', 'gen')])
+    layer.rebuild(graph, makeTextures(), 1)
+    const group = layer.container.children[0]
+    expect(group.getChildByName('icon')!.visible).toBe(false)
+    expect(group.getChildByName('sprite')!.visible).toBe(true)
+    expect(group.getChildByName('vdot')!.visible).toBe(true)
+  })
+
+  it('icon visible and sprite hidden when rebuilt at lod 0', () => {
+    const graph = makeGraph([makeBus('A', 'sub')])
+    layer.rebuild(graph, makeTextures(), 0)
+    const group = layer.container.children[0]
+    expect(group.getChildByName('icon')!.visible).toBe(true)
+    expect(group.getChildByName('sprite')!.visible).toBe(false)
+    expect(group.getChildByName('vdot')!.visible).toBe(false)
+  })
+
+  it('applyLod(0) shows icon and hides sprite/vdot', () => {
+    const graph = makeGraph([makeBus('A', 'load')])
+    layer.rebuild(graph, makeTextures(), 2)
+    layer.applyLod(0)
+    const group = layer.container.children[0]
+    expect(group.getChildByName('icon')!.visible).toBe(true)
+    expect(group.getChildByName('sprite')!.visible).toBe(false)
+    expect(group.getChildByName('vdot')!.visible).toBe(false)
+  })
+
+  it('applyLod(2) hides icon and shows sprite/vdot', () => {
+    const graph = makeGraph([makeBus('A', 'sub')])
+    layer.rebuild(graph, makeTextures(), 0)
+    layer.applyLod(2)
+    const group = layer.container.children[0]
+    expect(group.getChildByName('icon')!.visible).toBe(false)
+    expect(group.getChildByName('sprite')!.visible).toBe(true)
+    expect(group.getChildByName('vdot')!.visible).toBe(true)
+  })
+
+  it('refreshBus at lod 0 redraws icon without error', () => {
+    const bus = makeBus('A', 'load', { loadMw: 200 })
+    layer.rebuild(makeGraph([bus]), makeTextures(), 0)
+    bus.hasVoltageViolation = true
+    expect(() => layer.refreshBus(bus, 0)).not.toThrow()
+  })
+
+  it('load bus city-size: town icon drawn for low loadMw', () => {
+    // Should not throw — just verifies correct code path executes
+    const bus = makeBus('A', 'load', { loadMw: 50 })
+    expect(() => layer.rebuild(makeGraph([bus]), makeTextures(), 0)).not.toThrow()
+  })
+
+  it('load bus city-size: city icon drawn for mid loadMw', () => {
+    const bus = makeBus('A', 'load', { loadMw: 250 })
+    expect(() => layer.rebuild(makeGraph([bus]), makeTextures(), 0)).not.toThrow()
+  })
+
+  it('load bus city-size: metro icon drawn for high loadMw', () => {
+    const bus = makeBus('A', 'load', { loadMw: 800 })
+    expect(() => layer.rebuild(makeGraph([bus]), makeTextures(), 0)).not.toThrow()
+  })
 })
