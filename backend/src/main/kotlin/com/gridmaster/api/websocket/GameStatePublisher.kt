@@ -42,6 +42,7 @@ interface GameStatePublisher {
         newAlerts: List<Alert>,
         pendingCards: List<EventCard>,
         healthScore: Int? = null,
+        tutorialStep: Int? = null,
     )
 
     /**

@@ -17,6 +17,7 @@ import com.gridmaster.engine.powerflow.PowerFlowResult
 import com.gridmaster.engine.powerflow.PowerFlowService
 import com.gridmaster.game.TickEngine
 import com.gridmaster.game.event.EventEngine
+import com.gridmaster.game.tutorial.TutorialEngine
 import com.powsybl.iidm.network.VariantManagerConstants
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
@@ -53,6 +54,7 @@ class CommandHandlerImpl(
     private val dispatchService: DispatchService,
     private val tickEngine: TickEngine,
     private val eventEngine: EventEngine,
+    private val tutorialEngine: TutorialEngine,
 ) : CommandHandler {
     private val log = LoggerFactory.getLogger(CommandHandlerImpl::class.java)
 
@@ -103,7 +105,11 @@ class CommandHandlerImpl(
         if (validationError != null) return rejectedResult(session, command, validationError)
 
         val mutations = translate(command, snapshot)
-        return runMutationPipeline(sessionId, mutations, listOf(command), session.latestPowerFlowResult)
+        val result = runMutationPipeline(sessionId, mutations, listOf(command), session.latestPowerFlowResult)
+        if (result.success) {
+            tutorialEngine.onCommand(sessionId, command.commandType())
+        }
+        return result
     }
 
     override fun handleBatch(

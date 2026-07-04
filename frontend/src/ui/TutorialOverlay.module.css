@@ -1,0 +1,87 @@
+/* ── Tutorial overlay panel ────────────────────────────────────────────────── */
+
+.panel {
+  position: absolute;
+  bottom: 80px;      /* above the BottomHud toolbar */
+  left: 16px;
+  width: 296px;
+  border-radius: 10px;
+  background: rgba(10, 14, 26, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-left: 3px solid #3b82f6; /* blue accent — tutorial */
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.65);
+  font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  color: #e8eaf0;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  pointer-events: all;
+  z-index: 30;
+  animation: slideIn 0.25s ease;
+}
+
+.panelComplete {
+  border-left-color: #4ade80; /* green on completion */
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+
+/* ── Step badge ───────────────────────────────────────────────────────────── */
+
+.badge {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #3b82f6;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 2px;
+}
+
+.panelComplete .badge {
+  background: #4ade80;
+  color: #0a0e1a;
+}
+
+/* ── Text content ─────────────────────────────────────────────────────────── */
+
+.body {
+  flex: 1;
+  min-width: 0;
+}
+
+.title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #60a5fa;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 4px;
+}
+
+.panelComplete .title {
+  color: #4ade80;
+}
+
+.instruction {
+  font-size: 13px;
+  line-height: 1.45;
+  color: #e8eaf0;
+  margin-bottom: 6px;
+}
+
+.hint {
+  font-size: 11px;
+  line-height: 1.4;
+  color: #64748b;
+  font-style: italic;
+}

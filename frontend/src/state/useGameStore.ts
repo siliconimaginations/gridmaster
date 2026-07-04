@@ -60,6 +60,8 @@ interface GameStore {
   gameOver: GameOverDto | null
   /** Server-computed 0-100 health score from the last tick. */
   healthScore: number | null
+  /** Current tutorial step (1–5); null for non-tutorial sessions. */
+  tutorialStep: number | null
 
   // Selection slice
   selectedElement: SelectedElementInfo | null
@@ -113,6 +115,7 @@ const INITIAL_GAME_STATE = {
   ucSchedule: null as boolean[] | null,
   gameOver: null as GameOverDto | null,
   healthScore: null as number | null,
+  tutorialStep: null as number | null,
 } as const satisfies Partial<GameStore>
 
 // ── Store ─────────────────────────────────────────────────────────────────────
@@ -157,6 +160,7 @@ export const useGameStore = create<GameStore>()(subscribeWithSelector((set, get)
         alerts: update.alerts ?? [],
         pendingEventCards: update.pendingEventCards ?? [],
         healthScore: update.healthScore ?? null,
+        tutorialStep: update.tutorialStep ?? null,
       })
     } else {
       // DELTA: clock fields are always present — set them unconditionally.
@@ -174,6 +178,7 @@ export const useGameStore = create<GameStore>()(subscribeWithSelector((set, get)
         alerts: update.alerts ?? undefined,
         pendingEventCards: update.pendingEventCards ?? undefined,
         healthScore: update.healthScore ?? undefined,
+        tutorialStep: update.tutorialStep ?? undefined,
       })
       set({ ...clockUpdate, ...optionalUpdate })
     }
