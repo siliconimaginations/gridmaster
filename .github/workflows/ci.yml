@@ -229,12 +229,13 @@ jobs:
   # Isolated job: write access for badge commit, only runs on push to main.
   # Keeping contents:write out of frontend-test prevents fork PRs from
   # obtaining write permission via a compromised dependency.
+  # Badges are committed to the unprotected ci/badges branch to avoid
+  # branch-protection rejections on main.
   frontend-badge:
     name: Frontend badge update
     needs: frontend-test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    continue-on-error: true  # Badge commit is blocked by branch protection; failure is cosmetic
     permissions:
       contents: write
     steps:
@@ -250,21 +251,33 @@ jobs:
         working-directory: frontend
         run: python3 scripts/gen_vitest_badge.py
 
-      - name: Commit frontend coverage badge
-        uses: EndBug/add-and-commit@v10
-        with:
-          add: .github/badges/vitest.svg
-          message: 'ci: update frontend coverage badge [skip ci]'
-          default_author: github_actions
+      - name: Push badge to ci/badges branch
+        run: |
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          mkdir -p /tmp/badges
+          cp .github/badges/vitest.svg /tmp/badges/vitest.svg
+          if git fetch origin ci/badges:refs/remotes/origin/ci/badges 2>/dev/null; then
+            git checkout -B ci/badges FETCH_HEAD
+          else
+            git checkout --orphan ci/badges
+            git rm -rf . --quiet 2>/dev/null || true
+          fi
+          mkdir -p .github/badges
+          cp /tmp/badges/vitest.svg .github/badges/vitest.svg
+          git add .github/badges/vitest.svg
+          git diff --staged --quiet || git commit -m "ci: update frontend coverage badge [skip ci]"
+          git push origin ci/badges
 
   # Isolated job: write access for badge commit, only runs on push to main.
   # Mirrors the same isolation applied to frontend-badge.
+  # Badges are committed to the unprotected ci/badges branch to avoid
+  # branch-protection rejections on main.
   backend-badge:
     name: Backend badge update
     needs: backend-test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    continue-on-error: true  # Badge commit is blocked by branch protection; failure is cosmetic
     permissions:
       contents: write
     steps:
@@ -284,9 +297,20 @@ jobs:
           generate-coverage-badge: true
           coverage-badge-filename: jacoco.svg
 
-      - name: Commit coverage badge
-        uses: EndBug/add-and-commit@v10
-        with:
-          add: .github/badges/jacoco.svg
-          message: 'ci: update coverage badge [skip ci]'
-          default_author: github_actions
+      - name: Push badge to ci/badges branch
+        run: |
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          mkdir -p /tmp/badges
+          cp .github/badges/jacoco.svg /tmp/badges/jacoco.svg
+          if git fetch origin ci/badges:refs/remotes/origin/ci/badges 2>/dev/null; then
+            git checkout -B ci/badges FETCH_HEAD
+          else
+            git checkout --orphan ci/badges
+            git rm -rf . --quiet 2>/dev/null || true
+          fi
+          mkdir -p .github/badges
+          cp /tmp/badges/jacoco.svg .github/badges/jacoco.svg
+          git add .github/badges/jacoco.svg
+          git diff --staged --quiet || git commit -m "ci: update backend coverage badge [skip ci]"
+          git push origin ci/badges

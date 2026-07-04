@@ -90,6 +90,8 @@ jobs:
   # Isolated job: write access for badge commits.
   # Runs even on e2e failure (always()) so badges reflect the real broken state
   # rather than staying stale at last-known-good values.
+  # Badges are committed to the unprotected ci/badges branch to avoid
+  # branch-protection rejections on main.
   # See docs/engineering/16-e2e-coverage-workflow.md for metric definitions.
   e2e-badge:
     name: E2E badge update
@@ -97,13 +99,11 @@ jobs:
     needs: e2e
     if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
-      contents: write   # needed to commit the SVG badges
+      contents: write   # needed to push to ci/badges branch
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download Playwright report
         uses: actions/download-artifact@v4
@@ -114,12 +114,25 @@ jobs:
       - name: Generate E2E badges (coverage + pass rate)
         run: python3 scripts/gen_e2e_badges.py
 
-      - name: Commit E2E badges
-        uses: stefanzweifel/git-auto-commit-action@v5
-        continue-on-error: true   # GH006 branch-protection blocks bot push; badges are cosmetic
-        with:
-          file_pattern: .github/badges/e2e-coverage.svg .github/badges/e2e-pass.svg
-          commit_message: 'ci: update e2e badges [skip ci]'
+      - name: Push badges to ci/badges branch
+        run: |
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          mkdir -p /tmp/badges
+          cp .github/badges/e2e-coverage.svg /tmp/badges/e2e-coverage.svg
+          cp .github/badges/e2e-pass.svg /tmp/badges/e2e-pass.svg
+          if git fetch origin ci/badges:refs/remotes/origin/ci/badges 2>/dev/null; then
+            git checkout -B ci/badges FETCH_HEAD
+          else
+            git checkout --orphan ci/badges
+            git rm -rf . --quiet 2>/dev/null || true
+          fi
+          mkdir -p .github/badges
+          cp /tmp/badges/e2e-coverage.svg .github/badges/e2e-coverage.svg
+          cp /tmp/badges/e2e-pass.svg .github/badges/e2e-pass.svg
+          git add .github/badges/e2e-coverage.svg .github/badges/e2e-pass.svg
+          git diff --staged --quiet || git commit -m "ci: update e2e badges [skip ci]"
+          git push origin ci/badges
 
   # ── Failure issue creation ────────────────────────────────────────────────────
   # Creates or updates GitHub issues for each failing implemented e2e scenario.
