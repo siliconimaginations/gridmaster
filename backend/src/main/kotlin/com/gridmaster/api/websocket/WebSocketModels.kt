@@ -213,6 +213,17 @@ enum class ConnectionStatusType {
  * `GET /network` endpoint so that clients always receive the same field names
  * (`activePowerMw`, `committed`, etc.) regardless of transport.
  *
+ * ### Performance (issue #247)
+ * The conversion performs a single O(N) pass over all network elements — buses, lines,
+ * two-windings transformers, generators, and loads — with no nested iteration.
+ * At the current scale of ~50 buses this step contributes < 1 % of the tick wall-clock
+ * time; the dominant cost is the PowSyBl power-flow solve.
+ *
+ * Because [GridNetwork.snapshotAt] is set to `Instant.now()` on every new snapshot,
+ * reference-equality and data-class `hashCode` caching across ticks are ineffective.
+ * No memoization is added at this scale.  If the network grows beyond ~200 buses,
+ * consider caching the DTO keyed on a monotonic network-mutation counter instead.
+ *
  * @param smc System marginal cost (£/MWh); null when no dispatch has run yet.
  */
 fun GridNetwork.toNetworkWsDto(smc: Double? = null): GridNetworkWsDto {

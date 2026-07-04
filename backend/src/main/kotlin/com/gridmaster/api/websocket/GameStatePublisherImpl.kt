@@ -155,6 +155,8 @@ class GameStatePublisherImpl(
         pendingCards: List<EventCard>,
     ) {
         val smc = sessionStore.find(sessionId)?.latestDispatchResult?.systemMarginalCostPerMwh
+        // Computed every DELTA tick for hash-comparison; O(N) single-pass, negligible at
+        // ~50 buses compared to the PowSyBl power-flow solve. See issue #247.
         val networkDto = powerFlowResult.snapshot.toNetworkWsDto(smc)
         val violations = powerFlowResult.violations.map { it.toDto() }
         val cards = pendingCards.map { it.toDto() }
