@@ -139,24 +139,25 @@ push to main
 │  • Download playwright-    │
 │    report artifact         │
 │  • python3 gen_e2e_badges  │
-│  • Commit both SVGs        │  continue-on-error (GH006 branch protection)
+│  • Push both SVGs to       │  → ci/badges branch (not main)
+│    ci/badges branch        │
 └───────────────────────────┘
 ```
 
 **Why the badge job is isolated**: badge commit needs `contents: write` permission. Keeping it separate from the test job means the test job can run with minimal `contents: read`, matching the security posture of `ci.yml`'s `frontend-badge` / `backend-badge` pattern.
 
-**Why `continue-on-error: true`**: the `github-actions` bot cannot push to a branch-protected repo (GH006). Stale SVGs are cosmetic — the CI run status is the real gate.
+**Why `ci/badges` branch**: the `github-actions` bot cannot push to a branch-protected `main` (GH006). Badge SVGs are committed to the unprotected `ci/badges` branch instead. README badge URLs reference raw content from that branch.
 
 ---
 
 ## README badges
 
 ```md
-![E2E Coverage](.github/badges/e2e-coverage.svg)
-![E2E Pass Rate](.github/badges/e2e-pass.svg)
+![E2E Coverage](https://raw.githubusercontent.com/siliconimaginations/gridmaster/ci/badges/.github/badges/e2e-coverage.svg)
+![E2E Pass Rate](https://raw.githubusercontent.com/siliconimaginations/gridmaster/ci/badges/.github/badges/e2e-pass.svg)
 ```
 
-Both are committed SVGs so they render without external badge services. CI rewrites them on every push to main.
+Badges are committed SVGs stored on the `ci/badges` branch so they render without external badge services and without pushing to the branch-protected `main`. CI rewrites them on every push to main.
 
 ---
 
