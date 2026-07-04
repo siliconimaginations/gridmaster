@@ -12,15 +12,26 @@ import { DispatchPanel } from './ui/DispatchPanel'
 import { PlanningPanel } from './ui/PlanningPanel'
 import { TimelineStrip } from './ui/TimelineStrip'
 import { EventCardPanel } from './ui/EventCardPanel'
+import { GridCanvas } from './components/GridCanvas'
 
 /**
- * Root component. Renders a full-screen Babylon.js canvas with React HUD
- * overlays floating above it.
+ * Feature flag: set `VITE_USE_PIXI=true` in `.env.local` (or CI env) to
+ * activate the PixiJS renderer. When true, renders `<GridCanvas>` which
+ * manages its own async pixi.js init and store subscription. When false,
+ * the original Babylon.js + SceneManager path is used unchanged.
+ *
+ * See docs/engineering/15-pixi-renderer.md §Migration plan.
+ */
+const USE_PIXI = import.meta.env.VITE_USE_PIXI === 'true'
+
+/**
+ * Root component. Renders a full-screen canvas (Babylon.js or PixiJS depending
+ * on {@link USE_PIXI}) with React HUD overlays floating above it.
  *
  * Layout:
  * ```
  *   <div id="game-root">        ← position: relative, fills 100%
- *     <canvas />                ← absolute, fills entire root
+ *     <canvas /> | <GridCanvas> ← absolute, fills entire root
  *     <div id="hud-root">       ← absolute, fills root; pointer-events: none
  *       <TopHud />              ← centred at top
  *       <BottomHud />           ← anchored to bottom
@@ -30,19 +41,18 @@ import { EventCardPanel } from './ui/EventCardPanel'
  *
  * All HUD components read state from the Zustand store directly.
  * See docs/engineering/13-hud.md for the full overlay architecture rationale.
- *
- * Store → scene sync:
- * Two `useGameStore.subscribe` selectors (network + violations) push state
- * changes into SceneManager without going through React render cycles.
- * See docs/engineering/14-scene-meshes.md §Store→Scene sync.
  */
 export default function App() {
+  // canvasRef is only used in the Babylon path; stays null in PixiJS mode (harmless)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const { status: bootstrapStatus, error: bootstrapError, retry: retryBootstrap } = useSessionBootstrap()
   const [dispatchPanelOpen, setDispatchPanelOpen] = useState(false)
   const [planningPanelOpen, setPlanningPanelOpen] = useState(false)
 
   useEffect(() => {
+    // GridCanvas handles its own lifecycle when PixiJS mode is active
+    if (USE_PIXI) return
+
     const canvas = canvasRef.current
     if (!canvas) return
 
@@ -79,10 +89,13 @@ export default function App() {
       id="game-root"
       style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}
     >
-      <canvas
-        ref={canvasRef}
-        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block' }}
-      />
+      {USE_PIXI
+        ? <GridCanvas onSelect={(info) => useGameStore.getState().selectElement(info)} />
+        : <canvas
+            ref={canvasRef}
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block' }}
+          />
+      }
       <div
         id="hud-root"
         style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}
