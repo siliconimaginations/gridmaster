@@ -49,14 +49,16 @@ export class Container {
 // ── Graphics (v8 fluent API) ───────────────────────────────────────────────────
 
 export class Graphics extends Container {
-  clear()                                         { return this }
-  circle(_x: number, _y: number, _r: number)      { return this }
-  fill(_c: unknown)                                { return this }
-  stroke(_s: unknown)                              { return this }
-  moveTo(_x: number, _y: number)                   { return this }
-  quadraticCurveTo(_cx: number, _cy: number, _x: number, _y: number) { return this }
+  clear()                                                              { return this }
+  circle(_x: number, _y: number, _r: number)                          { return this }
+  fill(_c: unknown)                                                    { return this }
+  stroke(_s: unknown)                                                  { return this }
+  moveTo(_x: number, _y: number)                                       { return this }
+  quadraticCurveTo(_cx: number, _cy: number, _x: number, _y: number)  { return this }
   roundRect(_x: number, _y: number, _w: number, _h: number, _r: number) { return this }
-  lineTo(_x: number, _y: number)                   { return this }
+  lineTo(_x: number, _y: number)                                       { return this }
+  poly(_points: number[])                                              { return this }
+  rect(_x: number, _y: number, _w: number, _h: number)                { return this }
 }
 
 // ── Sprite ─────────────────────────────────────────────────────────────────────
