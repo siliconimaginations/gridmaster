@@ -236,6 +236,9 @@ jobs:
     needs: frontend-test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    concurrency:
+      group: badge-push-ci-badges
+      cancel-in-progress: false  # queue, don't cancel — each badge job pushes a different file
     permissions:
       contents: write
     steps:
@@ -279,6 +282,9 @@ jobs:
     needs: backend-test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    concurrency:
+      group: badge-push-ci-badges
+      cancel-in-progress: false  # queue, don't cancel — each badge job pushes a different file
     permissions:
       contents: write
     steps:

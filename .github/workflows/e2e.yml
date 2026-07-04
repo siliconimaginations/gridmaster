@@ -98,6 +98,9 @@ jobs:
     runs-on: ubuntu-22.04
     needs: e2e
     if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    concurrency:
+      group: badge-push-ci-badges
+      cancel-in-progress: false  # queue, don't cancel — shares group with ci.yml badge jobs
     permissions:
       contents: write   # needed to push to ci/badges branch
 
