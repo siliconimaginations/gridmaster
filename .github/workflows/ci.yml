@@ -258,7 +258,7 @@ jobs:
           mkdir -p /tmp/badges
           cp .github/badges/vitest.svg /tmp/badges/vitest.svg
           if git fetch origin ci/badges:refs/remotes/origin/ci/badges 2>/dev/null; then
-            git checkout -B ci/badges FETCH_HEAD
+            git checkout -b ci/badges FETCH_HEAD
           else
             git checkout --orphan ci/badges
             git rm -rf . --quiet 2>/dev/null || true
@@ -304,7 +304,7 @@ jobs:
           mkdir -p /tmp/badges
           cp .github/badges/jacoco.svg /tmp/badges/jacoco.svg
           if git fetch origin ci/badges:refs/remotes/origin/ci/badges 2>/dev/null; then
-            git checkout -B ci/badges FETCH_HEAD
+            git checkout -b ci/badges FETCH_HEAD
           else
             git checkout --orphan ci/badges
             git rm -rf . --quiet 2>/dev/null || true
