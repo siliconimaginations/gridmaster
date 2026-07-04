@@ -35,4 +35,6 @@ data class GameSession(
     val updatedAt: Instant = Instant.now(),
     /** Set when the session reaches a terminal state (mission complete, game over). */
     val completedAt: Instant? = null,
+    /** Final health score (0-100) recorded when the game ends; null for active sessions. */
+    val finalScore: Int? = null,
 )

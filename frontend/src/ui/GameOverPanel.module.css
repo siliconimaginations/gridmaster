@@ -1,0 +1,109 @@
+/* ── Full-screen overlay ──────────────────────────────────────────────────── */
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: all;
+  z-index: 50; /* above all HUD layers */
+  backdrop-filter: blur(4px);
+}
+
+/* ── Card ─────────────────────────────────────────────────────────────────── */
+
+.panel {
+  width: 360px;
+  border-radius: 12px;
+  background: rgba(10, 14, 26, 0.97);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-top: 3px solid #ef4444; /* red — grid failure */
+  font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  color: #e8eaf0;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.75);
+  overflow: hidden;
+}
+
+/* ── Header ───────────────────────────────────────────────────────────────── */
+
+.header {
+  padding: 20px 24px 12px;
+  text-align: center;
+}
+
+.title {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #ef4444;
+  margin: 0 0 4px;
+}
+
+.subtitle {
+  font-size: 12px;
+  color: #94a3b8;
+  margin: 0;
+}
+
+/* ── Stats grid ───────────────────────────────────────────────────────────── */
+
+.stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: rgba(255, 255, 255, 0.06);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.stat {
+  background: rgba(10, 14, 26, 0.97);
+  padding: 16px;
+  text-align: center;
+}
+
+.statValue {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.statLabel {
+  font-size: 11px;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* ── Health score colour coding ───────────────────────────────────────────── */
+
+.scoreGood    { color: #4ade80; }  /* ≥ 60 */
+.scoreWarning { color: #fbbf24; }  /* 30-59 */
+.scoreCritical{ color: #ef4444; }  /* < 30 */
+
+/* ── Actions ──────────────────────────────────────────────────────────────── */
+
+.actions {
+  padding: 16px 24px 20px;
+  display: flex;
+  justify-content: center;
+}
+
+.btn {
+  background: #3b82f6;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 28px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn:hover {
+  background: #2563eb;
+}

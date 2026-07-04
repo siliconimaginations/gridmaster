@@ -154,6 +154,45 @@ class GameSessionService(
     }
 
     // -------------------------------------------------------------------------
+    // Score history
+    // -------------------------------------------------------------------------
+
+    /** Return all completed sessions for [userId], ordered most-recent first. */
+    fun listScores(userId: String): List<GameSession> =
+        jpaRepository.findAllByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(userId)
+            .map { it.toDomain() }
+
+    // -------------------------------------------------------------------------
+    // Game over
+    // -------------------------------------------------------------------------
+
+    /**
+     * Mark a session as game-over: set [completedAt] and persist [finalScore].
+     *
+     * Called by [com.gridmaster.game.TickEngineImpl] when the health-score game-over
+     * condition is met. The session stays in [PhysicsSessionStore] until the next
+     * tick iteration removes it; that tick is already aborting so no further saves occur.
+     *
+     * @param finalScore Average health score over the session (0-100).
+     */
+    fun markGameOver(
+        sessionId: String,
+        userId: String,
+        finalScore: Int,
+    ): GameSession {
+        val existingEntity = requireOwned(sessionId, userId)
+        val updated =
+            existingEntity.copy(
+                completedAt = Instant.now(),
+                finalScore = finalScore,
+                updatedAt = Instant.now(),
+            )
+        jpaRepository.save(updated)
+        log.info("Session {} game over — finalScore={}", sessionId, finalScore)
+        return updated.toDomain()
+    }
+
+    // -------------------------------------------------------------------------
     // Delete
     // -------------------------------------------------------------------------
 
@@ -212,4 +251,5 @@ private fun GameSessionEntity.toDomain() =
         createdAt = createdAt,
         updatedAt = updatedAt,
         completedAt = completedAt,
+        finalScore = finalScore,
     )
