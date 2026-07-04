@@ -100,6 +100,18 @@
         "EV-02",
         "EV-03"
       ]
+    },
+    {
+      "id": "F-RENDERER",
+      "name": "Grid canvas rendering (Babylon.js + PixiJS)",
+      "feature_implemented": true,
+      "scenarios": [
+        "RENDERER-01",
+        "RENDERER-02",
+        "RENDERER-03",
+        "RENDERER-04",
+        "RENDERER-05"
+      ]
     }
   ],
   "scenarios": [
@@ -120,7 +132,7 @@
     },
     {
       "id": "GC-01",
-      "description": "Tick counter increments (clock advancing at ≥1×)",
+      "description": "Tick counter increments (clock advancing at \u22651\u00d7)",
       "test_implemented": true
     },
     {
@@ -130,17 +142,17 @@
     },
     {
       "id": "CM-01",
-      "description": "DecommitGenerator → committed=false in next store update",
+      "description": "DecommitGenerator \u2192 committed=false in next store update",
       "test_implemented": true
     },
     {
       "id": "CM-02",
-      "description": "CommitGenerator → committed=true after decommit baseline",
+      "description": "CommitGenerator \u2192 committed=true after decommit baseline",
       "test_implemented": true
     },
     {
       "id": "CM-03",
-      "description": "SetGeneratorOutput → activePowerMw reflects new setpoint",
+      "description": "SetGeneratorOutput \u2192 activePowerMw reflects new setpoint",
       "test_implemented": true
     },
     {
@@ -150,7 +162,7 @@
     },
     {
       "id": "HUD-02",
-      "description": "Speed change via 10× button reflected in store",
+      "description": "Speed change via 10\u00d7 button reflected in store",
       "test_implemented": true
     },
     {
@@ -216,6 +228,31 @@
     {
       "id": "EV-03",
       "description": "Apply button disabled until option selected; enabled after selection",
+      "test_implemented": true
+    },
+    {
+      "id": "RENDERER-01",
+      "description": "Canvas element is present and visible after bootstrap",
+      "test_implemented": true
+    },
+    {
+      "id": "RENDERER-02",
+      "description": "No renderer errors in console after grid loads",
+      "test_implemented": true
+    },
+    {
+      "id": "RENDERER-03",
+      "description": "PixiJS label overlay div is present when renderer is active",
+      "test_implemented": true
+    },
+    {
+      "id": "RENDERER-04",
+      "description": "Bus labels appear in PixiJS overlay after first GameStateUpdate",
+      "test_implemented": true
+    },
+    {
+      "id": "RENDERER-05",
+      "description": "Canvas click propagates bus selection to store",
       "test_implemented": true
     }
   ]
