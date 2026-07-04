@@ -98,9 +98,24 @@ def collect_specs(suites: list) -> list[dict]:
 
 
 def spec_failed(spec: dict) -> bool:
-    """True if ANY test attempt in this spec did not pass."""
+    """True if ANY test attempt in this spec actually failed (skipped tests are not failures).
+
+    Playwright records a ``status`` of ``"skipped"`` for tests skipped via
+    ``test.skip()``.  An empty ``results`` list can also appear when a test is
+    skipped before any attempt runs.  Neither case should be treated as a
+    failure — only ``"failed"`` / ``"timedOut"`` / ``"interrupted"`` results
+    count against the spec.
+    """
     for test in spec.get("tests", []):
-        if not any(r.get("status") == "passed" for r in test.get("results", [])):
+        results = test.get("results", [])
+        # No attempts recorded — test was skipped before running.
+        if not results:
+            continue
+        # All attempts were explicitly skipped (test.skip() at runtime).
+        if all(r.get("status") == "skipped" for r in results):
+            continue
+        # At least one attempt ran; if none passed the test failed.
+        if not any(r.get("status") == "passed" for r in results):
             return True
     return False
 

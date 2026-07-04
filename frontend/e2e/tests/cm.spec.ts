@@ -34,14 +34,30 @@ test.beforeAll(async ({ request }) => {
   })
   const { id } = await sessionRes.json() as { id: string }
 
-  const networkRes = await request.get(`/api/sessions/${id}/network`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-  // GET /network now returns GridNetworkWsDto with `committed` (aligned with WS stream since PR #243)
-  const network = await networkRes.json() as { generators: Array<{ id: string; committed: boolean; maxActivePowerMw: number }> }
-  const gen = network.generators.find((g) => g.committed)
-  committedGenId = gen?.id ?? ''
-  committedGenMaxMw = gen?.maxActivePowerMw ?? 100
+  // Retry GET /network until the backend has populated at least one committed
+  // generator.  The backend may still be initialising PowSyBl immediately after
+  // Spring Boot reports healthy — a 2 s × 5 retry window covers the typical
+  // cold-start gap without inflating suite time.
+  // GET /network returns GridNetworkWsDto with `committed` field (PR #243).
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      const networkRes = await request.get(`/api/sessions/${id}/network`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (networkRes.ok()) {
+        const network = await networkRes.json() as { generators: Array<{ id: string; committed: boolean; maxActivePowerMw: number }> }
+        const gen = network.generators?.find((g) => g.committed)
+        if (gen) {
+          committedGenId = gen.id
+          committedGenMaxMw = gen.maxActivePowerMw
+          break
+        }
+      }
+    } catch {
+      // transient network error — retry
+    }
+    if (attempt < 4) await new Promise((r) => setTimeout(r, 2_000))
+  }
 
   // Clean up discovery session
   await request.delete(`/api/sessions/${id}`, { headers: { Authorization: `Bearer ${token}` } })
