@@ -1,12 +1,15 @@
 /**
  * PixiGridRenderer — drop-in replacement for SceneManager.
  *
- * Wraps a PIXI.Application + pixi-viewport and exposes the same interface
- * as SceneManager so App.tsx needs minimal changes:
+ * Wraps a PIXI.Application (pixi.js v8) + pixi-viewport and exposes the same
+ * interface as SceneManager so App.tsx needs minimal changes:
  *
  *   updateNetwork(network, violations)  ← full topology update
  *   updateViolations(violations)        ← fast-path violations-only
  *   dispose()
+ *
+ * Initialisation is async (pixi.js v8 requirement). Use the static factory:
+ *   const renderer = await PixiGridRenderer.create(canvas, onSelect)
  *
  * See docs/engineering/15-pixi-renderer.md for architecture details.
  */
@@ -23,43 +26,102 @@ import { ParticleLayer } from './layers/ParticleLayer'
 import { NodeLayer } from './layers/NodeLayer'
 import type { BusTextures } from './layers/NodeLayer'
 
-// World dimensions (virtual canvas size — viewport pans/zooms within it)
+// Virtual world size — viewport pans/zooms within it
 const WORLD_W = 2400
 const WORLD_H = 1600
 
-// Isometric terrain diamond tile size
+// Isometric terrain tile display size
 const TILE_W = 192
 const TILE_H = 96
 
 type SelectCallback = (info: SelectedElementInfo | null) => void
 
 export class PixiGridRenderer {
-  private app: PIXI.Application
+  private app:      PIXI.Application
   private viewport: Viewport
-  private lod: LodController
+  private lod:      LodController
 
-  private wires: WireLayer
-  private nodes: NodeLayer
+  private wires:    WireLayer
+  private nodes:    NodeLayer
   private particles: ParticleLayer
 
   private terrain1: PIXI.TilingSprite | null = null
   private terrain2: PIXI.TilingSprite | null = null
 
-  private textures: BusTextures | null = null
-  private dotTexture: PIXI.Texture | null = null
+  private textures:    BusTextures | null = null
+  private dotTexture:  PIXI.Texture | null = null
 
   private graph: GridGraph | null = null
 
-  // HTML label overlay — positioned as sibling to the canvas
-  private labelOverlay: HTMLDivElement
+  private labelOverlay:  HTMLDivElement
   private labelElements = new Map<string, HTMLDivElement>()
 
-  constructor(
-    canvas: HTMLCanvasElement,
-    private onSelect: SelectCallback,
+  private constructor(
+    private readonly onSelect: SelectCallback,
   ) {
-    this.app = new PIXI.Application({
-      view:            canvas,
+    this.app      = new PIXI.Application()
+    this.lod      = new LodController()
+    this.wires    = new WireLayer()
+    this.nodes    = new NodeLayer()
+    this.particles = new ParticleLayer()
+
+    // Placeholder viewport — replaced in init()
+    this.viewport = null as unknown as Viewport
+
+    this.labelOverlay = document.createElement('div')
+    this.labelOverlay.style.cssText =
+      'position:absolute;inset:0;pointer-events:none;overflow:hidden;'
+  }
+
+  /** Async factory — call instead of constructor. */
+  static async create(
+    canvas: HTMLCanvasElement,
+    onSelect: SelectCallback,
+  ): Promise<PixiGridRenderer> {
+    const renderer = new PixiGridRenderer(onSelect)
+    await renderer.init(canvas)
+    return renderer
+  }
+
+  // ── SceneManager-compatible API ────────────────────────────────────────────
+
+  updateNetwork(network: GridNetworkDto | null, violations: ViolationDto[]): void {
+    if (!network) return
+    if (!this.textures) {
+      void this.loadAndApply(network, violations)
+      return
+    }
+    this.applyNetwork(network, violations)
+  }
+
+  updateViolations(violations: ViolationDto[]): void {
+    if (!this.graph) return
+    for (const bus of this.graph.buses.values()) {
+      const viol = violations.find(v => v.elementId === bus.id && v.elementType === 'BUS')
+      bus.hasVoltageViolation = viol !== undefined
+      bus.violationType = viol?.violationType as 'VOLTAGE_HIGH' | 'VOLTAGE_LOW' | undefined
+      this.nodes.refreshBus(bus, this.lod.tier)
+    }
+  }
+
+  setFlowVisible(on: boolean): void { this.particles.setFlowVisible(on) }
+  get flowVisible(): boolean        { return this.particles.flowVisible }
+
+  dispose(): void {
+    this.app.ticker.stop()
+    this.wires.destroy()
+    this.nodes.destroy()
+    this.particles.destroy()
+    this.labelOverlay.remove()
+    this.app.destroy(false, { children: true })
+  }
+
+  // ── Initialisation ─────────────────────────────────────────────────────────
+
+  private async init(canvas: HTMLCanvasElement): Promise<void> {
+    // pixi.js v8: Application.init() is async
+    await this.app.init({
+      canvas,
       width:           canvas.clientWidth,
       height:          canvas.clientHeight,
       backgroundColor: 0x4a7a42,
@@ -73,9 +135,8 @@ export class PixiGridRenderer {
       screenHeight: canvas.clientHeight,
       worldWidth:   WORLD_W,
       worldHeight:  WORLD_H,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      events: (this.app.renderer as any).events,
-    } as ConstructorParameters<typeof Viewport>[0])
+      events:       this.app.renderer.events,
+    })
 
     this.viewport
       .drag()
@@ -86,23 +147,15 @@ export class PixiGridRenderer {
 
     this.app.stage.addChild(this.viewport)
 
-    this.lod = new LodController()
-    this.wires = new WireLayer()
-    this.nodes = new NodeLayer()
-    this.particles = new ParticleLayer()
-
-    // Layer z-order within viewport
+    // Layer z-order
     this.viewport.addChild(this.wires.container)
     this.viewport.addChild(this.nodes.container)
     this.viewport.addChild(this.particles.container)
 
-    // Label HTML overlay
-    this.labelOverlay = document.createElement('div')
-    this.labelOverlay.style.cssText =
-      'position:absolute;inset:0;pointer-events:none;overflow:hidden;'
+    // Label overlay
     canvas.parentElement?.appendChild(this.labelOverlay)
 
-    // Wire up LOD changes
+    // LOD changes
     this.lod.onChange(tier => {
       this.nodes.applyLod(tier)
       this.updateLabelVisibility(tier)
@@ -111,63 +164,19 @@ export class PixiGridRenderer {
     this.viewport.on('zoomed', () => this.lod.update(this.viewport.scale.x))
     this.viewport.on('moved',  () => this.syncLabelPositions())
 
-    // Bus click → select element
-    this.nodes.onBusClick(bus => {
-      this.onSelect({ elementType: 'BUS', elementId: bus.id })
-    })
+    this.nodes.onBusClick(bus =>
+      this.onSelect({ elementType: 'BUS', elementId: bus.id }),
+    )
 
-    // Tick — particles + label sync
-    this.app.ticker.add((dt) => {
-      this.particles.tick(dt)
+    this.app.ticker.add((ticker) => {
+      this.particles.tick(ticker.deltaTime)
       this.syncLabelPositions()
     })
   }
 
-  // ── SceneManager-compatible API ────────────────────────────────────────────
+  // ── Network application ────────────────────────────────────────────────────
 
-  /** Full update: new network topology or first load. */
-  updateNetwork(network: GridNetworkDto | null, violations: ViolationDto[]): void {
-    if (!network) return
-    if (!this.textures) {
-      // Textures not loaded yet — queue update for after init
-      void this.initAndUpdate(network, violations)
-      return
-    }
-    this.applyNetwork(network, violations)
-  }
-
-  /** Fast-path: only violation highlights changed. */
-  updateViolations(violations: ViolationDto[]): void {
-    if (!this.graph) return
-    // Re-derive violation flags without full graph rebuild
-    for (const bus of this.graph.buses.values()) {
-      const viol = violations.find(v => v.elementId === bus.id && v.elementType === 'BUS')
-      bus.hasVoltageViolation = viol !== undefined
-      bus.violationType = viol?.violationType as 'VOLTAGE_HIGH' | 'VOLTAGE_LOW' | undefined
-      this.nodes.refreshBus(bus, this.lod.tier)
-    }
-  }
-
-  dispose(): void {
-    this.app.ticker.stop()
-    this.wires.destroy()
-    this.nodes.destroy()
-    this.particles.destroy()
-    this.labelOverlay.remove()
-    this.app.destroy(false, { children: true, texture: true, baseTexture: true })
-  }
-
-  // ── Toggle flow animation (exposed to HUD buttons) ─────────────────────────
-
-  setFlowVisible(on: boolean): void { this.particles.setFlowVisible(on) }
-  get flowVisible(): boolean { return this.particles.flowVisible }
-
-  // ── Private ────────────────────────────────────────────────────────────────
-
-  private async initAndUpdate(
-    network: GridNetworkDto,
-    violations: ViolationDto[],
-  ): Promise<void> {
+  private async loadAndApply(network: GridNetworkDto, violations: ViolationDto[]): Promise<void> {
     await this.loadTextures()
     this.buildTerrain()
     this.applyNetwork(network, violations)
@@ -193,17 +202,18 @@ export class PixiGridRenderer {
     this.syncLabelPositions()
   }
 
-  // ── Terrain ─────────────────────────────────────────────────────────────────
+  // ── Terrain ────────────────────────────────────────────────────────────────
 
   private buildTerrain(): void {
     const t1 = PIXI.Texture.from('sprite-terrain1')
     const t2 = PIXI.Texture.from('sprite-terrain2')
 
-    this.terrain1 = new PIXI.TilingSprite(t1, WORLD_W, WORLD_H)
+    // pixi.js v8: TilingSprite constructor takes an options object
+    this.terrain1 = new PIXI.TilingSprite({ texture: t1, width: WORLD_W, height: WORLD_H })
     this.terrain1.tilePosition.set(0, 0)
     this.terrain1.zIndex = 0
 
-    this.terrain2 = new PIXI.TilingSprite(t2, WORLD_W, WORLD_H)
+    this.terrain2 = new PIXI.TilingSprite({ texture: t2, width: WORLD_W, height: WORLD_H })
     this.terrain2.tilePosition.set(TILE_W / 2, TILE_H / 2)
     this.terrain2.zIndex = 1
 
@@ -211,12 +221,8 @@ export class PixiGridRenderer {
     this.viewport.addChildAt(this.terrain2, 1)
   }
 
-  // ── Texture loading ─────────────────────────────────────────────────────────
+  // ── Texture loading ────────────────────────────────────────────────────────
 
-  /**
-   * Loads sprite textures from the public asset directory.
-   * Sprite files should be placed at /public/sprites/*.png.
-   */
   private async loadTextures(): Promise<void> {
     await PIXI.Assets.load([
       { alias: 'sprite-gen',      src: '/sprites/sprite-gen.png'      },
@@ -232,22 +238,18 @@ export class PixiGridRenderer {
       load: PIXI.Texture.from('sprite-city'),
     }
 
-    // Tiny white circle texture for particles
+    // Tiny circle texture for particles
     const g = new PIXI.Graphics()
-    g.beginFill(0xffffff).drawCircle(0, 0, 4).endFill()
+    g.circle(0, 0, 4).fill(0xffffff)
     this.dotTexture = this.app.renderer.generateTexture(g)
     g.destroy()
   }
 
-  // ── HTML label overlay ──────────────────────────────────────────────────────
+  // ── HTML label overlay ─────────────────────────────────────────────────────
 
   private rebuildLabels(graph: GridGraph): void {
-    // Pool: remove labels for deleted buses
     for (const [id, el] of this.labelElements) {
-      if (!graph.buses.has(id)) {
-        el.remove()
-        this.labelElements.delete(id)
-      }
+      if (!graph.buses.has(id)) { el.remove(); this.labelElements.delete(id) }
     }
 
     for (const bus of graph.buses.values()) {
@@ -275,12 +277,9 @@ export class PixiGridRenderer {
 
   private syncLabelPositions(): void {
     if (!this.graph) return
-
     for (const bus of this.graph.buses.values()) {
       const el = this.labelElements.get(bus.id)
       if (!el) continue
-
-      // Convert world coords to screen coords via viewport
       const screen = this.viewport.toScreen(bus.x, bus.y - 130)
       el.style.left = `${screen.x}px`
       el.style.top  = `${screen.y}px`
@@ -289,11 +288,9 @@ export class PixiGridRenderer {
 
   private updateLabelVisibility(tier: LodTier): void {
     for (const el of this.labelElements.values()) {
-      // Show bus ID at tier 1+, full name only at tier 2
       const nameEl = el.children[1] as HTMLElement
       el.style.visibility  = tier >= 1 ? 'visible' : 'hidden'
-      nameEl.style.display = tier >= 2 ? 'block' : 'none'
+      nameEl.style.display = tier >= 2 ? 'block'   : 'none'
     }
   }
 }
-

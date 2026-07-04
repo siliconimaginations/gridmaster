@@ -1,11 +1,11 @@
 /**
  * GridCanvas — React wrapper for {@link PixiGridRenderer}.
  *
- * Mounts a full-screen canvas, creates the renderer, and subscribes to the
- * Zustand store using the same pattern as the old Babylon.js App.tsx so the
- * store and all HUD components are unaffected.
+ * Mounts a full-screen canvas, asynchronously creates the renderer (pixi.js v8
+ * requires async init), and subscribes to the Zustand store using the same
+ * pattern as the old Babylon.js App.tsx so all HUD components are unaffected.
  *
- * Usage (drop-in for the inline canvas + SceneManager in App.tsx):
+ * Drop-in replacement for the inline canvas + SceneManager in App.tsx:
  *
  *   <GridCanvas onSelect={info => useGameStore.getState().selectElement(info)} />
  */
@@ -27,25 +27,39 @@ export function GridCanvas({ onSelect }: GridCanvasProps) {
     const canvas = canvasRef.current
     if (!canvas) return
 
-    const renderer = new PixiGridRenderer(canvas, onSelect)
+    let renderer: PixiGridRenderer | null = null
+    let disposed = false
 
-    let initialized = false
-    const unsub = useGameStore.subscribe(
-      state => ({ network: state.network, violations: state.violations }),
-      ({ network, violations }, prev) => {
-        if (!initialized || network !== prev.network) {
-          initialized = true
-          renderer.updateNetwork(network, violations)
-        } else {
-          renderer.updateViolations(violations)
-        }
-      },
-      { equalityFn: shallow, fireImmediately: true },
-    )
+    // pixi.js v8 init is async; store subscription starts after renderer is ready
+    void PixiGridRenderer.create(canvas, onSelect).then(r => {
+      if (disposed) { r.dispose(); return }
+      renderer = r
+
+      let initialized = false
+      const unsub = useGameStore.subscribe(
+        state => ({ network: state.network, violations: state.violations }),
+        ({ network, violations }, prev) => {
+          if (!initialized || network !== prev.network) {
+            initialized = true
+            renderer!.updateNetwork(network, violations)
+          } else {
+            renderer!.updateViolations(violations)
+          }
+        },
+        { equalityFn: shallow, fireImmediately: true },
+      )
+
+      // Attach unsub to cleanup
+      ;(renderer as PixiGridRenderer & { _unsub?: () => void })._unsub = unsub
+    })
 
     return () => {
-      unsub()
-      renderer.dispose()
+      disposed = true
+      if (renderer) {
+        const r = renderer as PixiGridRenderer & { _unsub?: () => void }
+        r._unsub?.()
+        r.dispose()
+      }
     }
   }, [onSelect])
 

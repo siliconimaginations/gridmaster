@@ -1,11 +1,11 @@
 /**
- * ParticleLayer — GPU-accelerated flow animation along transmission lines.
+ * ParticleLayer — flow animation along transmission lines.
  *
- * Uses PIXI.ParticleContainer for a single draw call regardless of particle count.
- * Particle positions are sampled from pre-computed bezier LUTs in {@link WireLayer}.
+ * Uses a plain PIXI.Container (pixi.js v8 removed ParticleContainer;
+ * v8's renderer auto-batches based on shared textures, so a Container
+ * of same-texture Sprites achieves equivalent performance).
  *
- * Performance budget: 800 edges × 3 particles = 2400 particles — well within
- * ParticleContainer's 50 000-particle limit.
+ * Particle positions are sampled from pre-computed bezier LUTs in WireLayer.
  *
  * See docs/engineering/15-pixi-renderer.md §Flow particles.
  */
@@ -15,47 +15,40 @@ import type { BranchEdge } from '../../model/GridGraph'
 import type { BezierLUT } from './WireLayer'
 
 const PARTICLES_PER_EDGE = 3
-const BASE_SPEED = 0.004
-const LOAD_SPEED_MULT = 0.012
+const BASE_SPEED         = 0.004
+const LOAD_SPEED_MULT    = 0.012
 
 interface Particle {
   sprite: PIXI.Sprite
-  lut: Float32Array   // ref to BezierLUT.points (64 samples)
-  t: number           // 0–1 position along curve
-  speed: number
+  lut:    Float32Array   // ref to BezierLUT.points (64 samples × 2 coords)
+  t:      number         // 0–1 position along curve
+  speed:  number
 }
 
 export class ParticleLayer {
-  readonly container: PIXI.ParticleContainer
+  readonly container: PIXI.Container
   private particles: Particle[] = []
   private _visible = false
 
   constructor() {
-    this.container = new PIXI.ParticleContainer(50_000, {
-      position: true,
-      tint:     true,
-    })
-    this.container.zIndex = 30
+    this.container = new PIXI.Container()
+    this.container.zIndex  = 30
     this.container.visible = false
   }
 
   get flowVisible(): boolean { return this._visible }
 
   setFlowVisible(on: boolean): void {
-    this._visible = on
+    this._visible          = on
     this.container.visible = on
   }
 
-  /**
-   * Rebuilds particles from the given edges and their LUTs.
-   * Call after {@link WireLayer.update} to get fresh LUTs.
-   */
+  /** Rebuilds particles from the given edges and their LUTs. */
   rebuild(
-    edges: BranchEdge[],
-    luts: ReadonlyMap<string, BezierLUT>,
+    edges:      BranchEdge[],
+    luts:       ReadonlyMap<string, BezierLUT>,
     dotTexture: PIXI.Texture,
   ): void {
-    // Remove old sprites
     this.container.removeChildren()
     this.particles = []
 
@@ -65,10 +58,10 @@ export class ParticleLayer {
       if (!lut) continue
 
       for (let i = 0; i < PARTICLES_PER_EDGE; i++) {
-        const sprite = new PIXI.Sprite(dotTexture)
+        const sprite    = new PIXI.Sprite(dotTexture)
         sprite.anchor.set(0.5)
-        sprite.width = sprite.height = 5
-        sprite.tint = 0xffd060
+        sprite.width  = sprite.height = 5
+        sprite.tint   = 0xffd060
 
         this.container.addChild(sprite)
         this.particles.push({
@@ -84,7 +77,6 @@ export class ParticleLayer {
   /** Advance all particles one frame. Call from PIXI.Ticker. */
   tick(dt: number): void {
     if (!this._visible) return
-
     for (const p of this.particles) {
       p.t = (p.t + p.speed * dt) % 1
       const i = Math.floor(p.t * 63) * 2

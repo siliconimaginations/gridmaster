@@ -20,7 +20,7 @@ const WIRE_OFFSET: Record<string, number> = {
   load: -88,
 }
 
-const LINE_COLOR_NORMAL    = 0x4a8ab0
+const LINE_COLOR_NORMAL     = 0x4a8ab0
 const LINE_COLOR_NEAR_LIMIT = 0xc88820
 const LINE_COLOR_OVERLOAD   = 0xdd3030
 
@@ -43,10 +43,7 @@ export class WireLayer {
     this.container.addChild(this.graphics)
   }
 
-  /**
-   * (Re)draws all transmission lines for the given graph.
-   * Pre-computes bezier LUTs for the particle layer.
-   */
+  /** (Re)draws all transmission lines and pre-computes bezier LUTs. */
   update(graph: GridGraph): void {
     this.graphics.clear()
     this._luts.clear()
@@ -62,11 +59,6 @@ export class WireLayer {
       this.drawLine(edge, geom)
       this._luts.set(edge.id, buildLUT(edge.id, geom))
     }
-  }
-
-  /** Fast-path: recolor lines without recomputing bezier geometry. */
-  updateColors(graph: GridGraph): void {
-    this.update(graph)  // Graphics are cheap to redraw; geometry is re-used from LUT cache
   }
 
   /** Returns precomputed bezier LUTs for {@link ParticleLayer}. */
@@ -94,10 +86,11 @@ export class WireLayer {
 
     const width = edge.isOverloaded ? 2.8 : edge.isNearLimit ? 2.2 : 1.8
 
+    // pixi.js v8 Graphics API
     this.graphics
-      .lineStyle(width, color, 1)
       .moveTo(ax, ay)
       .quadraticCurveTo(cx, cy, bx, by)
+      .stroke({ color, width, cap: 'round' })
   }
 
   destroy(): void { this.container.destroy({ children: true }) }

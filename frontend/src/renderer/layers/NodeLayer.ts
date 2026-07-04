@@ -3,10 +3,10 @@
  *
  * Each bus gets a PIXI.Container with:
  *   - PIXI.Sprite (building texture)
- *   - PIXI.Graphics voltage dot (bottom-left of sprite)
+ *   - PIXI.Graphics voltage dot (left of label, at rooftop height)
  *   - PIXI.Graphics MW state bar (generators only, above sprite)
  *
- * sortableChildren=true on the layer container ensures painter order by bus.y.
+ * sortableChildren=true ensures painter order by bus.y.
  *
  * See docs/engineering/15-pixi-renderer.md §Node layer.
  */
@@ -37,9 +37,7 @@ type ClickCallback = (bus: BusNode) => void
 export class NodeLayer {
   readonly container: PIXI.Container
 
-  /** busId → its Container, for fast per-bus updates */
   private busContainers = new Map<string, PIXI.Container>()
-
   private _onClick?: ClickCallback
 
   constructor() {
@@ -50,97 +48,76 @@ export class NodeLayer {
 
   onBusClick(cb: ClickCallback): void { this._onClick = cb }
 
-  /**
-   * Rebuilds bus sprites from scratch.
-   * Called on network change (new topology) or first load.
-   */
   rebuild(graph: GridGraph, textures: BusTextures, lod: LodTier): void {
     this.container.removeChildren()
     this.busContainers.clear()
 
     for (const bus of graph.buses.values()) {
       const group = this.buildBusGroup(bus, textures, lod)
-      group.zIndex = bus.y     // painter sort
+      group.zIndex = bus.y
       this.container.addChild(group)
       this.busContainers.set(bus.id, group)
     }
   }
 
-  /**
-   * Fast update: refreshes voltage dots, state bar fill, and tint.
-   * Does NOT rebuild sprite geometry — call {@link rebuild} for topology changes.
-   */
   refreshBus(bus: BusNode, lod: LodTier): void {
     const group = this.busContainers.get(bus.id)
     if (!group) return
 
-    // Voltage dot (tag=vdot)
     const vdot = group.getChildByName('vdot') as PIXI.Graphics | null
-    if (vdot) {
-      vdot.clear()
-      drawVoltageDot(vdot, bus)
-    }
+    if (vdot) { vdot.clear(); drawVoltageDot(vdot, bus) }
 
-    // State bar (tag=sbar) — generators only
     if (bus.role === 'gen') {
       const sbar = group.getChildByName('sbar') as PIXI.Graphics | null
-      if (sbar) {
-        sbar.clear()
-        drawStateBar(sbar, bus)
-        sbar.visible = lod >= 2
-      }
+      if (sbar) { sbar.clear(); drawStateBar(sbar, bus); sbar.visible = lod >= 2 }
     }
 
-    // Update painter z-index in case y changed
     group.zIndex = bus.y
   }
 
   applyLod(lod: LodTier): void {
     for (const [, group] of this.busContainers) {
-      const sbar = group.getChildByName('sbar') as PIXI.Graphics | null
-      if (sbar) sbar.visible = lod >= 2
-
-      // Scale sprites at tier 0/1
-      const scale = lod === 0 ? 0.5 : lod === 1 ? 0.75 : 1.0
-      const sprite = group.getChildByName('sprite') as PIXI.Sprite | null
-      if (sprite) { sprite.scale.set(scale) }
+      const sbar   = group.getChildByName('sbar')   as PIXI.Graphics | null
+      const sprite = group.getChildByName('sprite') as PIXI.Sprite   | null
+      if (sbar)   sbar.visible = lod >= 2
+      if (sprite) sprite.scale.set(lod === 0 ? 0.5 : lod === 1 ? 0.75 : 1.0)
     }
   }
 
   destroy(): void { this.container.destroy({ children: true }) }
 
-  // ── Private helpers ──────────────────────────────────────────────────────────
+  // ── Private ──────────────────────────────────────────────────────────────────
 
   private buildBusGroup(bus: BusNode, textures: BusTextures, lod: LodTier): PIXI.Container {
     const group = new PIXI.Container()
     group.position.set(bus.x, bus.y)
-    group.interactive = true
-    group.cursor = 'pointer'
+    group.eventMode = 'static'
+    group.cursor    = 'pointer'
     group.on('pointertap', () => this._onClick?.(bus))
 
-    // ── Sprite ──────────────────────────────────────────────────────
+    // Sprite
     const params  = SPRITE_PARAMS[bus.role] ?? SPRITE_PARAMS.load
     const texture = textures[bus.role] ?? textures.load
     const sprite  = new PIXI.Sprite(texture)
-    sprite.name   = 'sprite'
+    sprite.label  = 'sprite'
     sprite.x      = params.x
     sprite.y      = params.y
     sprite.width  = params.w
     sprite.height = params.h
     group.addChild(sprite)
 
-    // ── Voltage dot ─────────────────────────────────────────────────
+    // Voltage dot
     const vdot = new PIXI.Graphics()
-    vdot.name = 'vdot'
+    vdot.label = 'vdot'
     drawVoltageDot(vdot, bus)
     group.addChild(vdot)
 
-    // ── State bar (generators only) ─────────────────────────────────
+    // State bar (generators only)
     if (bus.role === 'gen') {
       const sbar = new PIXI.Graphics()
-      sbar.name = 'sbar'
-      drawStateBar(sbar, bus)
+      sbar.label   = 'sbar'
       sbar.visible = lod >= 2
+      drawStateBar(sbar, bus)
       group.addChild(sbar)
     }
 
@@ -148,48 +125,45 @@ export class NodeLayer {
   }
 }
 
-// ── Drawing helpers ────────────────────────────────────────────────────────────
+// ── Drawing helpers (pixi.js v8 Graphics API) ─────────────────────────────────
 
 function drawVoltageDot(g: PIXI.Graphics, bus: BusNode): void {
   const zone  = voltageZone(bus.v)
   const color = VOLTAGE_COLORS[zone]
   const wo    = WIRE_OFFSET[bus.role] ?? -90
-  // Position: left of label area, at rooftop height
-  g.beginFill(color)
-   .lineStyle(1, 0x000000, 0.6)
-   .drawCircle(-30, wo - 4, 4)
-   .endFill()
+  g.circle(-30, wo - 4, 4)
+   .fill(color)
+   .stroke({ color: 0x000000, alpha: 0.6, width: 1 })
 }
 
 function drawStateBar(g: PIXI.Graphics, bus: BusNode): void {
   if (bus.role !== 'gen' || bus.genMaxMw <= 0) return
 
-  const pct = bus.genMw / bus.genMaxMw
-  const wo  = WIRE_OFFSET.gen
-  const yTop = wo - 12    // just above sprite top
-  const x = -STATE_BAR_W / 2
+  const pct   = bus.genMw / bus.genMaxMw
+  const wo    = WIRE_OFFSET.gen
+  const yTop  = wo - 12
+  const x     = -STATE_BAR_W / 2
+  const fillW = Math.round(STATE_BAR_W * pct)
 
   const fillColor = pct > 0.85 ? 0xff3030 : pct > 0.60 ? 0xffa020 : 0x28cc60
 
   // Background track
-  g.beginFill(0x000000, 0.68)
-   .lineStyle(0.7, 0xffffff, 0.22)
-   .drawRoundedRect(x, yTop - STATE_BAR_H, STATE_BAR_W, STATE_BAR_H, 2)
-   .endFill()
+  g.roundRect(x, yTop - STATE_BAR_H, STATE_BAR_W, STATE_BAR_H, 2)
+   .fill({ color: 0x000000, alpha: 0.68 })
+   .stroke({ color: 0xffffff, alpha: 0.22, width: 0.7 })
 
   // Fill
-  if (pct > 0) {
-    g.beginFill(fillColor)
-     .drawRoundedRect(x, yTop - STATE_BAR_H, Math.round(STATE_BAR_W * pct), STATE_BAR_H, 2)
-     .endFill()
+  if (fillW > 0) {
+    g.roundRect(x, yTop - STATE_BAR_H, fillW, STATE_BAR_H, 2)
+     .fill(fillColor)
   }
 
   // Threshold markers at 60% and 85%
   for (const t of [0.60, 0.85]) {
     const mx = x + STATE_BAR_W * t
-    g.lineStyle(0.8, 0x000000, 0.4)
-     .moveTo(mx, yTop - STATE_BAR_H)
+    g.moveTo(mx, yTop - STATE_BAR_H)
      .lineTo(mx, yTop)
+     .stroke({ color: 0x000000, alpha: 0.4, width: 0.8 })
   }
 }
 
