@@ -257,7 +257,8 @@ jobs:
           git config user.name "github-actions[bot]"
           mkdir -p /tmp/badges
           cp .github/badges/vitest.svg /tmp/badges/vitest.svg
-          if git fetch origin ci/badges:refs/remotes/origin/ci/badges 2>/dev/null; then
+          if git ls-remote --exit-code --heads origin ci/badges >/dev/null 2>&1; then
+            git fetch origin ci/badges:refs/remotes/origin/ci/badges
             git checkout -b ci/badges FETCH_HEAD
           else
             git checkout --orphan ci/badges
@@ -303,7 +304,8 @@ jobs:
           git config user.name "github-actions[bot]"
           mkdir -p /tmp/badges
           cp .github/badges/jacoco.svg /tmp/badges/jacoco.svg
-          if git fetch origin ci/badges:refs/remotes/origin/ci/badges 2>/dev/null; then
+          if git ls-remote --exit-code --heads origin ci/badges >/dev/null 2>&1; then
+            git fetch origin ci/badges:refs/remotes/origin/ci/badges
             git checkout -b ci/badges FETCH_HEAD
           else
             git checkout --orphan ci/badges
