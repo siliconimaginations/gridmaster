@@ -139,11 +139,11 @@ export function networkDtoToGridGraph(
     const role: BusRole = genMaxMw > 0 ? 'gen' : loadMw > 0 ? 'load' : 'sub'
 
     buses.set(bus.id, {
-      id:       bus.id,
+      id:        bus.id,
       role,
-      name:     bus.name,
-      voltageKv: bus.voltageKv,
-      v:        bus.voltagePu,
+      name:      bus.name,
+      voltageKv: bus.voltageKv ?? 0,
+      v:         bus.voltagePu ?? 1.0,   // default to nominal if power flow hasn't converged
       genMw,
       genMaxMw,
       loadMw,

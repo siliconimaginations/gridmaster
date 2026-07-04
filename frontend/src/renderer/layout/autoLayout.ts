@@ -107,6 +107,10 @@ function layoutForceDirected(
   const vx = new Float64Array(n)
   const vy = new Float64Array(n)
 
+  // Pre-compute id → index map for O(1) edge lookups (avoids O(N) findIndex inside the loop)
+  const idxMap = new Map<string, number>()
+  nodes.forEach((node, i) => idxMap.set(node.id, i))
+
   // Voltage-lane targets: generators top third, loads bottom third, subs middle
   const laneY: Record<string, number> = {
     gen:  cy - ry * 0.55,
@@ -133,8 +137,8 @@ function layoutForceDirected(
     // Spring attraction along edges
     for (const edge of graph.edges) {
       if (!edge.connected) continue
-      const ai = nodes.findIndex(n => n.id === edge.fromId)
-      const bi = nodes.findIndex(n => n.id === edge.toId)
+      const ai = idxMap.get(edge.fromId) ?? -1
+      const bi = idxMap.get(edge.toId)   ?? -1
       if (ai < 0 || bi < 0) continue
 
       const dx   = nodes[bi].x - nodes[ai].x
