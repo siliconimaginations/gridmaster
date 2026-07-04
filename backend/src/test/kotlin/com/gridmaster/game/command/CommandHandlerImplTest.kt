@@ -48,6 +48,7 @@ class CommandHandlerImplTest {
     private lateinit var dispatchService: DispatchService
     private lateinit var tickEngine: TickEngine
     private lateinit var eventEngine: EventEngine
+    private lateinit var tutorialEngine: com.gridmaster.game.tutorial.TutorialEngine
     private lateinit var session: PhysicsSession
     private lateinit var snapshot: GridNetwork
 
@@ -63,6 +64,7 @@ class CommandHandlerImplTest {
         dispatchService = mockk(relaxed = true)
         tickEngine = mockk(relaxed = true)
         eventEngine = mockk(relaxed = true)
+        tutorialEngine = mockk(relaxed = true)
 
         snapshot = buildMinimalSnapshot()
         session = PhysicsSession(sessionId, TestNetworkFactory.create(), snapshot)
@@ -82,6 +84,7 @@ class CommandHandlerImplTest {
                 dispatchService,
                 tickEngine,
                 eventEngine,
+                tutorialEngine,
             )
     }
 

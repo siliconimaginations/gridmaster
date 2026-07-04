@@ -115,6 +115,11 @@ export interface GameStateUpdate {
   pendingEventCards?: EventCardDto[]
   /** Server-computed 0-100 grid health score for this tick. */
   healthScore?: number
+  /**
+   * Current tutorial step (1–5). Non-null only for TUTORIAL-mode sessions.
+   * Null/absent for FREE_PLAY and CHALLENGE sessions.
+   */
+  tutorialStep?: number | null
 }
 
 /** Sent in a ConnectionStatus message when type === 'GAME_OVER'. */

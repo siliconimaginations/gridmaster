@@ -39,6 +39,11 @@ data class GameStateUpdate(
     val pendingEventCards: List<EventCardDto>? = null,
     /** Server-computed 0-100 grid health score for this tick. */
     val healthScore: Int? = null,
+    /**
+     * Current tutorial step number (1–5). Non-null only for TUTORIAL-mode sessions.
+     * Null for FREE_PLAY and CHALLENGE sessions.
+     */
+    val tutorialStep: Int? = null,
 )
 
 enum class UpdateType { FULL, DELTA }

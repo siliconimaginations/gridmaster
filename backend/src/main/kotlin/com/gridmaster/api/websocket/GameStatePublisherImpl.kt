@@ -46,6 +46,7 @@ class GameStatePublisherImpl(
         newAlerts: List<Alert>,
         pendingCards: List<EventCard>,
         healthScore: Int?,
+        tutorialStep: Int?,
     ) {
         val isFull = tickNumber % GameStatePublisher.FULL_STATE_INTERVAL_TICKS == 0L
         val state = sessionState.getOrPut(sessionId) { SessionPublishState() }
@@ -61,6 +62,7 @@ class GameStatePublisherImpl(
                 newAlerts,
                 pendingCards,
                 healthScore = healthScore,
+                tutorialStep = tutorialStep,
             )
         } else {
             doPublishDelta(
@@ -74,6 +76,7 @@ class GameStatePublisherImpl(
                 newAlerts,
                 pendingCards,
                 healthScore = healthScore,
+                tutorialStep = tutorialStep,
             )
         }
     }
@@ -151,6 +154,7 @@ class GameStatePublisherImpl(
         newAlerts: List<Alert>,
         pendingCards: List<EventCard>,
         healthScore: Int? = null,
+        tutorialStep: Int? = null,
     ) {
         val smc = sessionStore.find(sessionId)?.latestDispatchResult?.systemMarginalCostPerMwh
         val networkDto = powerFlowResult.snapshot.toNetworkWsDto(smc)
@@ -168,6 +172,7 @@ class GameStatePublisherImpl(
                 alerts = newAlerts.map { AlertDto.from(it) },
                 pendingEventCards = pendingCards.map { it.toDto() },
                 healthScore = healthScore,
+                tutorialStep = tutorialStep,
             )
 
         val state = sessionState.getOrPut(sessionId) { SessionPublishState() }
@@ -189,6 +194,7 @@ class GameStatePublisherImpl(
         newAlerts: List<Alert>,
         pendingCards: List<EventCard>,
         healthScore: Int? = null,
+        tutorialStep: Int? = null,
     ) {
         val smc = sessionStore.find(sessionId)?.latestDispatchResult?.systemMarginalCostPerMwh
         // Computed every DELTA tick for hash-comparison; O(N) single-pass, negligible at
@@ -221,6 +227,7 @@ class GameStatePublisherImpl(
                 alerts = alertsToSend,
                 pendingEventCards = if (cardsChanged) cards else null,
                 healthScore = healthScore,
+                tutorialStep = tutorialStep,
             )
 
         if (networkChanged) state.lastNetworkHash = networkDto.hashCode()
