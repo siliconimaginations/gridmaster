@@ -96,6 +96,15 @@ describe('networkDtoToGridGraph', () => {
     expect(g.buses.get('B1')!.loadMw).toBe(0)
   })
 
+  it('sets fuelType from the largest-capacity generator on the bus (#335)', () => {
+    const g = networkDtoToGridGraph(makeDto())
+    // G1 (COAL, 120 MW max) dominates G2 (GAS, 80 MW max)
+    expect(g.buses.get('B1')!.fuelType).toBe('COAL')
+    // Non-generator buses carry no fuel type
+    expect(g.buses.get('B2')!.fuelType).toBeUndefined()
+    expect(g.buses.get('B3')!.fuelType).toBeUndefined()
+  })
+
   it('sets adjacency bidirectionally for connected branches', () => {
     const g = networkDtoToGridGraph(makeDto())
     expect(g.adjacency.get('B1')!.has('B2')).toBe(true)

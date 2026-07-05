@@ -57,6 +57,12 @@ export interface BusNode {
   genMw: number
   /** Max generation capacity on this bus (MW). */
   genMaxMw: number
+  /**
+   * Fuel type of the largest-capacity generator on this bus (e.g. "GAS",
+   * "NUCLEAR"); undefined for buses without generators. Drives the fuel
+   * sub-icon in the PixiJS renderer (#335).
+   */
+  fuelType?: string
 
   /** Total load demand on this bus (MW). 0 for non-load buses. */
   loadMw: number
@@ -138,6 +144,16 @@ export function networkDtoToGridGraph(
 
     const role: BusRole = genMaxMw > 0 ? 'gen' : loadMw > 0 ? 'load' : 'sub'
 
+    // Dominant fuel = fuel of the largest-capacity generator on the bus (#335)
+    let dominantFuel: string | undefined
+    let dominantMax = -Infinity
+    for (const g of gens) {
+      if (g.maxActivePowerMw > dominantMax) {
+        dominantMax = g.maxActivePowerMw
+        dominantFuel = g.fuelType
+      }
+    }
+
     buses.set(bus.id, {
       id:        bus.id,
       role,
@@ -146,6 +162,7 @@ export function networkDtoToGridGraph(
       v:         bus.voltagePu ?? 1.0,   // default to nominal if power flow hasn't converged
       genMw,
       genMaxMw,
+      fuelType:  dominantFuel,
       loadMw,
       hasVoltageViolation: viol !== undefined,
       violationType: viol ? (viol.violationType as 'VOLTAGE_HIGH' | 'VOLTAGE_LOW') : undefined,

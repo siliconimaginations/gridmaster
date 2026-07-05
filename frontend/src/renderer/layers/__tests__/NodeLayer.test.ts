@@ -234,4 +234,41 @@ describe('NodeLayer', () => {
     const bus = makeBus('A', 'load', { loadMw: 800 })
     expect(() => layer.rebuild(makeGraph([bus]), makeTextures(), 0)).not.toThrow()
   })
+
+  // ── Fuel-type badge (#335) ─────────────────────────────────────────────────
+
+  it('gen bus group contains a fuel badge child', () => {
+    layer.rebuild(makeGraph([makeBus('A', 'gen', { fuelType: 'WIND' })]), makeTextures(), 1)
+    const group = layer.container.children[0]
+    expect(group.getChildByName('fuel')).not.toBeNull()
+  })
+
+  it('non-gen buses have no fuel badge', () => {
+    layer.rebuild(makeGraph([makeBus('A', 'load'), makeBus('B', 'sub')]), makeTextures(), 1)
+    for (const group of layer.container.children) {
+      expect(group.getChildByName('fuel')).toBeNull()
+    }
+  })
+
+  it('fuel badge visible only at lod 1', () => {
+    layer.rebuild(makeGraph([makeBus('A', 'gen', { fuelType: 'GAS' })]), makeTextures(), 1)
+    const fuel = layer.container.children[0].getChildByName('fuel')!
+
+    expect(fuel.visible).toBe(true)
+    layer.applyLod(0)
+    expect(fuel.visible).toBe(false)
+    layer.applyLod(2)
+    expect(fuel.visible).toBe(false)
+    layer.applyLod(1)
+    expect(fuel.visible).toBe(true)
+  })
+
+  it.each(['GAS', 'COAL', 'NUCLEAR', 'WIND', 'SOLAR', 'HYDRO', 'UNKNOWN', undefined])(
+    'rebuild draws fuel glyph without error for %s',
+    (fuel) => {
+      const bus = makeBus('A', 'gen', { fuelType: fuel })
+      expect(() => layer.rebuild(makeGraph([bus]), makeTextures(), 0)).not.toThrow()
+      expect(() => layer.rebuild(makeGraph([bus]), makeTextures(), 1)).not.toThrow()
+    },
+  )
 })
