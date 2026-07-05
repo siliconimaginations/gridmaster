@@ -61,6 +61,8 @@ const resetStore = () =>
     pendingEventCards: [],
     connectionStatus: 'disconnected',
     sessionId: null,
+    healthScore: null,
+    healthHistory: [],
   })
 
 // ── applyUpdate FULL ──────────────────────────────────────────────────────────
@@ -259,5 +261,39 @@ describe('useGameStore — sendCommandOptimistic', () => {
     capturedOnAck?.(successAck)
 
     expect(getNetwork).not.toHaveBeenCalled()
+  })
+})
+
+// ── healthHistory ring buffer (#333) ──────────────────────────────────────────
+
+describe('useGameStore — healthHistory ring buffer (#333)', () => {
+  beforeEach(resetStore)
+
+  it('appends healthScore on FULL updates', () => {
+    useGameStore.getState().applyUpdate({ ...FULL_UPDATE, healthScore: 80 })
+    useGameStore.getState().applyUpdate({ ...FULL_UPDATE, healthScore: 75 })
+    expect(useGameStore.getState().healthHistory).toEqual([80, 75])
+  })
+
+  it('appends healthScore on DELTA updates', () => {
+    useGameStore.getState().applyUpdate({ ...FULL_UPDATE, healthScore: 80 })
+    useGameStore.getState().applyUpdate({ ...FULL_UPDATE, type: 'DELTA' as const, healthScore: 60 })
+    expect(useGameStore.getState().healthHistory).toEqual([80, 60])
+  })
+
+  it('does not append when healthScore is absent', () => {
+    useGameStore.getState().applyUpdate({ ...FULL_UPDATE, healthScore: 90 })
+    useGameStore.getState().applyUpdate({ ...FULL_UPDATE, healthScore: undefined })
+    expect(useGameStore.getState().healthHistory).toEqual([90])
+  })
+
+  it('caps the buffer at 30 samples, dropping oldest', () => {
+    for (let i = 1; i <= 35; i++) {
+      useGameStore.getState().applyUpdate({ ...FULL_UPDATE, healthScore: i })
+    }
+    const history = useGameStore.getState().healthHistory
+    expect(history).toHaveLength(30)
+    expect(history[0]).toBe(6)
+    expect(history[29]).toBe(35)
   })
 })

@@ -10,6 +10,7 @@ import {
   TREND_GLYPH,
 } from './hud'
 import type { HealthSeverity, TrendDirection } from './hud'
+import { HealthSparkline } from './HealthSparkline'
 import styles from './TopHud.module.css'
 
 /**
@@ -52,13 +53,14 @@ function healthArrowClass(dir: TrendDirection): string {
 }
 
 export function TopHud() {
-  const { gameTimeMinutes, clockState, tickNumber, network, violations, healthScore } = useGameStore(useShallow((s) => ({
+  const { gameTimeMinutes, clockState, tickNumber, network, violations, healthScore, healthHistory } = useGameStore(useShallow((s) => ({
     gameTimeMinutes: s.gameTimeMinutes,
     clockState: s.clockState,
     tickNumber: s.tickNumber,
     network: s.network,
     violations: s.violations,
     healthScore: s.healthScore,
+    healthHistory: s.healthHistory,
   })))
 
   // ── Metric history ring buffer (last HISTORY_LENGTH ticks) ────────────────
@@ -160,6 +162,7 @@ export function TopHud() {
         >
           {TREND_GLYPH[healthTrend]}
         </span>
+        <HealthSparkline history={healthHistory} />
       </div>
     </div>
   )
