@@ -58,9 +58,18 @@ jobs:
         working-directory: frontend
         run: npm run build:e2e
 
+      # Readiness wait mirrors the backend step: without it the run proceeds even
+      # if preview fails to bind, and every test dies with ERR_CONNECTION_REFUSED
+      # (run 28734201401 — issues #349–#352).
       - name: Start frontend preview server
         working-directory: frontend
-        run: npx vite preview --port 5173 &
+        run: |
+          npx vite preview --port 5173 > /tmp/vite-preview.log 2>&1 &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:5173 > /dev/null && break
+            sleep 1
+          done
+          curl -sf http://localhost:5173 > /dev/null || { cat /tmp/vite-preview.log; exit 1; }
 
       - name: Run Playwright tests
         working-directory: frontend
