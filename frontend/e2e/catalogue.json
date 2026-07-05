@@ -112,6 +112,19 @@
         "RENDERER-04",
         "RENDERER-05"
       ]
+    },
+    {
+      "id": "F-TUTORIAL",
+      "name": "Tutorial mode (5-step guided flow)",
+      "feature_implemented": true,
+      "scenarios": [
+        "TU-01",
+        "TU-02",
+        "TU-03",
+        "TU-04",
+        "TU-05",
+        "TU-06"
+      ]
     }
   ],
   "scenarios": [
@@ -253,6 +266,36 @@
     {
       "id": "RENDERER-05",
       "description": "Canvas click propagates bus selection to store",
+      "test_implemented": true
+    },
+    {
+      "id": "TU-01",
+      "description": "TUTORIAL session shows the step 1 overlay on load",
+      "test_implemented": true
+    },
+    {
+      "id": "TU-02",
+      "description": "Step 1 auto-advances to step 2 after three ticks",
+      "test_implemented": true
+    },
+    {
+      "id": "TU-03",
+      "description": "SetGeneratorOutput command advances step 2 to step 3",
+      "test_implemented": true
+    },
+    {
+      "id": "TU-04",
+      "description": "Scheduled demand spike fires and advances step 3 to step 4",
+      "test_implemented": true
+    },
+    {
+      "id": "TU-05",
+      "description": "Pause then resume completes the tutorial (step 5)",
+      "test_implemented": true
+    },
+    {
+      "id": "TU-06",
+      "description": "FREE_PLAY sessions never show the tutorial overlay",
       "test_implemented": true
     }
   ]
