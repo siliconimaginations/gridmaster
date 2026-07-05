@@ -272,6 +272,8 @@ class PhysicsController(
         val session = sessionStore.get(sessionId)
         val result = session.latestContingencyResult ?: return ResponseEntity.noContent().build()
 
+        // TODO: #345 — index contingencyResults by outaged element ID (built once per
+        //  analysis run) if we adopt presets much larger than IEEE14.
         val cr =
             result.contingencyResults.find { contingencyResult ->
                 contingencyResult.contingency.elements.any { element ->
