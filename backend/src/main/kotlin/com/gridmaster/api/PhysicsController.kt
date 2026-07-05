@@ -12,7 +12,6 @@ import com.gridmaster.api.websocket.toNetworkWsDto
 import com.gridmaster.engine.contingency.ContingencyAnalysisParameters
 import com.gridmaster.engine.contingency.ContingencyAnalysisResult
 import com.gridmaster.engine.contingency.ContingencyAnalysisService
-import com.gridmaster.engine.contingency.ContingencyElement
 import com.gridmaster.engine.dispatch.DispatchMode
 import com.gridmaster.engine.dispatch.DispatchParameters
 import com.gridmaster.engine.dispatch.DispatchResult
@@ -272,14 +271,9 @@ class PhysicsController(
         val session = sessionStore.get(sessionId)
         val result = session.latestContingencyResult ?: return ResponseEntity.noContent().build()
 
-        // TODO: #345 — index contingencyResults by outaged element ID (built once per
-        //  analysis run) if we adopt presets much larger than IEEE14.
         val cr =
-            result.contingencyResults.find { contingencyResult ->
-                contingencyResult.contingency.elements.any { element ->
-                    element is ContingencyElement.LineOutage && element.lineId == branchId
-                }
-            } ?: return ResponseEntity.notFound().build()
+            result.resultsByElementId[branchId]
+                ?: return ResponseEntity.notFound().build()
 
         val dto =
             ContingencyBranchResultDto(

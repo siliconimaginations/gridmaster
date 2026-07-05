@@ -108,6 +108,43 @@ class ContingencyResultTest {
     }
 
     // -------------------------------------------------------------------------
+    // ContingencyAnalysisResult.resultsByElementId
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `resultsByElementId indexes every element of a multi-element contingency`() {
+        val n2 =
+            ContingencyResult(
+                contingency =
+                    Contingency(
+                        id = "N2-L1-G1",
+                        description = "Double outage",
+                        elements =
+                            listOf(
+                                ContingencyElement.LineOutage("L1"),
+                                ContingencyElement.GeneratorOutage("G1"),
+                            ),
+                    ),
+                status = PostContingencyStatus.SECURE,
+                violations = emptyList(),
+            )
+        val analysis = analysisResult(emptyList()).copy(contingencyResults = listOf(n2))
+
+        assertThat(analysis.resultsByElementId["L1"]).isEqualTo(n2)
+        assertThat(analysis.resultsByElementId["G1"]).isEqualTo(n2)
+        assertThat(analysis.resultsByElementId["L2"]).isNull()
+    }
+
+    @Test
+    fun `resultsByElementId keeps the first contingency when an element repeats`() {
+        val first = result(emptyList())
+        val second = result(listOf(violation(ViolationSeverity.WARNING)))
+        val analysis = analysisResult(emptyList()).copy(contingencyResults = listOf(first, second))
+
+        assertThat(analysis.resultsByElementId["L1"]).isEqualTo(first)
+    }
+
+    // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
 
