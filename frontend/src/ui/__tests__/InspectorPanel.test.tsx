@@ -5,6 +5,12 @@ import type { GridNetworkDto, SelectedElementInfo, ViolationDto } from '../../ap
 vi.mock('../../state/useGameStore')
 import { useGameStore } from '../../state/useGameStore'
 
+// Default resolves null ("no analysis yet") so unrelated LINE tests stay quiet.
+vi.mock('../../api/restClient', () => ({
+  getContingencyForBranch: vi.fn(() => Promise.resolve(null)),
+}))
+import { getContingencyForBranch } from '../../api/restClient'
+
 import { InspectorPanel } from '../InspectorPanel'
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -38,7 +44,7 @@ function mockStore(
   const selectElement = vi.fn()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   vi.mocked(useGameStore).mockImplementation((selector?: (s: any) => any) => {
-    const state = { selectedElement: selected, network, violations, selectElement }
+    const state = { selectedElement: selected, network, violations, selectElement, sessionId: 'sess-1' }
     return selector ? selector(state) : state
   })
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -112,5 +118,69 @@ describe('InspectorPanel', () => {
     render(<InspectorPanel />)
     fireEvent.click(screen.getByTestId('inspector-backdrop'))
     expect(selectElement).toHaveBeenCalledWith(null)
+  })
+})
+
+// ── N-1 security section ─────────────────────────────────────────────────────
+
+describe('N-1 security section', () => {
+  const VIOLATION = {
+    equipmentId: 'L5',
+    equipmentType: 'LINE',
+    violationType: 'THERMAL' as const,
+    value: 1250,
+    limit: 1000,
+    loadingPercent: 125,
+    severity: 'CRITICAL',
+  }
+
+  it('shows No analysis chip when no contingency result exists', async () => {
+    vi.mocked(getContingencyForBranch).mockResolvedValue(null)
+    mockStore({ elementType: 'LINE', elementId: BRANCH_ID })
+    render(<InspectorPanel />)
+
+    expect(await screen.findByText(/No analysis/)).toBeInTheDocument()
+    expect(getContingencyForBranch).toHaveBeenCalledWith('sess-1', BRANCH_ID)
+  })
+
+  it('shows Secure ✓ chip for a SECURE result', async () => {
+    vi.mocked(getContingencyForBranch).mockResolvedValue({
+      contingencyId: 'N1-LINE-br-1',
+      status: 'SECURE',
+      violations: [],
+      analysisCompletedAt: '2026-07-04T00:00:00Z',
+    })
+    mockStore({ elementType: 'LINE', elementId: BRANCH_ID })
+    render(<InspectorPanel />)
+
+    expect(await screen.findByText(/Secure ✓/)).toBeInTheDocument()
+  })
+
+  it('shows violation count chip for a VIOLATION result', async () => {
+    vi.mocked(getContingencyForBranch).mockResolvedValue({
+      contingencyId: 'N1-LINE-br-1',
+      status: 'VIOLATION',
+      violations: [VIOLATION, { ...VIOLATION, equipmentId: 'L6' }],
+      analysisCompletedAt: '2026-07-04T00:00:00Z',
+    })
+    mockStore({ elementType: 'LINE', elementId: BRANCH_ID })
+    render(<InspectorPanel />)
+
+    expect(await screen.findByText(/2 violations/)).toBeInTheDocument()
+  })
+
+  it('expands on toggle click and lists violation rows', async () => {
+    vi.mocked(getContingencyForBranch).mockResolvedValue({
+      contingencyId: 'N1-LINE-br-1',
+      status: 'VIOLATION',
+      violations: [VIOLATION],
+      analysisCompletedAt: '2026-07-04T00:00:00Z',
+    })
+    mockStore({ elementType: 'LINE', elementId: BRANCH_ID })
+    render(<InspectorPanel />)
+
+    fireEvent.click(await screen.findByTestId('n1-toggle'))
+    expect(await screen.findByText('L5')).toBeInTheDocument()
+    expect(await screen.findByText(/THERMAL 125\.0%/)).toBeInTheDocument()
   })
 })

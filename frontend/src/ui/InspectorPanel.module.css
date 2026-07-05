@@ -105,3 +105,56 @@
 .valueCritical {
   color: #f87171;
 }
+
+/* ── N-1 Security section ──────────────────────────────────────────────────── */
+
+.n1Section {
+  margin-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 6px;
+}
+
+.n1Header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 2px 0;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.n1Header:hover {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.n1ChipNeutral,
+.n1ChipSecure,
+.n1ChipViolation {
+  margin-left: auto;
+  padding: 1px 8px;
+  border-radius: 9px;
+  font-size: 11px;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.n1ChipNeutral {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.n1ChipSecure {
+  background: rgba(52, 211, 153, 0.15);
+  color: #34d399;
+}
+
+.n1ChipViolation {
+  background: rgba(248, 113, 113, 0.15);
+  color: #f87171;
+}

@@ -1,5 +1,6 @@
 package com.gridmaster.engine.contingency
 
+import com.fasterxml.jackson.annotation.JsonIgnore
 import com.gridmaster.engine.powerflow.EquipmentType
 import com.gridmaster.engine.powerflow.ViolationSeverity
 import java.time.Instant
@@ -67,7 +68,34 @@ data class ContingencyAnalysisResult(
     val completedAt: Instant,
     val preScreenedContingenciesCount: Int,
     val fullAcContingenciesCount: Int,
-)
+) {
+    /**
+     * Contingency results indexed by every outaged element ID, computed once on
+     * first access. Lets request handlers answer "what happens if element X trips"
+     * in constant time instead of scanning [contingencyResults] per request.
+     *
+     * A multi-element contingency appears once per element; when several
+     * contingencies share an element the first in [contingencyResults] wins.
+     * Excluded from JSON serialisation — the result payload stays unchanged.
+     */
+    @get:JsonIgnore
+    val resultsByElementId: Map<String, ContingencyResult> by lazy {
+        buildMap {
+            for (cr in contingencyResults) {
+                for (element in cr.contingency.elements) {
+                    val elementId =
+                        when (element) {
+                            is ContingencyElement.LineOutage -> element.lineId
+                            is ContingencyElement.TwoWindingsTransformerOutage -> element.transformerId
+                            is ContingencyElement.ThreeWindingsTransformerOutage -> element.transformerId
+                            is ContingencyElement.GeneratorOutage -> element.generatorId
+                        }
+                    putIfAbsent(elementId, cr)
+                }
+            }
+        }
+    }
+}
 
 /** Result for a single contingency. */
 data class ContingencyResult(

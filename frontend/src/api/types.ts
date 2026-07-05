@@ -242,6 +242,38 @@ export interface SelectedElementInfo {
   elementType: SceneElementType
   elementId: string
 }
+// ── REST: Contingency ─────────────────────────────────────────────────────────
+
+/** A single post-contingency limit violation, from GET /contingency/{branchId}. */
+export interface ContingencyViolationResult {
+  /** ID of the violating equipment (line, transformer, or bus). */
+  equipmentId: string
+  /** Equipment type name, e.g. "LINE" or "BUS". */
+  equipmentType: string
+  /** Kind of limit exceeded. */
+  violationType: 'THERMAL' | 'VOLTAGE_LOW' | 'VOLTAGE_HIGH'
+  /** Actual value: current in Amperes (thermal) or voltage in pu (voltage). */
+  value: number
+  /** Applicable limit the value exceeded. */
+  limit: number
+  /** Loading as a percentage of the limit. */
+  loadingPercent: number
+  /** Severity name, e.g. "WARNING" or "CRITICAL". */
+  severity: string
+}
+
+/** Post-contingency impact of losing one branch (N-1), from GET /contingency/{branchId}. */
+export interface ContingencyBranchResult {
+  /** ID of the matched contingency, e.g. "N1-LINE-L7". */
+  contingencyId: string
+  /** Post-contingency network status for this outage. */
+  status: 'SECURE' | 'VIOLATION' | 'NETWORK_FAILURE'
+  /** Violations that would appear if this branch tripped; empty when SECURE. */
+  violations: ContingencyViolationResult[]
+  /** ISO-8601 completion timestamp of the analysis run. */
+  analysisCompletedAt: string
+}
+
 // ── REST: Dispatch ────────────────────────────────────────────────────────────
 
 export interface DispatchRequest {
