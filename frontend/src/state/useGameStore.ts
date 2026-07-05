@@ -296,6 +296,9 @@ export const useGameStore = create<GameStore>()(subscribeWithSelector((set, get)
  * On SESSION_NOT_FOUND: clears the stale stored session ID, disconnects, and
  * sets `sessionInvalidated = true` so `useSessionBootstrap` re-runs and creates
  * a fresh session automatically.
+ *
+ * On GAME_OVER: also clears the stored session ID so a page refresh starts a
+ * fresh session instead of resuming the completed one (#334).
  */
 function _handleServerStatus(msg: ServerStatusMessage): void {
   if (msg.type === 'SESSION_NOT_FOUND') {
@@ -305,6 +308,7 @@ function _handleServerStatus(msg: ServerStatusMessage): void {
     useGameStore.setState({ sessionInvalidated: true })
   } else if (msg.type === 'GAME_OVER' && msg.gameOver) {
     console.info('[useGameStore] Server reported GAME_OVER', msg.gameOver)
+    clearStoredSessionId()
     useGameStore.setState({ gameOver: msg.gameOver, clockState: 'STOPPED' })
   }
 }

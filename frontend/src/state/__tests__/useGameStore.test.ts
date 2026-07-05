@@ -2,14 +2,23 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CommandAck, GameStateUpdate, GridNetworkDto } from '../../api/types'
 
 // Mock WsClient so store tests don't need a real STOMP connection.
-// Capture the onAck callback so tests can simulate server ack responses.
+// Capture the onAck/onStatus callbacks so tests can simulate server messages.
 let capturedOnAck: ((ack: CommandAck) => void) | null = null
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let capturedOnStatus: ((msg: any) => void) | null = null
 const mockSend = vi.fn()
 
 vi.mock('../../api/wsClient', () => ({
   WsClient: vi.fn().mockImplementation(
-    (_onMsg: unknown, _onStatus: unknown, onAck: (ack: CommandAck) => void) => {
+    (
+      _onMsg: unknown,
+      _onConnectionStatus: unknown,
+      onAck: (ack: CommandAck) => void,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      onServerStatus: (msg: any) => void,
+    ) => {
       capturedOnAck = onAck
+      capturedOnStatus = onServerStatus
       return { connect: vi.fn(), send: mockSend, disconnect: vi.fn() }
     },
   ),
@@ -21,7 +30,7 @@ vi.mock('../../api/restClient', () => ({
   clearStoredSessionId: vi.fn(),
 }))
 
-import { getNetwork } from '../../api/restClient'
+import { clearStoredSessionId, getNetwork } from '../../api/restClient'
 import { useGameStore } from '../useGameStore'
 
 /** Minimal GridNetworkDto fixture. */
@@ -261,6 +270,37 @@ describe('useGameStore — sendCommandOptimistic', () => {
     capturedOnAck?.(successAck)
 
     expect(getNetwork).not.toHaveBeenCalled()
+  })
+})
+
+// ── GAME_OVER handling (#334) ─────────────────────────────────────────────────
+
+describe('useGameStore — GAME_OVER server status', () => {
+  beforeEach(() => {
+    resetStore()
+    capturedOnStatus = null
+    vi.mocked(clearStoredSessionId).mockClear()
+    vi.mocked(getNetwork).mockResolvedValue(makeNetwork())
+  })
+
+  it('clears the stored session ID so a refresh starts fresh', () => {
+    useGameStore.getState().connect('sess-1', 'jwt')
+    expect(capturedOnStatus).not.toBeNull()
+
+    capturedOnStatus?.({
+      type: 'GAME_OVER',
+      gameOver: {
+        finalHealthScore: 12,
+        averageHealthScore: 40,
+        gridTimeManagedMinutes: 300,
+        eventsHandledCount: 2,
+        won: false,
+      },
+    })
+
+    expect(clearStoredSessionId).toHaveBeenCalled()
+    expect(useGameStore.getState().gameOver?.finalHealthScore).toBe(12)
+    expect(useGameStore.getState().clockState).toBe('STOPPED')
   })
 })
 

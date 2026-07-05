@@ -116,7 +116,7 @@ describe('useSessionBootstrap', () => {
 
   it('resumes a stored session that still exists instead of creating a new one', async () => {
     mockGetStoredSessionId.mockReturnValue('sess-existing')
-    mockGetSession.mockResolvedValue({ ...SESSION, id: 'sess-existing' })
+    mockGetSession.mockResolvedValue({ ...SESSION, id: 'sess-existing', clockState: 'RUNNING' })
 
     const { result } = renderHook(() => useSessionBootstrap())
     await waitFor(() => expect(result.current.status).toBe('ready'))
@@ -124,6 +124,46 @@ describe('useSessionBootstrap', () => {
     expect(mockGetSession).toHaveBeenCalledWith('sess-existing')
     expect(mockCreateSession).not.toHaveBeenCalled()
     expect(mockConnect).toHaveBeenCalledWith('sess-existing', TOKEN.token)
+  })
+
+  it('resumes a paused stored session', async () => {
+    mockGetStoredSessionId.mockReturnValue('sess-paused')
+    mockGetSession.mockResolvedValue({ ...SESSION, id: 'sess-paused', clockState: 'PAUSED' })
+
+    const { result } = renderHook(() => useSessionBootstrap())
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+
+    expect(mockCreateSession).not.toHaveBeenCalled()
+    expect(mockConnect).toHaveBeenCalledWith('sess-paused', TOKEN.token)
+  })
+
+  it('creates a new session when the stored session is completed (game over) (#334)', async () => {
+    mockGetStoredSessionId.mockReturnValue('sess-done')
+    mockGetSession.mockResolvedValue({
+      ...SESSION,
+      id: 'sess-done',
+      clockState: 'RUNNING',
+      completedAt: '2026-07-05T00:00:00Z',
+    })
+
+    const { result } = renderHook(() => useSessionBootstrap())
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+
+    expect(mockClearStoredSessionId).toHaveBeenCalled()
+    expect(mockCreateSession).toHaveBeenCalled()
+    expect(mockConnect).toHaveBeenCalledWith(SESSION.id, TOKEN.token)
+  })
+
+  it('creates a new session when the stored session is permanently stopped (#334)', async () => {
+    mockGetStoredSessionId.mockReturnValue('sess-stopped')
+    mockGetSession.mockResolvedValue({ ...SESSION, id: 'sess-stopped', clockState: 'STOPPED' })
+
+    const { result } = renderHook(() => useSessionBootstrap())
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+
+    expect(mockClearStoredSessionId).toHaveBeenCalled()
+    expect(mockCreateSession).toHaveBeenCalled()
+    expect(mockConnect).toHaveBeenCalledWith(SESSION.id, TOKEN.token)
   })
 
   it('creates a new session when the stored session no longer exists', async () => {

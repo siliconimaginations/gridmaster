@@ -77,7 +77,14 @@ export function useSessionBootstrap(): BootstrapResult {
         let sessionId = getStoredSessionId()
         if (sessionId) {
           try {
-            await getSession(sessionId)
+            const detail = await getSession(sessionId)
+            // Resume only live sessions (#334): a completed (game-over) or
+            // permanently stopped session must not be revived on refresh —
+            // drop it and start fresh.
+            if (detail.completedAt !== null || detail.clockState === 'STOPPED') {
+              clearStoredSessionId()
+              sessionId = null
+            }
           } catch (err) {
             // Only a 404 means the stored session is genuinely gone (expired,
             // deleted, or from a different backend instance) — fall through and

@@ -1,3 +1,4 @@
+import { clearStoredSessionId } from '../api/restClient'
 import { useGameStore } from '../state/useGameStore'
 import styles from './GameOverPanel.module.css'
 
@@ -29,6 +30,10 @@ export function GameOverPanel() {
   }
 
   function handlePlayAgain() {
+    // Drop the stored session so the post-reload bootstrap cannot resume the
+    // completed one (#334). The GAME_OVER handler already clears it; this is
+    // the safety net for locally-triggered game-over states.
+    clearStoredSessionId()
     disconnect()
     // Reload causes useSessionBootstrap to create a fresh session.
     window.location.reload()
