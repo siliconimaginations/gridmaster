@@ -118,6 +118,8 @@ class PhysicsControllerTest {
         mockSession = PhysicsSession(SESSION_ID, iidmNetwork, mockSnapshot)
         every { sessionStore.get(SESSION_ID) } returns mockSession
         every { sessionStore.get(neq(SESSION_ID)) } throws SessionNotFoundException("unknown")
+        // Default: the analysis service cache is empty; individual tests override.
+        every { contingencyService.latestResult() } returns null
     }
 
     // -----------------------------------------------------------------------
@@ -298,6 +300,35 @@ class PhysicsControllerTest {
         mockSession.latestContingencyResult = null
         mvc.get("$BASE/contingency/L1")
             .andExpect { status { isNoContent() } }
+    }
+
+    @Test
+    fun `GET contingency branchId falls back to the analysis service cache`() {
+        // The tick engine writes results to the service cache, not the session
+        // field — the endpoint must serve them from there (#347).
+        mockSession.latestContingencyResult = null
+        every { contingencyService.latestResult() } returns
+            contingencyAnalysisResult(secureLineResult("L1"))
+
+        mvc.get("$BASE/contingency/L1")
+            .andExpect {
+                status { isOk() }
+                jsonPath("$.contingencyId") { value("N1-LINE-L1") }
+                jsonPath("$.status") { value("SECURE") }
+            }
+    }
+
+    @Test
+    fun `GET contingencies falls back to the analysis service cache`() {
+        mockSession.latestContingencyResult = null
+        every { contingencyService.latestResult() } returns
+            contingencyAnalysisResult(secureLineResult("L1"))
+
+        mvc.get("$BASE/contingencies")
+            .andExpect {
+                status { isOk() }
+                jsonPath("$.contingencyResults[0].contingency.id") { value("N1-LINE-L1") }
+            }
     }
 
     @Test
