@@ -88,10 +88,24 @@ export class ApiError extends Error {
 // ── Base fetch ────────────────────────────────────────────────────────────────
 
 /**
+ * Hard ceiling on any single REST request, in milliseconds.
+ *
+ * Without this, a request that never gets a response (backend mid-startup,
+ * dead proxy socket, wedged request thread) leaves callers hanging forever —
+ * the session bootstrap would sit on "Connecting to the grid…" with no error
+ * and nothing in the console (#342). With it, the caller gets an `ApiError`
+ * (status 0) naming the stuck endpoint, and the bootstrap overlay shows a
+ * Retry button instead of spinning forever.
+ */
+export const REQUEST_TIMEOUT_MS = 30_000
+
+/**
  * Core fetch wrapper.
  * - Attaches Bearer token from localStorage.
  * - On 401, re-issues token then retries once (`retry = false` prevents loops).
  * - Throws `ApiError` on any non-2xx (including the retried 401).
+ * - Throws `ApiError` with status 0 when no response arrives within
+ *   [REQUEST_TIMEOUT_MS] (see #342).
  * - Returns `undefined` for 204 No Content.
  */
 async function apiFetch<T>(path: string, options: RequestInit = {}, retry = true): Promise<T> {
@@ -102,7 +116,24 @@ async function apiFetch<T>(path: string, options: RequestInit = {}, retry = true
   }
   if (token) headers['Authorization'] = `Bearer ${token}`
 
-  const res = await fetch(`${BASE_URL}${path}`, { ...options, headers })
+  let res: Response
+  try {
+    res = await fetch(`${BASE_URL}${path}`, {
+      ...options,
+      headers,
+      signal: options.signal ?? AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    })
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'TimeoutError') {
+      throw new ApiError(
+        0,
+        null,
+        `No response from the GridMaster backend after ${REQUEST_TIMEOUT_MS / 1000}s: ` +
+          `${options.method ?? 'GET'} ${path} — is the backend still starting?`,
+      )
+    }
+    throw e
+  }
 
   if (res.status === 401 && retry) {
     const refreshed = await issueToken({ userId: getStoredUserId() || undefined })

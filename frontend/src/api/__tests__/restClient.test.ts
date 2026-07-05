@@ -144,6 +144,45 @@ describe('apiFetch — auth header + 401 retry', () => {
   })
 })
 
+// ── apiFetch — request timeout (#342) ────────────────────────────────────────
+
+describe('apiFetch — request timeout', () => {
+  beforeEach(() => clearStoredAuth())
+  afterEach(() => { vi.restoreAllMocks() })
+
+  it('passes an abort signal so hung requests cannot spin forever', async () => {
+    const fetchMock = mockFetch(200, [])
+    vi.stubGlobal('fetch', fetchMock)
+
+    await listSessions()
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(init.signal).toBeInstanceOf(AbortSignal)
+  })
+
+  it('maps a fetch TimeoutError to ApiError status 0 naming the endpoint', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValue(new DOMException('The operation timed out.', 'TimeoutError'))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const err = await listSessions().catch((e: unknown) => e)
+
+    expect(err).toBeInstanceOf(ApiError)
+    expect((err as ApiError).status).toBe(0)
+    expect((err as ApiError).message).toContain('GET /api/sessions')
+  })
+
+  it('rethrows non-timeout fetch failures unchanged', async () => {
+    const boom = new TypeError('Failed to fetch')
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(boom))
+
+    const err = await listSessions().catch((e: unknown) => e)
+
+    expect(err).toBe(boom)
+  })
+})
+
 // ── Session endpoints ─────────────────────────────────────────────────────────
 
 describe('createSession', () => {
