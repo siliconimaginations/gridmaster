@@ -9,6 +9,8 @@ import styles from './GameOverPanel.module.css'
  * the page so the bootstrap flow creates a fresh session.
  *
  * Hidden when `gameOver` is null (normal play).
+ * When `gameOver.won === true`, shows a Challenge victory banner instead of the
+ * defeat banner.
  */
 export function GameOverPanel() {
   const gameOver = useGameStore((s) => s.gameOver)
@@ -16,7 +18,7 @@ export function GameOverPanel() {
 
   if (!gameOver) return null
 
-  const { finalHealthScore, averageHealthScore, gridTimeManagedMinutes } = gameOver
+  const { finalHealthScore, averageHealthScore, gridTimeManagedMinutes, won } = gameOver
   const gridHours = Math.floor(gridTimeManagedMinutes / 60)
   const gridMins  = gridTimeManagedMinutes % 60
 
@@ -34,12 +36,23 @@ export function GameOverPanel() {
 
   return (
     <div className={styles.overlay} data-testid="game-over-overlay">
-      <div className={styles.panel} data-testid="game-over-panel">
+      <div className={`${styles.panel} ${won ? styles.panelWon : ''}`} data-testid="game-over-panel">
         <div className={styles.header}>
-          <h2 className={styles.title}>Grid Failure</h2>
-          <p className={styles.subtitle}>
-            Health remained critically low for too long — the grid has collapsed.
-          </p>
+          {won ? (
+            <>
+              <h2 className={`${styles.title} ${styles.titleWon}`}>Challenge Complete!</h2>
+              <p className={styles.subtitle}>
+                Grid stability restored — well done, operator.
+              </p>
+            </>
+          ) : (
+            <>
+              <h2 className={styles.title}>Grid Failure</h2>
+              <p className={styles.subtitle}>
+                Health remained critically low for too long — the grid has collapsed.
+              </p>
+            </>
+          )}
         </div>
 
         <div className={styles.stats}>

@@ -42,6 +42,7 @@ class TickEngineImplTest {
     private lateinit var contingencyAnalysisService: ContingencyAnalysisService
     private lateinit var eventEngine: com.gridmaster.game.event.EventEngine
     private lateinit var tutorialEngine: com.gridmaster.game.tutorial.TutorialEngine
+    private lateinit var challengeEngine: com.gridmaster.game.challenge.ChallengeEngine
     private lateinit var networkRepository: com.gridmaster.engine.network.NetworkRepository
     private lateinit var engine: TickEngineImpl
 
@@ -58,6 +59,7 @@ class TickEngineImplTest {
         contingencyAnalysisService = mockk()
         eventEngine = mockk(relaxed = true)
         tutorialEngine = mockk(relaxed = true)
+        challengeEngine = mockk(relaxed = true)
         networkRepository = mockk(relaxed = true)
 
         engine =
@@ -68,6 +70,7 @@ class TickEngineImplTest {
                 contingencyAnalysisService = contingencyAnalysisService,
                 eventEngine = eventEngine,
                 tutorialEngine = tutorialEngine,
+                challengeEngine = challengeEngine,
                 networkRepository = networkRepository,
                 autoSaveInterval = 5L,
             )

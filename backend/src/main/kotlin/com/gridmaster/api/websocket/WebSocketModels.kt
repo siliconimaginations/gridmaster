@@ -44,6 +44,11 @@ data class GameStateUpdate(
      * Null for FREE_PLAY and CHALLENGE sessions.
      */
     val tutorialStep: Int? = null,
+    /**
+     * Game-minutes remaining until the challenge deadline. Non-null only for
+     * CHALLENGE-mode sessions; clamped to 0 once the deadline passes.
+     */
+    val challengeTimeRemainingMinutes: Int? = null,
 )
 
 enum class UpdateType { FULL, DELTA }
@@ -225,6 +230,8 @@ data class GameOverDto(
     val gridTimeManagedMinutes: Long,
     val averageHealthScore: Int,
     val eventsHandledCount: Int,
+    /** True when the player met the challenge victory condition; false for defeat. */
+    val won: Boolean = false,
 )
 
 // ─────────────────────────────────────────────────────────────────────────────

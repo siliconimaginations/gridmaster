@@ -26,6 +26,10 @@
   overflow: hidden;
 }
 
+.panelWon {
+  border-top-color: #4ade80; /* green — challenge victory */
+}
+
 /* ── Header ───────────────────────────────────────────────────────────────── */
 
 .header {
@@ -39,6 +43,10 @@
   letter-spacing: 0.02em;
   color: #ef4444;
   margin: 0 0 4px;
+}
+
+.titleWon {
+  color: #4ade80;
 }
 
 .subtitle {

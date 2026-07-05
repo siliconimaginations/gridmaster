@@ -1,0 +1,116 @@
+/* ── Challenge HUD panel ────────────────────────────────────────────────────── */
+
+.panel {
+  position: absolute;
+  top: 64px;      /* below TopHud (~56px) with 8px gap */
+  right: 16px;
+  width: 220px;
+  border-radius: 10px;
+  background: rgba(10, 14, 26, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-left: 3px solid #4ade80; /* urgency colour overrides this below */
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.65);
+  font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  color: #e8eaf0;
+  padding: 12px 14px;
+  pointer-events: all;
+  z-index: 30;
+  animation: slideDown 0.25s ease;
+}
+
+/* ── Urgency tiers ────────────────────────────────────────────────────────── */
+
+.urgent0 { border-left-color: #4ade80; } /* ≥ 20 min → green */
+.urgent1 { border-left-color: #f59e0b; } /* 10–19 min → amber */
+.urgent2 { border-left-color: #ef4444; } /* < 10 min  → red   */
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+
+/* ── Header ───────────────────────────────────────────────────────────────── */
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.icon {
+  font-size: 13px;
+}
+
+.label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.10em;
+  color: #94a3b8;
+  text-transform: uppercase;
+}
+
+/* ── Objective ────────────────────────────────────────────────────────────── */
+
+.objective {
+  font-size: 12px;
+  line-height: 1.4;
+  color: #cbd5e1;
+  margin-bottom: 10px;
+}
+
+/* ── Stats row ────────────────────────────────────────────────────────────── */
+
+.stats {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.stat {
+  flex: 1;
+}
+
+.statValue {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 2px;
+}
+
+.statLabel {
+  font-size: 10px;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ── Time-remaining colour applied to statValue ───────────────────────────── */
+
+.urgent0.statValue,
+.panel.urgent0 .stats .stat:first-child .statValue {
+  color: #4ade80;
+}
+
+.panel.urgent1 .stats .stat:first-child .statValue {
+  color: #f59e0b;
+}
+
+.panel.urgent2 .stats .stat:first-child .statValue {
+  color: #ef4444;
+}
+
+/* ── Health colours ───────────────────────────────────────────────────────── */
+
+.healthGood { color: #4ade80; }
+.healthWarn { color: #f59e0b; }
+.healthCrit { color: #ef4444; }
+
+/* ── Hint ─────────────────────────────────────────────────────────────────── */
+
+.hint {
+  font-size: 10px;
+  color: #475569;
+  line-height: 1.4;
+  font-style: italic;
+}

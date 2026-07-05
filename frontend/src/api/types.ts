@@ -120,6 +120,11 @@ export interface GameStateUpdate {
    * Null/absent for FREE_PLAY and CHALLENGE sessions.
    */
   tutorialStep?: number | null
+  /**
+   * Game-minutes remaining until the challenge deadline. Non-null only for
+   * CHALLENGE-mode sessions; clamped to 0 once the deadline passes.
+   */
+  challengeTimeRemainingMinutes?: number | null
 }
 
 /** Sent in a ConnectionStatus message when type === 'GAME_OVER'. */
@@ -128,6 +133,8 @@ export interface GameOverDto {
   gridTimeManagedMinutes: number
   averageHealthScore: number
   eventsHandledCount: number
+  /** True when the player won (challenge victory); false for defeat. */
+  won?: boolean
 }
 
 /**

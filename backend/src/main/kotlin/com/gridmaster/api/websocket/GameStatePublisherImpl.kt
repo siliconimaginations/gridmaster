@@ -47,6 +47,7 @@ class GameStatePublisherImpl(
         pendingCards: List<EventCard>,
         healthScore: Int?,
         tutorialStep: Int?,
+        challengeTimeRemainingMinutes: Int?,
     ) {
         val isFull = tickNumber % GameStatePublisher.FULL_STATE_INTERVAL_TICKS == 0L
         val state = sessionState.getOrPut(sessionId) { SessionPublishState() }
@@ -63,6 +64,7 @@ class GameStatePublisherImpl(
                 pendingCards,
                 healthScore = healthScore,
                 tutorialStep = tutorialStep,
+                challengeTimeRemainingMinutes = challengeTimeRemainingMinutes,
             )
         } else {
             doPublishDelta(
@@ -77,6 +79,7 @@ class GameStatePublisherImpl(
                 pendingCards,
                 healthScore = healthScore,
                 tutorialStep = tutorialStep,
+                challengeTimeRemainingMinutes = challengeTimeRemainingMinutes,
             )
         }
     }
@@ -155,6 +158,7 @@ class GameStatePublisherImpl(
         pendingCards: List<EventCard>,
         healthScore: Int? = null,
         tutorialStep: Int? = null,
+        challengeTimeRemainingMinutes: Int? = null,
     ) {
         val smc = sessionStore.find(sessionId)?.latestDispatchResult?.systemMarginalCostPerMwh
         val networkDto = powerFlowResult.snapshot.toNetworkWsDto(smc)
@@ -173,6 +177,7 @@ class GameStatePublisherImpl(
                 pendingEventCards = pendingCards.map { it.toDto() },
                 healthScore = healthScore,
                 tutorialStep = tutorialStep,
+                challengeTimeRemainingMinutes = challengeTimeRemainingMinutes,
             )
 
         val state = sessionState.getOrPut(sessionId) { SessionPublishState() }
@@ -195,6 +200,7 @@ class GameStatePublisherImpl(
         pendingCards: List<EventCard>,
         healthScore: Int? = null,
         tutorialStep: Int? = null,
+        challengeTimeRemainingMinutes: Int? = null,
     ) {
         val smc = sessionStore.find(sessionId)?.latestDispatchResult?.systemMarginalCostPerMwh
         // Computed every DELTA tick for hash-comparison; O(N) single-pass, negligible at
@@ -228,6 +234,7 @@ class GameStatePublisherImpl(
                 pendingEventCards = if (cardsChanged) cards else null,
                 healthScore = healthScore,
                 tutorialStep = tutorialStep,
+                challengeTimeRemainingMinutes = challengeTimeRemainingMinutes,
             )
 
         if (networkChanged) state.lastNetworkHash = networkDto.hashCode()
