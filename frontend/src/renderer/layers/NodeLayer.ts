@@ -113,12 +113,15 @@ export class NodeLayer {
       const sbar   = group.getChildByName('sbar')   as PIXI.Graphics | null
       const icon   = group.getChildByName('icon')   as PIXI.Graphics | null
 
+      const fuel = group.getChildByName('fuel') as PIXI.Graphics | null
+
       if (sprite) {
         sprite.visible = lod > 0
         if (lod > 0) sprite.scale.set(lod === 1 ? 0.75 : 1.0)
       }
       if (vdot) vdot.visible = lod > 0
       if (sbar) sbar.visible = lod >= 2
+      if (fuel) fuel.visible = lod === 1
       if (icon) {
         icon.visible = lod === 0
         // Redraw icon when switching into LOD 0 to reflect latest violation state
@@ -167,6 +170,14 @@ export class NodeLayer {
       sbar.visible = lod >= 2
       drawStateBar(sbar, bus)
       group.addChild(sbar)
+
+      // Fuel badge (generators only, visible at LOD 1 — the LOD-0 icon
+      // already embeds the glyph, and LOD 2 shows full sprite detail) (#335)
+      const fuel = new PIXI.Graphics()
+      fuel.label   = 'fuel'
+      fuel.visible = lod === 1
+      drawFuelBadge(fuel, bus)
+      group.addChild(fuel)
     }
 
     // Icon — visible only at LOD 0
@@ -199,10 +210,9 @@ function drawBusIcon(g: PIXI.Graphics, bus: BusNode): void {
       g.circle(0, 0, 20)
        .fill(0xffd700)
        .stroke({ color: 0xb8860b, width: 1.5 })
-      // Dark lightning bolt polygon (flat [x,y] pairs)
-      //  Top right → right bump → notch → bottom → left bump → notch → back
-      g.poly([3, -10, 6, -1, 1, -1, -3, 10, -6, 1, -1, 1])
-       .fill(0x1a1a1a)
+      // Fuel-type glyph inside the circle; falls back to the classic
+      // lightning bolt when fuelType is unknown (#335)
+      drawFuelIcon(g, bus.fuelType, 0, 0, 11)
       break
     }
 
@@ -243,6 +253,114 @@ function drawBusIcon(g: PIXI.Graphics, bus: BusNode): void {
       break
     }
   }
+}
+
+// ── Fuel-type glyphs (#335) ───────────────────────────────────────────────────
+
+/**
+ * Draws a fuel-type glyph centred at (cx, cy) with radius `size`.
+ *
+ * Glyph set: GAS/COAL flame (orange / grey), NUCLEAR trefoil, WIND turbine,
+ * SOLAR sun, HYDRO waves; unknown or missing fuel falls back to the classic
+ * lightning bolt. All shapes are defined for a base radius of 10 and scaled
+ * by `k = size / 10`, so the same glyph works inside the LOD-0 circle and
+ * the smaller LOD-1 badge.
+ *
+ * Uses only Graphics primitives — no sprite assets (issue #335).
+ */
+export function drawFuelIcon(
+  g: PIXI.Graphics,
+  fuelType: string | undefined,
+  cx: number,
+  cy: number,
+  size: number,
+): void {
+  const k = size / 10
+  const mapPts = (pts: number[]): number[] =>
+    pts.map((v, i) => (i % 2 === 0 ? cx + v * k : cy + v * k))
+
+  switch (fuelType?.toUpperCase()) {
+    case 'GAS': {
+      g.poly(mapPts([0, -10, 6, 2, 4, 6, -4, 6, -6, 2])).fill(0xff7f2a)
+      g.poly(mapPts([0, -8, 4, 1, 3, 5, -3, 5, -4, 1])).fill(0xffd24a)
+      break
+    }
+
+    case 'COAL': {
+      g.poly(mapPts([0, -10, 6, 2, 4, 6, -4, 6, -6, 2])).fill(0x4a4a4a)
+      g.poly(mapPts([0, -8, 4, 1, 3, 5, -3, 5, -4, 1])).fill(0x777777)
+      break
+    }
+
+    case 'NUCLEAR': {
+      g.circle(cx, cy, 2 * k).fill(0x111111)
+      for (const angleDeg of [90, 210, 330]) {
+        const rad = (angleDeg * Math.PI) / 180
+        const spread = (14 * Math.PI) / 180
+        g.poly([
+          cx + Math.cos(rad) * 3.5 * k, cy + Math.sin(rad) * 3.5 * k,
+          cx + Math.cos(rad + spread) * 9 * k, cy + Math.sin(rad + spread) * 9 * k,
+          cx + Math.cos(rad - spread) * 9 * k, cy + Math.sin(rad - spread) * 9 * k,
+        ]).fill(0x111111)
+      }
+      break
+    }
+
+    case 'WIND': {
+      g.circle(cx, cy, 1.5 * k).fill(0x1a4d80)
+      for (const angleDeg of [0, 120, 240]) {
+        const rad = (angleDeg * Math.PI) / 180
+        const spread = (6 * Math.PI) / 180
+        g.poly([
+          cx, cy,
+          cx + Math.cos(rad + spread) * 10 * k, cy + Math.sin(rad + spread) * 10 * k,
+          cx + Math.cos(rad - spread) * 10 * k, cy + Math.sin(rad - spread) * 10 * k,
+        ]).fill(0x2266cc)
+      }
+      break
+    }
+
+    case 'SOLAR': {
+      g.circle(cx, cy, 4.5 * k).fill(0xcc5500)
+      for (let i = 0; i < 8; i++) {
+        const angle = (i * Math.PI) / 4
+        g.moveTo(cx + Math.cos(angle) * 6 * k, cy + Math.sin(angle) * 6 * k)
+          .lineTo(cx + Math.cos(angle) * 9.5 * k, cy + Math.sin(angle) * 9.5 * k)
+          .stroke({ color: 0xcc5500, width: 1.5 * k })
+      }
+      break
+    }
+
+    case 'HYDRO': {
+      for (const baseYRel of [-2, 3]) {
+        const yBase = cy + baseYRel * k
+        g.moveTo(cx - 8 * k, yBase)
+          .quadraticCurveTo(cx - 4 * k, yBase - 5 * k, cx, yBase)
+          .quadraticCurveTo(cx + 4 * k, yBase + 5 * k, cx + 8 * k, yBase)
+          .stroke({ color: 0x1155cc, width: 2 * k })
+      }
+      break
+    }
+
+    default: {
+      g.poly(mapPts([3, -10, 6, -1, 1, -1, -3, 10, -6, 1, -1, 1])).fill(0x1a1a1a)
+    }
+  }
+}
+
+/**
+ * Draws the LOD-1 fuel badge for a generator bus: a dark disc anchored near
+ * the sprite's roofline with the fuel glyph inside. Hidden at LOD 0 (the main
+ * icon already contains the glyph) and LOD 2 (full sprite detail).
+ */
+function drawFuelBadge(g: PIXI.Graphics, bus: BusNode): void {
+  if (bus.role !== 'gen') return
+  const bx = 34
+  const by = WIRE_OFFSET.gen + 10
+  g.circle(bx, by, 12)
+    .fill({ color: 0x10141a, alpha: 0.85 })
+    .stroke({ color: 0xffffff, alpha: 0.3, width: 1 })
+  drawFuelIcon(g, bus.fuelType, bx, by, 8)
 }
 
 // ── City-size helpers ─────────────────────────────────────────────────────────
