@@ -67,11 +67,30 @@ async function waitForStep(page: Page, step: number): Promise<void> {
 }
 
 /**
- * Drives a freshly bootstrapped tutorial from step 1 to step 3:
+ * Waits until the tutorial overlay's step is ≥ `step`.
+ *
+ * Steps 3→4 auto-advance when the scheduled demand spike fires (~1 tick), so
+ * asserting an exact intermediate step races the step machine on slow CI —
+ * "at least" is the stable contract for transitions with auto-advancing
+ * successors.
+ */
+async function waitForStepAtLeast(page: Page, step: number): Promise<void> {
+  await page.waitForFunction(
+    (min) => {
+      const el = document.querySelector('[data-testid="tutorial-overlay"]')
+      return el !== null && Number(el.getAttribute('data-step')) >= min
+    },
+    step,
+    { timeout: 25_000 },
+  )
+}
+
+/**
+ * Drives a freshly bootstrapped tutorial from step 1 past step 2:
  * waits for the tick-based advance to step 2, then sends the
  * SetGeneratorOutput command the step machine listens for.
  */
-async function advanceToStep3(page: Page): Promise<void> {
+async function advancePastStep2(page: Page): Promise<void> {
   await waitForStep(page, 2)
 
   // Network is populated by the first tick; pick any committed generator
@@ -91,15 +110,19 @@ async function advanceToStep3(page: Page): Promise<void> {
     },
     [genId, Math.round(maxMw * 0.5)] as [string, number],
   )
-  await waitForStep(page, 3)
+  await waitForStepAtLeast(page, 3)
 }
 
 test('TU-01 tutorial session shows step 1 overlay on load', async ({ page, request }) => {
   const { token, sessionId } = await bootstrapTutorial(page, request)
 
-  const overlay = page.locator('[data-testid="tutorial-overlay"][data-step="1"]')
+  // Step 1 auto-advances to 2 after only 3 ticks (~3 s) — on a slow CI runner
+  // that window can close before this assertion polls, so accept step 1 or 2.
+  // Step 2 requires a player command to advance, so the range is stable.
+  const overlay = page.locator('[data-testid="tutorial-overlay"]')
   await expect(overlay).toBeVisible()
-  await expect(overlay).toContainText('Step 1 of 5')
+  await expect(overlay).toHaveAttribute('data-step', /^[12]$/)
+  await expect(overlay).toContainText(/Step [12] of 5/)
 
   await deleteSession(request, token, sessionId)
 })
@@ -116,8 +139,11 @@ test('TU-02 step 1 auto-advances to step 2 after three ticks', async ({ page, re
 test('TU-03 SetGeneratorOutput command advances step 2 to step 3', async ({ page, request }) => {
   const { token, sessionId } = await bootstrapTutorial(page, request)
 
-  await advanceToStep3(page)
-  await expect(page.locator('[data-testid="tutorial-overlay"]')).toContainText('demand spike')
+  // Step 3's successor auto-advances (spike fires ~1 tick later), so the
+  // stable contract is "the command moved us past step 2" — asserting
+  // step-3 content races the spike on slow runners.
+  await advancePastStep2(page)
+  await expect(page.locator('[data-testid="tutorial-overlay"]')).toHaveAttribute('data-step', /^[34]$/)
 
   await deleteSession(request, token, sessionId)
 })
@@ -125,7 +151,7 @@ test('TU-03 SetGeneratorOutput command advances step 2 to step 3', async ({ page
 test('TU-04 demand spike fires and advances step 3 to step 4', async ({ page, request }) => {
   const { token, sessionId } = await bootstrapTutorial(page, request)
 
-  await advanceToStep3(page)
+  await advancePastStep2(page)
   // The spike is scheduled +10 game-minutes (1 tick) after entering step 3
   // and the step machine advances on the tick where it fires.
   await waitForStep(page, 4)
@@ -137,7 +163,7 @@ test('TU-04 demand spike fires and advances step 3 to step 4', async ({ page, re
 test('TU-05 pause then resume completes the tutorial', async ({ page, request }) => {
   const { token, sessionId } = await bootstrapTutorial(page, request)
 
-  await advanceToStep3(page)
+  await advancePastStep2(page)
   await waitForStep(page, 4)
 
   // Pause…
