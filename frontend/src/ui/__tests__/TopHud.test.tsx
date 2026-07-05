@@ -27,6 +27,8 @@ function mockStore(overrides: Record<string, unknown> = {}) {
       clockState: 'RUNNING',
       network: makeNetwork(500),
       violations: [],
+      healthScore: null,
+      healthHistory: [],
       ...overrides,
     }
     return selector ? selector(state) : state

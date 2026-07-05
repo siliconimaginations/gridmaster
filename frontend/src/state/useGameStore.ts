@@ -18,6 +18,9 @@ import type {
   ViolationDto,
 } from '../api/types'
 
+/** Number of health-score samples kept for the TopHud sparkline (#333). */
+export const HEALTH_HISTORY_SIZE = 30
+
 // ── Store shape ───────────────────────────────────────────────────────────────
 
 interface GameStore {
@@ -60,6 +63,12 @@ interface GameStore {
   gameOver: GameOverDto | null
   /** Server-computed 0-100 health score from the last tick. */
   healthScore: number | null
+  /**
+   * Ring-buffer of the last [HEALTH_HISTORY_SIZE] health-score samples,
+   * oldest first. Appended on every update that carries a healthScore;
+   * feeds the TopHud sparkline (#333).
+   */
+  healthHistory: number[]
   /** Current tutorial step (1–5); null for non-tutorial sessions. */
   tutorialStep: number | null
   /** Game-minutes remaining until challenge deadline; null for non-challenge sessions. */
@@ -117,6 +126,7 @@ const INITIAL_GAME_STATE = {
   ucSchedule: null as boolean[] | null,
   gameOver: null as GameOverDto | null,
   healthScore: null as number | null,
+  healthHistory: [] as number[],
   tutorialStep: null as number | null,
   challengeTimeRemainingMinutes: null as number | null,
 } as const satisfies Partial<GameStore>
@@ -150,9 +160,16 @@ export const useGameStore = create<GameStore>()(subscribeWithSelector((set, get)
 
   // ── applyUpdate ─────────────────────────────────────────────────────────────
   applyUpdate: (update: GameStateUpdate) => {
+    // Ring-buffer append (#333): one sample per update that carries a score.
+    // FULL updates replace state but the trend history survives within a session.
+    const appendHealth = (history: number[]): number[] =>
+      update.healthScore != null
+        ? [...history, update.healthScore].slice(-HEALTH_HISTORY_SIZE)
+        : history
+
     if (update.type === 'FULL') {
       // FULL: replace all fields unconditionally
-      set({
+      set((state) => ({
         tickNumber: update.tickNumber,
         gameTimeMinutes: update.gameTimeMinutes,
         clockState: update.clockState,
@@ -163,9 +180,10 @@ export const useGameStore = create<GameStore>()(subscribeWithSelector((set, get)
         alerts: update.alerts ?? [],
         pendingEventCards: update.pendingEventCards ?? [],
         healthScore: update.healthScore ?? null,
+        healthHistory: appendHealth(state.healthHistory),
         tutorialStep: update.tutorialStep ?? null,
         challengeTimeRemainingMinutes: update.challengeTimeRemainingMinutes ?? null,
-      })
+      }))
     } else {
       // DELTA: clock fields are always present — set them unconditionally.
       // Network/alert fields are optional — only merge when present. Closes #101.
@@ -185,7 +203,7 @@ export const useGameStore = create<GameStore>()(subscribeWithSelector((set, get)
         tutorialStep: update.tutorialStep ?? undefined,
         challengeTimeRemainingMinutes: update.challengeTimeRemainingMinutes ?? undefined,
       })
-      set({ ...clockUpdate, ...optionalUpdate })
+      set((state) => ({ ...clockUpdate, ...optionalUpdate, healthHistory: appendHealth(state.healthHistory) }))
     }
   },
 
@@ -231,7 +249,7 @@ export const useGameStore = create<GameStore>()(subscribeWithSelector((set, get)
     wsClient?.disconnect()
     wsClient = null
     // Resets all game state to initial values so a future session starts clean
-    set({ ...INITIAL_GAME_STATE, connectionStatus: 'disconnected', sessionId: null, sessionInvalidated: false, selectedElement: null, gameOver: null, healthScore: null })
+    set({ ...INITIAL_GAME_STATE, connectionStatus: 'disconnected', sessionId: null, sessionInvalidated: false, selectedElement: null, gameOver: null, healthScore: null, healthHistory: [] })
   },
 
   // ── selectElement ────────────────────────────────────────────────────────────
