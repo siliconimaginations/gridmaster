@@ -1,6 +1,8 @@
 package com.gridmaster.api
 
 import com.gridmaster.api.dto.ApplyMutationsRequest
+import com.gridmaster.api.dto.ContingencyBranchResultDto
+import com.gridmaster.api.dto.ContingencyViolationDto
 import com.gridmaster.api.dto.DispatchRequest
 import com.gridmaster.api.dto.NetworkMutationDto
 import com.gridmaster.api.dto.RunPowerFlowRequest
@@ -10,6 +12,7 @@ import com.gridmaster.api.websocket.toNetworkWsDto
 import com.gridmaster.engine.contingency.ContingencyAnalysisParameters
 import com.gridmaster.engine.contingency.ContingencyAnalysisResult
 import com.gridmaster.engine.contingency.ContingencyAnalysisService
+import com.gridmaster.engine.contingency.ContingencyElement
 import com.gridmaster.engine.dispatch.DispatchMode
 import com.gridmaster.engine.dispatch.DispatchParameters
 import com.gridmaster.engine.dispatch.DispatchResult
@@ -251,6 +254,51 @@ class PhysicsController(
             }
         }
         return ResponseEntity.accepted().build()
+    }
+
+    /**
+     * GET /api/sessions/{sessionId}/contingency/{branchId} — post-contingency impact
+     * of losing one branch, extracted from the latest cached N-1 result.
+     *
+     * Returns 204 when no contingency analysis has completed yet, and 404 when the
+     * latest result contains no contingency whose outage element is the requested
+     * branch (e.g. the ID belongs to a generator, or the branch was excluded).
+     */
+    @GetMapping("/contingency/{branchId}")
+    fun getContingencyForBranch(
+        @PathVariable sessionId: String,
+        @PathVariable branchId: String,
+    ): ResponseEntity<ContingencyBranchResultDto> {
+        val session = sessionStore.get(sessionId)
+        val result = session.latestContingencyResult ?: return ResponseEntity.noContent().build()
+
+        val cr =
+            result.contingencyResults.find { contingencyResult ->
+                contingencyResult.contingency.elements.any { element ->
+                    element is ContingencyElement.LineOutage && element.lineId == branchId
+                }
+            } ?: return ResponseEntity.notFound().build()
+
+        val dto =
+            ContingencyBranchResultDto(
+                contingencyId = cr.contingency.id,
+                status = cr.status,
+                violations =
+                    cr.violations.map { v ->
+                        ContingencyViolationDto(
+                            equipmentId = v.equipmentId,
+                            equipmentType = v.equipmentType.name,
+                            violationType = v.violationType.name,
+                            value = v.value,
+                            limit = v.limit,
+                            loadingPercent = v.loadingPercent,
+                            severity = v.severity.name,
+                        )
+                    },
+                analysisCompletedAt = result.completedAt,
+            )
+
+        return ResponseEntity.ok(dto)
     }
 
     // -------------------------------------------------------------------------

@@ -11,6 +11,7 @@
 
 import type {
   ClockStatusResponse,
+  ContingencyBranchResult,
   CreateSessionRequest,
   DispatchRequest,
   GridNetworkDto,
@@ -226,6 +227,30 @@ export function getLatestPowerFlow(sessionId: string): Promise<unknown> {
 /** Triggers a synchronous AC power-flow run and returns the result. */
 export function runPowerFlow(sessionId: string): Promise<unknown> {
   return apiFetch<unknown>(`/api/sessions/${sessionId}/powerflow/run`, { method: 'POST' })
+}
+
+// ── Contingency ───────────────────────────────────────────────────────────────
+
+/**
+ * Returns the post-contingency impact of losing one branch (N-1), or null.
+ *
+ * Null means "nothing to show": the server responded 204 (no contingency
+ * analysis has completed yet) or 404 (the latest result has no contingency
+ * for this branch). Any other error is rethrown.
+ */
+export async function getContingencyForBranch(
+  sessionId: string,
+  branchId: string,
+): Promise<ContingencyBranchResult | null> {
+  try {
+    const result = await apiFetch<ContingencyBranchResult | undefined>(
+      `/api/sessions/${sessionId}/contingency/${encodeURIComponent(branchId)}`,
+    )
+    return result ?? null
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) return null
+    throw e
+  }
 }
 
 // ── Dispatch & unit commitment ─────────────────────────────────────────────────

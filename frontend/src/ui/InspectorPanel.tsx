@@ -1,6 +1,15 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import type { BranchDto, BusDto, GeneratorDto, GridNetworkDto, LoadDto, ViolationDto } from '../api/types'
+import type {
+  BranchDto,
+  BusDto,
+  ContingencyBranchResult,
+  GeneratorDto,
+  GridNetworkDto,
+  LoadDto,
+  ViolationDto,
+} from '../api/types'
+import { getContingencyForBranch } from '../api/restClient'
 import { useGameStore } from '../state/useGameStore'
 import styles from './InspectorPanel.module.css'
 
@@ -51,6 +60,91 @@ function GeneratorCard({ id, network }: { id: string; network: GridNetworkDto })
   )
 }
 
+/**
+ * Collapsible "N-1 Security" section for the line inspector card.
+ *
+ * Shows the post-contingency impact of losing this line, fetched from
+ * GET /contingency/{branchId} on mount: a status chip (secure / violation
+ * count / non-convergence) plus a per-violation breakdown when expanded.
+ * Renders a neutral "No analysis" chip until an N-1 run has completed.
+ */
+function N1SecuritySection({ branchId }: { branchId: string }) {
+  const sessionId = useGameStore((s) => s.sessionId)
+  const [data, setData] = useState<ContingencyBranchResult | null>(null)
+  const [loaded, setLoaded] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+
+  useEffect(() => {
+    if (!sessionId) return
+    let cancelled = false
+
+    getContingencyForBranch(sessionId, branchId)
+      .then((result) => {
+        if (!cancelled) {
+          setData(result)
+          setLoaded(true)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setLoaded(true)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [sessionId, branchId])
+
+  let chip = <span className={styles.n1ChipNeutral}>…</span>
+  if (loaded) {
+    if (!data) {
+      chip = <span className={styles.n1ChipNeutral}>No analysis</span>
+    } else if (data.status === 'SECURE') {
+      chip = <span className={styles.n1ChipSecure}>Secure ✓</span>
+    } else if (data.status === 'VIOLATION') {
+      chip = (
+        <span className={styles.n1ChipViolation}>
+          {data.violations.length} violation{data.violations.length === 1 ? '' : 's'}
+        </span>
+      )
+    } else {
+      chip = <span className={styles.n1ChipViolation}>Would not converge</span>
+    }
+  }
+
+  return (
+    <div className={styles.n1Section} data-testid="n1-security-section">
+      <button
+        type="button"
+        className={styles.n1Header}
+        data-testid="n1-toggle"
+        onClick={() => setExpanded((e) => !e)}
+      >
+        {expanded ? '▾' : '▸'} N-1 Security {chip}
+      </button>
+
+      {expanded && data && data.violations.length > 0 && (
+        <div>
+          {data.violations.map((v) => (
+            <div key={`${v.equipmentId}-${v.violationType}`}>
+              <Row
+                label={v.equipmentId}
+                value={`${v.violationType} ${fmt(v.loadingPercent)}%`}
+                cls={styles.valueCritical}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {expanded && data && data.status === 'SECURE' && (
+        <Row label="If this line trips" value="No violations" />
+      )}
+
+      {expanded && !data && loaded && <Row label="Analysis" value="Not yet run" />}
+    </div>
+  )
+}
+
 function LineCard({ id, network }: { id: string; network: GridNetworkDto }) {
   const branch = network.branches.find((b) => b.id === id) as BranchDto | undefined
   if (!branch) return null
@@ -67,6 +161,7 @@ function LineCard({ id, network }: { id: string; network: GridNetworkDto }) {
       <Row label="From" value={fromBus?.name ?? branch.fromBusId} />
       <Row label="To" value={toBus?.name ?? branch.toBusId} />
       <Row label="Status" value={branch.connected ? 'Connected' : 'Tripped'} />
+      <N1SecuritySection branchId={id} />
     </>
   )
 }

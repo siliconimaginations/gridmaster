@@ -4,7 +4,14 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.gridmaster.api.security.JwtAuthFilter
 import com.gridmaster.api.security.JwtService
 import com.gridmaster.api.security.SecurityConfig
+import com.gridmaster.engine.contingency.Contingency
+import com.gridmaster.engine.contingency.ContingencyAnalysisResult
 import com.gridmaster.engine.contingency.ContingencyAnalysisService
+import com.gridmaster.engine.contingency.ContingencyElement
+import com.gridmaster.engine.contingency.ContingencyResult
+import com.gridmaster.engine.contingency.PostContingencyStatus
+import com.gridmaster.engine.contingency.PostContingencyViolation
+import com.gridmaster.engine.contingency.ViolationType
 import com.gridmaster.engine.dispatch.DispatchResult
 import com.gridmaster.engine.dispatch.DispatchService
 import com.gridmaster.engine.dispatch.GeneratorTarget
@@ -18,10 +25,12 @@ import com.gridmaster.engine.model.GridNetwork
 import com.gridmaster.engine.model.NetworkMutation
 import com.gridmaster.engine.network.IidmNetworkMapper
 import com.gridmaster.engine.powerflow.ConvergenceStatus
+import com.gridmaster.engine.powerflow.EquipmentType
 import com.gridmaster.engine.powerflow.PowerFlowParameters
 import com.gridmaster.engine.powerflow.PowerFlowResult
 import com.gridmaster.engine.powerflow.PowerFlowService
 import com.gridmaster.engine.powerflow.SolveMode
+import com.gridmaster.engine.powerflow.ViolationSeverity
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -279,6 +288,94 @@ class PhysicsControllerTest {
         mvc.get("$BASE/contingencies")
             .andExpect { status { isNoContent() } }
     }
+
+    // -----------------------------------------------------------------------
+    // GET /contingency/{branchId}
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `GET contingency branchId returns 204 when no result cached`() {
+        mockSession.latestContingencyResult = null
+        mvc.get("$BASE/contingency/L1")
+            .andExpect { status { isNoContent() } }
+    }
+
+    @Test
+    fun `GET contingency branchId returns 404 when branch has no contingency`() {
+        mockSession.latestContingencyResult =
+            contingencyAnalysisResult(
+                secureLineResult("L2"),
+            )
+        mvc.get("$BASE/contingency/L1")
+            .andExpect { status { isNotFound() } }
+    }
+
+    @Test
+    fun `GET contingency branchId returns mapped result for matching line`() {
+        val violation =
+            PostContingencyViolation(
+                equipmentId = "L5",
+                equipmentType = EquipmentType.LINE,
+                violationType = ViolationType.THERMAL,
+                value = 1250.0,
+                limit = 1000.0,
+                loadingPercent = 125.0,
+                severity = ViolationSeverity.CRITICAL,
+            )
+        mockSession.latestContingencyResult =
+            contingencyAnalysisResult(
+                ContingencyResult(
+                    contingency =
+                        Contingency(
+                            id = "N1-LINE-L1",
+                            description = "Loss of line L1",
+                            elements = listOf(ContingencyElement.LineOutage("L1")),
+                        ),
+                    status = PostContingencyStatus.VIOLATION,
+                    violations = listOf(violation),
+                ),
+                secureLineResult("L2"),
+            )
+
+        mvc.get("$BASE/contingency/L1")
+            .andExpect {
+                status { isOk() }
+                jsonPath("$.contingencyId") { value("N1-LINE-L1") }
+                jsonPath("$.status") { value("VIOLATION") }
+                jsonPath("$.violations[0].equipmentId") { value("L5") }
+                jsonPath("$.violations[0].equipmentType") { value("LINE") }
+                jsonPath("$.violations[0].violationType") { value("THERMAL") }
+                jsonPath("$.violations[0].value") { value(1250.0) }
+                jsonPath("$.violations[0].limit") { value(1000.0) }
+                jsonPath("$.violations[0].loadingPercent") { value(125.0) }
+                jsonPath("$.violations[0].severity") { value("CRITICAL") }
+            }
+    }
+
+    /** Builds a secure (no-violation) [ContingencyResult] for the line outage of [lineId]. */
+    private fun secureLineResult(lineId: String): ContingencyResult =
+        ContingencyResult(
+            contingency =
+                Contingency(
+                    id = "N1-LINE-$lineId",
+                    description = "Loss of line $lineId",
+                    elements = listOf(ContingencyElement.LineOutage(lineId)),
+                ),
+            status = PostContingencyStatus.SECURE,
+            violations = emptyList(),
+        )
+
+    /** Wraps [results] in a [ContingencyAnalysisResult] with neutral run metadata. */
+    private fun contingencyAnalysisResult(vararg results: ContingencyResult): ContingencyAnalysisResult =
+        ContingencyAnalysisResult(
+            baseCaseSecure = results.all { it.status == PostContingencyStatus.SECURE },
+            contingencyResults = results.toList(),
+            criticalContingencies = emptyList(),
+            analysisTimeMs = 0L,
+            completedAt = Instant.now(),
+            preScreenedContingenciesCount = results.size,
+            fullAcContingenciesCount = results.size,
+        )
 
     // -----------------------------------------------------------------------
     // POST /contingencies/trigger
