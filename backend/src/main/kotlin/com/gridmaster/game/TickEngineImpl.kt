@@ -65,6 +65,7 @@ class TickEngineImpl(
     private val contingencyAnalysisService: ContingencyAnalysisService,
     private val eventEngine: EventEngine,
     private val tutorialEngine: TutorialEngine,
+    private val challengeEngine: com.gridmaster.game.challenge.ChallengeEngine,
     private val networkRepository: NetworkRepository,
     @Value("\${gridmaster.clock.auto-save-interval:$DEFAULT_AUTO_SAVE_INTERVAL}")
     private val autoSaveInterval: Long,
@@ -113,6 +114,7 @@ class TickEngineImpl(
             }
         eventEngine.register(sessionId)
         tutorialEngine.register(sessionId, gameSession.mode)
+        challengeEngine.register(sessionId, gameSession.mode)
         log.info("Started tick loop for session {} at {}×", sessionId, runtime.speedMultiplier)
         return runtime.toStatus()
     }
@@ -195,6 +197,7 @@ class TickEngineImpl(
         sessions.remove(sessionId)
         eventEngine.unregister(sessionId)
         tutorialEngine.unregister(sessionId)
+        challengeEngine.unregister(sessionId)
         networkRepository.evictSession(sessionId)
         log.info("Stopped tick loop for session {}", sessionId)
     }
@@ -302,11 +305,23 @@ class TickEngineImpl(
             firedEvents = firedEvents,
         )
 
-        // Step 5b: health score tracking + game-over detection
+        // Step 5b: health score tracking + game-over detection (defeat path)
         val tickHealthScore = computeHealthScore(pfResult)
         val gameOver = updateHealthAndCheckGameOver(runtime, tickHealthScore)
         if (gameOver) {
             triggerGameOver(runtime)
+            return
+        }
+
+        // Step 7c: ChallengeEngine.onTick() — evaluates victory condition; no-op for non-CHALLENGE
+        val victory =
+            challengeEngine.onTick(
+                sessionId = runtime.sessionId,
+                gameTimeMinutes = ctx.gameTimeMinutes,
+                healthScore = tickHealthScore,
+            )
+        if (victory) {
+            triggerVictory(runtime, tickHealthScore)
             return
         }
 
@@ -322,6 +337,7 @@ class TickEngineImpl(
             pendingCards = eventEngine.pendingCards(runtime.sessionId),
             healthScore = tickHealthScore,
             tutorialStep = tutorialEngine.currentStep(runtime.sessionId),
+            challengeTimeRemainingMinutes = challengeEngine.challengeTimeRemainingMinutes(runtime.sessionId),
         )
 
         // Step 9: auto-save
@@ -507,6 +523,66 @@ class TickEngineImpl(
         sessions.remove(runtime.sessionId)
         eventEngine.unregister(runtime.sessionId)
         tutorialEngine.unregister(runtime.sessionId)
+        challengeEngine.unregister(runtime.sessionId)
+        networkRepository.evictSession(runtime.sessionId)
+    }
+
+    /**
+     * Publish a GAME_OVER/won message, persist the result, and tear down the session.
+     *
+     * Called when [ChallengeEngine.onTick] returns true (victory condition met).
+     */
+    private fun triggerVictory(
+        runtime: SessionRuntime,
+        finalHealthScore: Int,
+    ) {
+        val avgScore: Int
+        synchronized(runtime) {
+            runtime.gameOverTriggered = true
+            avgScore =
+                if (runtime.totalHealthSamples > 0) {
+                    (runtime.totalHealthSum / runtime.totalHealthSamples).toInt()
+                } else {
+                    finalHealthScore
+                }
+        }
+
+        log.info(
+            "Challenge victory for session {} — health={} averageHealth={}",
+            runtime.sessionId,
+            finalHealthScore,
+            avgScore,
+        )
+
+        val dto =
+            GameOverDto(
+                finalHealthScore = finalHealthScore,
+                gridTimeManagedMinutes = runtime.gameTimeMinutes,
+                averageHealthScore = avgScore,
+                eventsHandledCount = 0,
+                won = true,
+            )
+
+        gameStatePublisher?.publishGameOver(runtime.sessionId, dto)
+
+        engineScope.launch(Dispatchers.IO) {
+            try {
+                gameSessionService.markGameOver(
+                    sessionId = runtime.sessionId,
+                    userId = runtime.userId,
+                    finalScore = avgScore,
+                )
+            } catch (e: Exception) {
+                log.error("Failed to persist victory for session {}", runtime.sessionId, e)
+            }
+        }
+
+        synchronized(runtime) { runtime.clockState = ClockState.STOPPED }
+        runtime.job?.cancel()
+        sessions.remove(runtime.sessionId)
+        eventEngine.unregister(runtime.sessionId)
+        tutorialEngine.unregister(runtime.sessionId)
+        challengeEngine.unregister(runtime.sessionId)
         networkRepository.evictSession(runtime.sessionId)
     }
 

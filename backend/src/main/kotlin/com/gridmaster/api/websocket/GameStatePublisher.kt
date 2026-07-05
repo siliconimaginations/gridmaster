@@ -43,6 +43,7 @@ interface GameStatePublisher {
         pendingCards: List<EventCard>,
         healthScore: Int? = null,
         tutorialStep: Int? = null,
+        challengeTimeRemainingMinutes: Int? = null,
     )
 
     /**

@@ -62,6 +62,8 @@ interface GameStore {
   healthScore: number | null
   /** Current tutorial step (1–5); null for non-tutorial sessions. */
   tutorialStep: number | null
+  /** Game-minutes remaining until challenge deadline; null for non-challenge sessions. */
+  challengeTimeRemainingMinutes: number | null
 
   // Selection slice
   selectedElement: SelectedElementInfo | null
@@ -116,6 +118,7 @@ const INITIAL_GAME_STATE = {
   gameOver: null as GameOverDto | null,
   healthScore: null as number | null,
   tutorialStep: null as number | null,
+  challengeTimeRemainingMinutes: null as number | null,
 } as const satisfies Partial<GameStore>
 
 // ── Store ─────────────────────────────────────────────────────────────────────
@@ -161,6 +164,7 @@ export const useGameStore = create<GameStore>()(subscribeWithSelector((set, get)
         pendingEventCards: update.pendingEventCards ?? [],
         healthScore: update.healthScore ?? null,
         tutorialStep: update.tutorialStep ?? null,
+        challengeTimeRemainingMinutes: update.challengeTimeRemainingMinutes ?? null,
       })
     } else {
       // DELTA: clock fields are always present — set them unconditionally.
@@ -179,6 +183,7 @@ export const useGameStore = create<GameStore>()(subscribeWithSelector((set, get)
         pendingEventCards: update.pendingEventCards ?? undefined,
         healthScore: update.healthScore ?? undefined,
         tutorialStep: update.tutorialStep ?? undefined,
+        challengeTimeRemainingMinutes: update.challengeTimeRemainingMinutes ?? undefined,
       })
       set({ ...clockUpdate, ...optionalUpdate })
     }

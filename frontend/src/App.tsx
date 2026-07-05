@@ -14,6 +14,7 @@ import { TimelineStrip } from './ui/TimelineStrip'
 import { EventCardPanel } from './ui/EventCardPanel'
 import { GameOverPanel } from './ui/GameOverPanel'
 import { TutorialOverlay } from './ui/TutorialOverlay'
+import { ChallengeHUD } from './ui/ChallengeHUD'
 import { GridCanvas } from './components/GridCanvas'
 
 /**
@@ -111,6 +112,7 @@ export default function App() {
         <DispatchPanel open={dispatchPanelOpen} onClose={() => setDispatchPanelOpen(false)} />
         <PlanningPanel open={planningPanelOpen} onClose={() => setPlanningPanelOpen(false)} />
         <TutorialOverlay />
+        <ChallengeHUD />
       </div>
       <BootstrapOverlay status={bootstrapStatus} error={bootstrapError} onRetry={retryBootstrap} />
       <GameOverPanel />
