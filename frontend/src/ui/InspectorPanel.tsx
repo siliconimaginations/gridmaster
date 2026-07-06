@@ -166,6 +166,24 @@ function LineCard({ id, network }: { id: string; network: GridNetworkDto }) {
   )
 }
 
+/**
+ * Derived bus role, mirroring model/GridGraph.ts's BusRole logic: 'gen' if the
+ * bus hosts any generator capacity, 'load' if it hosts load demand, 'sub'
+ * otherwise. Recomputed here (rather than threaded in from GridGraph) because
+ * InspectorPanel only has the raw GridNetworkDto, not the renderer's graph.
+ */
+function busRole(id: string, network: GridNetworkDto): 'gen' | 'load' | 'sub' {
+  const genMaxMw = network.generators
+    .filter((g) => g.busId === id)
+    .reduce((s, g) => s + g.maxActivePowerMw, 0)
+  if (genMaxMw > 0) return 'gen'
+  const loadMw = network.loads
+    .filter((l) => l.busId === id)
+    .reduce((s, l) => s + l.activePowerMw, 0)
+  if (loadMw > 0) return 'load'
+  return 'sub'
+}
+
 function BusCard({ id, network }: { id: string; network: GridNetworkDto }) {
   // The clicked element's id is the bus's own id (matches BusDto.id — see
   // BusNode.id in model/GridGraph.ts), NOT substationId. Filtering by
@@ -182,8 +200,32 @@ function BusCard({ id, network }: { id: string; network: GridNetworkDto }) {
   const connectedBranches = network.branches.filter(
     (br) => br.fromBusId === id || br.toBusId === id,
   )
+
+  // Type-specific state (#370): every bus previously showed only the generic
+  // voltage/topology rows and was always labelled "Substation" regardless of
+  // what's actually attached to it. Show generation/load figures for buses
+  // that host generators or loads, in addition to the shared rows.
+  const role = busRole(id, network)
+  const gensHere = network.generators.filter((g) => g.busId === id)
+  const loadsHere = network.loads.filter((l) => l.busId === id)
+  const genMw = gensHere.reduce((s, g) => s + g.activePowerMw, 0)
+  const genMaxMw = gensHere.reduce((s, g) => s + g.maxActivePowerMw, 0)
+  const loadMw = loadsHere.reduce((s, l) => s + l.activePowerMw, 0)
+
   return (
     <>
+      {role === 'gen' && (
+        <>
+          <Row label="Generation" value={`${fmt(genMw)} MW`} />
+          <Row label="Capacity" value={`${fmt(genMaxMw)} MW`} />
+          <Row
+            label="Loading"
+            value={`${fmt(genMaxMw > 0 ? (genMw / genMaxMw) * 100 : 0)}%`}
+            cls={loadingClass(genMaxMw > 0 ? (genMw / genMaxMw) * 100 : 0)}
+          />
+        </>
+      )}
+      {role === 'load' && <Row label="Demand" value={`${fmt(loadMw)} MW`} />}
       <Row
         label="Voltage"
         value={`${fmt(primary.voltagePu, 3)} pu`}
@@ -220,8 +262,14 @@ function elementHasViolation(id: string, elementType: string, violations: Violat
 const TYPE_LABEL: Record<string, string> = {
   GENERATOR: '⚡ Generator',
   LINE: '〰 Line',
-  BUS: '🔌 Substation',
   LOAD: '🏘 City',
+}
+
+/** Header labels for BUS elements, keyed by the derived {@link busRole} (#370). */
+const BUS_ROLE_LABEL: Record<'gen' | 'load' | 'sub', string> = {
+  gen: '⚡ Generator',
+  load: '🏘 City',
+  sub: '🔌 Substation',
 }
 
 /**
@@ -250,6 +298,10 @@ export function InspectorPanel() {
 
   const { elementType, elementId } = selectedElement
   const hasViolation = elementHasViolation(elementId, elementType, violations)
+  const headerLabel =
+    elementType === 'BUS'
+      ? BUS_ROLE_LABEL[busRole(elementId, network)]
+      : (TYPE_LABEL[elementType] ?? elementType)
 
   return (
     <>
@@ -265,7 +317,7 @@ export function InspectorPanel() {
       >
         {/* Header */}
         <div className={styles.header}>
-          <span className={styles.title}>{TYPE_LABEL[elementType] ?? elementType} {elementId}</span>
+          <span className={styles.title}>{headerLabel} {elementId}</span>
           <button className={styles.closeBtn} onClick={close} aria-label="Close inspector">×</button>
         </div>
 
