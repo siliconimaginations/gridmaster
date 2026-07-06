@@ -167,12 +167,20 @@ function LineCard({ id, network }: { id: string; network: GridNetworkDto }) {
 }
 
 function BusCard({ id, network }: { id: string; network: GridNetworkDto }) {
-  // substationId is used as the BUS element ID
-  const buses = network.buses.filter((b) => b.substationId === id)
-  const primary = buses[0] as BusDto | undefined
+  // The clicked element's id is the bus's own id (matches BusDto.id — see
+  // BusNode.id in model/GridGraph.ts), NOT substationId. Filtering by
+  // `substationId === id` never matched anything (substationId is a
+  // different, often-null grouping field), so this card always rendered
+  // empty (#364).
+  const primary = network.buses.find((b) => b.id === id) as BusDto | undefined
   if (!primary) return null
+  // Other buses sharing this one's substation, for a "voltage levels here"
+  // count — falls back to just this bus when it has no substation grouping.
+  const buses = primary.substationId
+    ? network.buses.filter((b) => b.substationId === primary.substationId)
+    : [primary]
   const connectedBranches = network.branches.filter(
-    (br) => buses.some((b) => b.id === br.fromBusId || b.id === br.toBusId),
+    (br) => br.fromBusId === id || br.toBusId === id,
   )
   return (
     <>

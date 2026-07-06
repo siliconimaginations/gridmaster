@@ -93,10 +93,43 @@ describe('InspectorPanel', () => {
   })
 
   it('shows bus metrics', () => {
-    mockStore({ elementType: 'BUS', elementId: SUB_ID })
+    // The real click path (NodeLayer.onBusClick → PixiGridRenderer.onSelect)
+    // passes the bus's own id, matching BusDto.id — not substationId (#364).
+    mockStore({ elementType: 'BUS', elementId: 'b1' })
     render(<InspectorPanel />)
     expect(screen.getByTestId('inspector-panel')).toHaveTextContent('0.980 pu')
     expect(screen.getByTestId('inspector-panel')).toHaveTextContent('132 kV')
+    // b1 has one connected branch (br-1, to b2) and shares SUB_ID with no
+    // other bus in this fixture, so both grouping counts should read 1.
+    // Negative lookahead (Gemini review, PR #368) so "Buses1" can't
+    // false-match a future fixture where the count is e.g. 10.
+    expect(screen.getByTestId('inspector-panel')).toHaveTextContent(/Buses1(?!\d)/)
+    expect(screen.getByTestId('inspector-panel')).toHaveTextContent(/Lines1(?!\d)/)
+  })
+
+  it('renders nothing for a BUS element id that matches no bus (regression for #364)', () => {
+    // Before the fix, BusCard matched on `substationId === id` instead of the
+    // bus's own id — passing an id that isn't a real substationId (like a
+    // bus's own id happens to be, in fixtures without shared substations)
+    // silently rendered an empty body. Confirm an unknown id still renders
+    // nothing (correct null-safety), while a real bus id (above) now works.
+    mockStore({ elementType: 'BUS', elementId: 'no-such-bus' })
+    render(<InspectorPanel />)
+    expect(screen.getByTestId('inspector-panel')).not.toHaveTextContent('pu')
+  })
+
+  it('BusCard groups by substationId when two buses share one', () => {
+    const network: GridNetworkDto = {
+      ...NETWORK,
+      buses: [
+        ...NETWORK.buses,
+        { id: 'b3', name: 'Bus 3', voltageKv: 132, voltagePu: 1.0, angleRad: 0, substationId: SUB_ID },
+      ],
+    }
+    mockStore({ elementType: 'BUS', elementId: 'b1' }, network)
+    render(<InspectorPanel />)
+    // b1 and b3 now share SUB_ID — Buses count reflects both.
+    expect(screen.getByTestId('inspector-panel')).toHaveTextContent(/Buses2(?!\d)/)
   })
 
   it('shows load metrics', () => {
