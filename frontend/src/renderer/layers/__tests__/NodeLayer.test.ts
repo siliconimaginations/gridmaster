@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('pixi.js')
 
-import { NodeLayer } from '../NodeLayer'
+import { NodeLayer, resolveBusTexture } from '../NodeLayer'
 import type { BusTextures } from '../NodeLayer'
 import type { GridGraph, BusNode } from '../../../model/GridGraph'
 import { Texture } from 'pixi.js'
@@ -21,7 +21,18 @@ function makeBus(id: string, role: 'gen' | 'sub' | 'load' = 'sub', overrides: Pa
 }
 
 function makeTextures(): BusTextures {
-  return { gen: new Texture(), sub: new Texture(), load: new Texture() }
+  return {
+    gen: new Texture(),
+    sub: new Texture(),
+    load: new Texture(),
+    genByFuel: {
+      COAL: new Texture(),
+      GAS: new Texture(),
+      HYDRO: new Texture(),
+      WIND: new Texture(),
+      SOLAR: new Texture(),
+    },
+  }
 }
 
 function makeGraph(buses: BusNode[]): GridGraph {
@@ -68,6 +79,55 @@ describe('NodeLayer', () => {
     const group = layer.container.children[0]
     const sprite = group.getChildByName('sprite')
     expect(sprite).not.toBeNull()
+  })
+
+  // ── Fuel-type sprites (#375) ─────────────────────────────────────────────────
+
+  describe('resolveBusTexture', () => {
+    it('picks the fuel-specific texture for a mapped generator fuelType', () => {
+      const textures = makeTextures()
+      const bus = makeBus('A', 'gen', { fuelType: 'COAL' })
+      expect(resolveBusTexture(bus, textures)).toBe(textures.genByFuel!.COAL)
+    })
+
+    it('is case-insensitive on fuelType', () => {
+      const textures = makeTextures()
+      const bus = makeBus('A', 'gen', { fuelType: 'wind' })
+      expect(resolveBusTexture(bus, textures)).toBe(textures.genByFuel!.WIND)
+    })
+
+    it('falls back to the generic generator texture for an unmapped fuelType (e.g. NUCLEAR)', () => {
+      const textures = makeTextures()
+      const bus = makeBus('A', 'gen', { fuelType: 'NUCLEAR' })
+      expect(resolveBusTexture(bus, textures)).toBe(textures.gen)
+    })
+
+    it('falls back to the generic generator texture when fuelType is missing', () => {
+      const textures = makeTextures()
+      const bus = makeBus('A', 'gen', { fuelType: undefined })
+      expect(resolveBusTexture(bus, textures)).toBe(textures.gen)
+    })
+
+    it('falls back to the generic generator texture when genByFuel is not provided at all', () => {
+      const textures: BusTextures = { gen: new Texture(), sub: new Texture(), load: new Texture() }
+      const bus = makeBus('A', 'gen', { fuelType: 'SOLAR' })
+      expect(resolveBusTexture(bus, textures)).toBe(textures.gen)
+    })
+
+    it('non-generator buses ignore fuelType and use their role texture', () => {
+      const textures = makeTextures()
+      const bus = makeBus('A', 'load')
+      expect(resolveBusTexture(bus, textures)).toBe(textures.load)
+    })
+  })
+
+  it('rebuild assigns the fuel-specific sprite texture to a generator bus group', () => {
+    const textures = makeTextures()
+    const graph = makeGraph([makeBus('A', 'gen', { fuelType: 'HYDRO' })])
+    layer.rebuild(graph, textures, 2)
+    const group = layer.container.children[0]
+    const sprite = group.getChildByName('sprite') as unknown as { texture: unknown }
+    expect(sprite.texture).toBe(textures.genByFuel!.HYDRO)
   })
 
   it('each bus group has a voltage dot labelled "vdot"', () => {

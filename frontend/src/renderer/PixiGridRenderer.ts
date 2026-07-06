@@ -261,12 +261,26 @@ export class PixiGridRenderer {
       { alias: 'sprite-city',     src: '/sprites/sprite-city.png'     },
       { alias: 'sprite-terrain1', src: '/sprites/sprite-terrain1.png' },
       { alias: 'sprite-terrain2', src: '/sprites/sprite-terrain2.png' },
+      // Per-fuel-type generator sprites (#375) — unmapped fuel types
+      // (NUCLEAR, OIL, OTHER) fall back to sprite-gen via genByFuel lookup.
+      { alias: 'sprite-coal',     src: '/sprites/sprite-coal.png'      },
+      { alias: 'sprite-gas',      src: '/sprites/sprite-gas.png'       },
+      { alias: 'sprite-hydro',    src: '/sprites/sprite-hydro.png'     },
+      { alias: 'sprite-wind',     src: '/sprites/sprite-wind.png'      },
+      { alias: 'sprite-solar',    src: '/sprites/sprite-solar.png'     },
     ])
 
     this.textures = {
       gen:  PIXI.Texture.from('sprite-gen'),
       sub:  PIXI.Texture.from('sprite-sub'),
       load: PIXI.Texture.from('sprite-city'),
+      genByFuel: {
+        COAL:  PIXI.Texture.from('sprite-coal'),
+        GAS:   PIXI.Texture.from('sprite-gas'),
+        HYDRO: PIXI.Texture.from('sprite-hydro'),
+        WIND:  PIXI.Texture.from('sprite-wind'),
+        SOLAR: PIXI.Texture.from('sprite-solar'),
+      },
     }
 
     // Tiny circle texture for particles

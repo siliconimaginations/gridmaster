@@ -51,6 +51,21 @@ const STATE_BAR_H = 8
 type ClickCallback = (bus: BusNode) => void
 type CitySize = 'town' | 'city' | 'metro'
 
+/**
+ * Picks the sprite for a bus: generators get a fuel-type-specific texture
+ * (Coal/Gas/Hydro/Wind/Solar) when one exists, falling back to the generic
+ * generator sprite for unmapped fuel types (NUCLEAR, OIL, OTHER, or a
+ * missing genByFuel entry). Non-generator buses use their role's texture
+ * as before (#375).
+ */
+export function resolveBusTexture(bus: BusNode, textures: BusTextures): PIXI.Texture {
+  if (bus.role === 'gen') {
+    const byFuel = bus.fuelType ? textures.genByFuel?.[bus.fuelType.toUpperCase()] : undefined
+    return byFuel ?? textures.gen
+  }
+  return textures[bus.role] ?? textures.load
+}
+
 export class NodeLayer {
   readonly container: PIXI.Container
 
@@ -160,7 +175,7 @@ export class NodeLayer {
 
     // Sprite — hidden at LOD 0 (icon takes over)
     const params  = SPRITE_PARAMS[bus.role] ?? SPRITE_PARAMS.load
-    const texture = textures[bus.role] ?? textures.load
+    const texture = resolveBusTexture(bus, textures)
     const sprite  = new PIXI.Sprite(texture)
     sprite.label   = 'sprite'
     sprite.x       = params.x
@@ -460,7 +475,10 @@ function drawStateBar(g: PIXI.Graphics, bus: BusNode): void {
 // ── Texture bag ───────────────────────────────────────────────────────────────
 
 export interface BusTextures {
+  /** Fallback generator sprite, used when a bus's fuelType has no entry in [genByFuel] (#375). */
   gen:  PIXI.Texture
   sub:  PIXI.Texture
   load: PIXI.Texture
+  /** Per-fuel-type generator sprites, keyed by uppercase FuelType (e.g. 'COAL', 'GAS') — #375. */
+  genByFuel?: Partial<Record<string, PIXI.Texture>>
 }
