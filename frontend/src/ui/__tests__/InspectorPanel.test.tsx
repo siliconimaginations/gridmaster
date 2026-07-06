@@ -132,6 +132,39 @@ describe('InspectorPanel', () => {
     expect(screen.getByTestId('inspector-panel')).toHaveTextContent(/Buses2(?!\d)/)
   })
 
+  // ── #370: bus role must distinguish generator/load/substation ──────────────
+
+  it('labels a generator-hosting bus as Generator and shows its output (#370)', () => {
+    // b1 hosts GEN_ID (400/600 MW) in the shared NETWORK fixture — the header
+    // previously always read "Substation" regardless of what the bus hosts.
+    mockStore({ elementType: 'BUS', elementId: 'b1' })
+    render(<InspectorPanel />)
+    expect(screen.getByTestId('inspector-panel')).toHaveTextContent('⚡ Generator')
+    expect(screen.getByTestId('inspector-panel')).toHaveTextContent('400.0 MW')
+    expect(screen.getByTestId('inspector-panel')).toHaveTextContent('600.0 MW')
+  })
+
+  it('labels a load-hosting bus as City and shows its demand (#370)', () => {
+    // b2 hosts LOAD_ID (200 MW) and no generators in the shared NETWORK fixture.
+    mockStore({ elementType: 'BUS', elementId: 'b2' })
+    render(<InspectorPanel />)
+    expect(screen.getByTestId('inspector-panel')).toHaveTextContent('🏘 City')
+    expect(screen.getByTestId('inspector-panel')).toHaveTextContent('200.0 MW')
+  })
+
+  it('labels a bus with neither generators nor loads as Substation (#370)', () => {
+    const network: GridNetworkDto = {
+      ...NETWORK,
+      buses: [
+        ...NETWORK.buses,
+        { id: 'b4', name: 'Bus 4', voltageKv: 400, voltagePu: 1.0, angleRad: 0, substationId: 'sub-4' },
+      ],
+    }
+    mockStore({ elementType: 'BUS', elementId: 'b4' }, network)
+    render(<InspectorPanel />)
+    expect(screen.getByTestId('inspector-panel')).toHaveTextContent('🔌 Substation')
+  })
+
   it('shows load metrics', () => {
     mockStore({ elementType: 'LOAD', elementId: LOAD_ID })
     render(<InspectorPanel />)
