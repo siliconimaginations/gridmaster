@@ -234,8 +234,14 @@ export class PixiGridRenderer {
     // grass (#363, part 2 — addressMode alone was not sufficient). Scaling
     // each tile down to TILE_W x TILE_H makes the two staggered diamond
     // layers actually mosaic together and cover the full quad.
-    this.terrain1.tileScale.set(TILE_W / t1.width, TILE_H / t1.height)
-    this.terrain2.tileScale.set(TILE_W / t2.width, TILE_H / t2.height)
+    // Guard against a zero/undefined texture dimension (e.g. an asset that
+    // failed to load) producing an Infinity/NaN scale.
+    if (t1.width > 0 && t1.height > 0) {
+      this.terrain1.tileScale.set(TILE_W / t1.width, TILE_H / t1.height)
+    }
+    if (t2.width > 0 && t2.height > 0) {
+      this.terrain2.tileScale.set(TILE_W / t2.width, TILE_H / t2.height)
+    }
 
     this.viewport.addChildAt(this.terrain1, 0)
     this.viewport.addChildAt(this.terrain2, 1)
