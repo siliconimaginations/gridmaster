@@ -226,6 +226,28 @@ export class PixiGridRenderer {
     this.terrain2.tilePosition.set(TILE_W / 2, TILE_H / 2)
     this.terrain2.zIndex = 1
 
+    // TilingSprite repeats its texture at the texture's NATIVE pixel size
+    // (1456x720 for these assets) unless tileScale is set — it does not
+    // automatically fit to the intended on-screen tile footprint. Without
+    // this, the WORLD_W x WORLD_H (2400x1600) quad only fits ~2x2 native-size
+    // repeats, so most of the quad shows bare background colour instead of
+    // grass (#363, part 2 — addressMode alone was not sufficient). Scaling
+    // each tile down to TILE_W x TILE_H makes the two staggered diamond
+    // layers actually mosaic together and cover the full quad.
+    //
+    // NOTE: this exact fix was already merged once in PR #371 and then
+    // silently reverted by a git-plumbing bug in PR #372 (a stale cached
+    // tree SHA was used as that PR's base_tree, so its merge commit rolled
+    // this file back to its pre-#371 state even though #372 never touched
+    // it). Re-applying here after verifying against a freshly-fetched main
+    // tree immediately before pushing.
+    if (t1.width > 0 && t1.height > 0) {
+      this.terrain1.tileScale.set(TILE_W / t1.width, TILE_H / t1.height)
+    }
+    if (t2.width > 0 && t2.height > 0) {
+      this.terrain2.tileScale.set(TILE_W / t2.width, TILE_H / t2.height)
+    }
+
     this.viewport.addChildAt(this.terrain1, 0)
     this.viewport.addChildAt(this.terrain2, 1)
   }
