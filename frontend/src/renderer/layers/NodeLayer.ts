@@ -57,6 +57,13 @@ export class NodeLayer {
   private busContainers = new Map<string, PIXI.Container>()
   /** Cached bus data for icon redraws (e.g. violation-state change at LOD 0). */
   private busData       = new Map<string, BusNode>()
+  /**
+   * Per-sprite base scale derived from SPRITE_PARAMS[w/h] ÷ native texture
+   * size, captured once in buildBusGroup. LOD tier changes must scale
+   * *relative to this*, not set an absolute scale — otherwise crossing a
+   * tier boundary re-inflates sprites toward native texture size (#359).
+   */
+  private spriteBaseScale = new Map<string, { x: number; y: number }>()
   private _onClick?: ClickCallback
 
   constructor() {
@@ -71,6 +78,7 @@ export class NodeLayer {
     this.container.removeChildren()
     this.busContainers.clear()
     this.busData.clear()
+    this.spriteBaseScale.clear()
 
     for (const bus of graph.buses.values()) {
       const group = this.buildBusGroup(bus, textures, lod)
@@ -117,7 +125,13 @@ export class NodeLayer {
 
       if (sprite) {
         sprite.visible = lod > 0
-        if (lod > 0) sprite.scale.set(lod === 1 ? 0.75 : 1.0)
+        if (lod > 0) {
+          const base = this.spriteBaseScale.get(id)
+          const factor = lod === 1 ? 0.75 : 1.0
+          if (base) {
+            sprite.scale.set(base.x * factor, base.y * factor)
+          }
+        }
       }
       if (vdot) vdot.visible = lod > 0
       if (sbar) sbar.visible = lod >= 2
@@ -155,6 +169,14 @@ export class NodeLayer {
     sprite.height  = params.h
     sprite.visible = lod > 0
     group.addChild(sprite)
+    // Capture the scale that width/height derived from the native texture
+    // size — applyLod scales relative to this, never absolutely (#359).
+    const baseScale = { x: sprite.scale.x, y: sprite.scale.y }
+    this.spriteBaseScale.set(bus.id, baseScale)
+    // Honor the current LOD tier's scale factor at construction time too,
+    // so a group built while at tier 1 doesn't render at full (tier-2) size
+    // until the next tier crossing fires applyLod.
+    if (lod === 1) sprite.scale.set(baseScale.x * 0.75, baseScale.y * 0.75)
 
     // Voltage dot — hidden at LOD 0
     const vdot = new PIXI.Graphics()
