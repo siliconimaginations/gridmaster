@@ -526,8 +526,14 @@ private object BuiltInCatalogue {
                         severity = EventSeverity.INFO,
                         options =
                             listOf(
+                                // costGbp intentionally £0 for all 4 policy-event options below —
+                                // confirmed with Rick on #366: the game-balance lever here is the
+                                // ongoing generator cost scaling (this event's effects), not a
+                                // one-time treasury charge. Rick specified the effect percentages
+                                // directly (wind -30%, coal/gas +20% each); no monetary cost was
+                                // requested.
                                 CardOption(
-                                    label = "Accept — +20% wind capacity",
+                                    label = "Accept — wind generation cost -30%",
                                     effects =
                                         listOf(
                                             EventEffect.ScaleGeneratorCost(
@@ -557,16 +563,19 @@ private object BuiltInCatalogue {
                         options =
                             listOf(
                                 CardOption(
-                                    label = "Support — higher coal/gas costs",
+                                    label = "Support — coal/gas generation cost +20%",
                                     effects =
                                         listOf(
+                                            // Uniform 20% rise for both fuels per Rick's #366
+                                            // confirmation (previously an inconsistent 30%
+                                            // coal / 15% gas split).
                                             EventEffect.ScaleGeneratorCost(
                                                 fuelType = FuelType.COAL,
-                                                factor = 1.3,
+                                                factor = 1.2,
                                             ),
                                             EventEffect.ScaleGeneratorCost(
                                                 fuelType = FuelType.GAS,
-                                                factor = 1.15,
+                                                factor = 1.2,
                                             ),
                                         ),
                                     costGbp = 0.0,
