@@ -250,15 +250,18 @@ class PhysicsController(
         @PathVariable sessionId: String,
     ): ResponseEntity<Void> {
         val session = sessionStore.get(sessionId)
-        // Acquire the session lock while cloneVariant() captures the current network state.
-        // triggerAsync() calls variantManager.cloneVariant() synchronously, so the variant
-        // snapshot is atomic with the lock. PowSyBl uses a per-thread working variant
-        // (ThreadLocal), so the background analysis on its variant does not interfere with
-        // session mutations that operate on INITIAL_VARIANT_ID.
+        // Pass session (the same object used as the lock below) through to
+        // triggerAsync(), which synchronizes on it for both the trigger-time
+        // cloneVariant() and the entire background analysis run. PowSyBl's
+        // VariantManager is NOT safe under concurrent access from multiple threads —
+        // an earlier version of this comment assumed a per-thread working variant
+        // made concurrent touches safe; that assumption was wrong and allowed the
+        // tick loop's power-flow solves to race against a live analysis run and
+        // corrupt the shared variant array (ArrayIndexOutOfBoundsException — #360).
         // This replaces the former NetworkSerDe XML round-trip (O(network size)) — #38.
         withContext(Dispatchers.IO) {
             synchronized(session) {
-                contingencyService.triggerAsync(session.iidmNetwork, ContingencyAnalysisParameters())
+                contingencyService.triggerAsync(session.iidmNetwork, session, ContingencyAnalysisParameters())
             }
         }
         return ResponseEntity.accepted().build()

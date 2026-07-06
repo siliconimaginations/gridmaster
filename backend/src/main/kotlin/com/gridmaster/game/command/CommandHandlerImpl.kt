@@ -310,9 +310,12 @@ class CommandHandlerImpl(
             )
 
             // Trigger async N-1 if topology changed. triggerAsync() calls cloneVariant()
-            // internally, so no separate copy is needed here (#38).
+            // internally, so no separate copy is needed here (#38). Pass `session` as the
+            // lock — triggerAsync() and the background run it schedules both synchronize
+            // on it, matching the `synchronized(session)` this whole pipeline already
+            // runs under (#360).
             if (mutations.any { it.isTopologyChange() }) {
-                contingencyService.triggerAsync(network, ContingencyAnalysisParameters())
+                contingencyService.triggerAsync(network, session, ContingencyAnalysisParameters())
                 log.debug("CommandHandler: triggered async N-1 for session {}", sessionId)
             }
 

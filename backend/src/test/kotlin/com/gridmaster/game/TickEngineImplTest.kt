@@ -81,7 +81,7 @@ class TickEngineImplTest {
         every { gameSessionService.load(sessionId, userId) } returns buildGameSession()
         every { gameSessionService.save(any(), any(), any(), any(), any()) } returns buildGameSession()
         every { powerFlowService.solve(any()) } returns convergedResult()
-        justRun { contingencyAnalysisService.triggerAsync(any()) }
+        justRun { contingencyAnalysisService.triggerAsync(any(), any()) }
     }
 
     @AfterEach
