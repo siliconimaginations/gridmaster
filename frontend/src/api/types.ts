@@ -146,7 +146,11 @@ export interface GameOverDto {
 export type PlayerCommandMessage =
   | { commandType: 'CommitGenerator'; payload: { generatorId: string } }
   | { commandType: 'DecommitGenerator'; payload: { generatorId: string } }
-  | { commandType: 'SetGeneratorOutput'; payload: { generatorId: string; activePowerMw: number } }
+  // Field name must be targetMw — matches PlayerCommand.SetGeneratorOutput.targetMw
+  // on the backend (backend/.../command/CommandModels.kt). A prior mismatch here
+  // (activePowerMw) meant every dispatch command was rejected with "'targetMw'
+  // must be a number" (#365).
+  | { commandType: 'SetGeneratorOutput'; payload: { generatorId: string; targetMw: number } }
   | { commandType: 'RunUnitCommitment'; payload: { hourlyForecastMw: number[] } }
   | { commandType: 'RespondToEventCard'; payload: { cardId: string; optionId: string } }
   | { commandType: 'PauseClock'; payload: Record<string, never> }
