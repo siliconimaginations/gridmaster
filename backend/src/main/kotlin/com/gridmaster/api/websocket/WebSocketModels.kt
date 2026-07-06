@@ -79,6 +79,17 @@ data class BusWsDto(
     val voltagePu: Double,
     /** Voltage angle in radians; 0.0 before first power flow. */
     val angleRad: Double,
+    /**
+     * Locational marginal price (£/MWh) at this bus (#377). Always null for
+     * now: the current dispatch LP (see LpDispatchService/MeritOrderAlgorithm)
+     * uses a single system-wide power-balance constraint with no per-bus
+     * nodal formulation, so there is no dual value or congestion-aware price
+     * to report per bus yet — [systemMarginalCostPerMwh] on
+     * [GridNetworkWsDto] remains the only real price signal available.
+     * Deliberate placeholder per issue #377 ("if this is not ready ...
+     * leave a placeholder") pending a genuine nodal/DC-OPF dispatch model.
+     */
+    val lmpPerMwh: Double? = null,
 )
 
 data class BranchWsDto(

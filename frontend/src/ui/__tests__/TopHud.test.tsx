@@ -14,6 +14,22 @@ const makeNetwork = (loadMw: number): GridNetworkDto => ({
   loads: [{ id: 'l1', busId: 'b1', name: 'Load1', activePowerMw: loadMw, reactivePowerMvar: 0 }],
 })
 
+/** Network with one committed generator at the given output/cost, for production-cost tests. */
+const makeNetworkWithGenerator = (
+  loadMw: number,
+  activePowerMw: number,
+  marginalCostPerMwh: number,
+  committed = true,
+): GridNetworkDto => ({
+  ...makeNetwork(loadMw),
+  generators: [
+    {
+      id: 'g1', busId: 'b1', name: 'Gen1', fuelType: 'GAS',
+      activePowerMw, maxActivePowerMw: 500, committed, marginalCostPerMwh,
+    },
+  ],
+})
+
 const makeViolation = (value: number, limit: number): ViolationDto => ({
   elementId: 'e1', elementType: 'LINE', violationType: 'OVERLOAD', value, limit,
 })
@@ -44,7 +60,7 @@ describe('TopHud', () => {
     render(<TopHud />)
     expect(screen.getByTestId('pill-clock')).toBeInTheDocument()
     expect(screen.getByTestId('pill-load')).toBeInTheDocument()
-    expect(screen.getByTestId('pill-price')).toBeInTheDocument()
+    expect(screen.getByTestId('pill-production-cost')).toBeInTheDocument()
     expect(screen.getByTestId('pill-health')).toBeInTheDocument()
   })
 
@@ -58,21 +74,29 @@ describe('TopHud', () => {
     expect(screen.getByTestId('pill-load')).toHaveTextContent('500 MW')
   })
 
-  it('shows — /MWh when systemMarginalCostPerMwh is null', () => {
+  it('shows — /h when there are no generators (#377)', () => {
     render(<TopHud />)
-    expect(screen.getByTestId('hud-price')).toHaveTextContent('— /MWh')
+    expect(screen.getByTestId('hud-production-cost')).toHaveTextContent('— /h')
   })
 
-  it('shows formatted price when systemMarginalCostPerMwh is set (#283)', () => {
+  it('shows total production cost as Σ (output MW × marginal cost) across committed generators (#377)', () => {
+    // 200 MW × £48.6/MWh = £9,720/h
+    mockStore({ network: makeNetworkWithGenerator(500, 200, 48.6) })
+    render(<TopHud />)
+    expect(screen.getByTestId('hud-production-cost')).toHaveTextContent('£9,720/h')
+  })
+
+  it('excludes decommitted generators from the production cost total (#377)', () => {
+    mockStore({ network: makeNetworkWithGenerator(500, 200, 48.6, false) })
+    render(<TopHud />)
+    expect(screen.getByTestId('hud-production-cost')).toHaveTextContent('— /h')
+  })
+
+  it('no longer shows the old systemMarginalCostPerMwh-based price ticker (#377)', () => {
     mockStore({ network: { ...makeNetwork(500), systemMarginalCostPerMwh: 99.4 } })
     render(<TopHud />)
-    expect(screen.getByTestId('hud-price')).toHaveTextContent('£99/MWh')
-  })
-
-  it('shows — /MWh when price is zero (pre-dispatch)', () => {
-    mockStore({ network: { ...makeNetwork(500), systemMarginalCostPerMwh: 0 } })
-    render(<TopHud />)
-    expect(screen.getByTestId('hud-price')).toHaveTextContent('— /MWh')
+    expect(screen.queryByTestId('pill-price')).toBeNull()
+    expect(screen.queryByTestId('hud-price')).toBeNull()
   })
 
   it('health pill shows "Grid healthy" with no violations', () => {

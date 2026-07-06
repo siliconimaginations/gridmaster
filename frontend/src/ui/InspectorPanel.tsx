@@ -244,6 +244,12 @@ function BusCard({ id, network }: { id: string; network: GridNetworkDto }) {
         cls={voltageClass(primary.voltagePu)}
       />
       <Row label="Base kV" value={`${fmt(primary.voltageKv, 0)} kV`} />
+      {/* Locational marginal price (#377) — deliberate placeholder until the
+          dispatch model supports per-bus nodal/congestion-aware pricing. */}
+      <Row
+        label="LMP"
+        value={primary.lmpPerMwh != null ? `£${fmt(primary.lmpPerMwh)}/MWh` : 'Pending (no nodal pricing yet)'}
+      />
       <Row label="Buses" value={String(buses.length)} />
       <Row label="Lines" value={String(connectedBranches.length)} />
     </>

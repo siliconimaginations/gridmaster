@@ -48,6 +48,37 @@ export function totalLoadMw(network: GridNetworkDto | null): string {
   return `${calculateTotalLoadMw(network).toFixed(0)} MW`
 }
 
+// ── Production cost (#377) ─────────────────────────────────────────────────────
+
+/**
+ * Total production cost rate (£/h) across all committed generators,
+ * computed as Σ (activePowerMw × marginalCostPerMwh) for each committed
+ * generator — i.e. each generator's own cost function evaluated at its
+ * current output. Returns 0 when `network` is null or has no generators.
+ *
+ * Replaces the old system-marginal-cost-only "Price" ticker (#377):
+ * that value only reflects the cost of the last (marginal) unit dispatched,
+ * not the total cost the player is actually paying to run the grid.
+ */
+export function calculateTotalProductionCostGbpPerHour(network: GridNetworkDto | null): number {
+  if (!network) return 0
+  return network.generators.reduce(
+    (sum, g) => sum + (g.committed ? g.activePowerMw * g.marginalCostPerMwh : 0),
+    0,
+  )
+}
+
+/**
+ * Formats the total production cost rate for HUD display.
+ * Returns `"— /h"` when `network` is null or there are no committed generators.
+ */
+export function totalProductionCostGbpPerHour(network: GridNetworkDto | null): string {
+  if (!network) return '— /h'
+  const cost = calculateTotalProductionCostGbpPerHour(network)
+  if (cost <= 0) return '— /h'
+  return `£${Math.round(cost).toLocaleString('en-GB')}/h`
+}
+
 // ── Grid health ───────────────────────────────────────────────────────────────
 
 export type HealthSeverity = 'ok' | 'warning' | 'critical'
