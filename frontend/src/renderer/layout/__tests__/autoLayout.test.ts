@@ -31,7 +31,7 @@ function makeGraph(buses: BusNode[], connected = true): GridGraph {
 }
 
 const W = 1200, H = 800
-const PADDING = 80
+const PADDING = 220
 
 // ── layoutGrid ────────────────────────────────────────────────────────────────
 
