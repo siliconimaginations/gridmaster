@@ -136,7 +136,7 @@ function MeritOrderTab({ generators }: { generators: GeneratorDto[] }) {
 
   const sorted = [...generators].sort((a, b) => {
     if (a.committed !== b.committed) return a.committed ? -1 : 1
-    return costGbpMwh(a) - costGbpMwh(b)
+    return costGbpMwh(a) - costGbpMwh(b) || a.id.localeCompare(b.id)
   })
 
   const totalOutput = generators.filter((g) => g.committed).reduce((sum, g) => sum + g.activePowerMw, 0)
@@ -291,6 +291,9 @@ function UCScheduleTab({ generators }: { generators: GeneratorDto[] }) {
 
 // ── Cost stack chart (issue #336) ─────────────────────────────────────────────
 
+/** Floor for the cost-stack chart's scale, so an all-zero-cost network doesn't divide by zero (Gemini review). */
+const MIN_COST_SCALE = 1
+
 /**
  * Collapsible bar chart of generators sorted by marginal cost, coloured by
  * fuel type, with a vertical marker at the system marginal cost (SMC) — the
@@ -308,9 +311,11 @@ function CostStackSection({
 
   if (generators.length === 0) return null
 
-  const sorted = [...generators].sort((a, b) => costGbpMwh(a) - costGbpMwh(b))
+  // Secondary sort by id keeps render order deterministic when two
+  // generators tie on cost (Gemini review).
+  const sorted = [...generators].sort((a, b) => costGbpMwh(a) - costGbpMwh(b) || a.id.localeCompare(b.id))
   const smc = typeof systemMarginalCostPerMwh === 'number' ? systemMarginalCostPerMwh : null
-  const maxCost = Math.max(...sorted.map(costGbpMwh), smc ?? 0, 1)
+  const maxCost = Math.max(...sorted.map(costGbpMwh), smc ?? 0, MIN_COST_SCALE)
   const smcPct = smc !== null ? Math.min((smc / maxCost) * 100, 100) : null
 
   return (
