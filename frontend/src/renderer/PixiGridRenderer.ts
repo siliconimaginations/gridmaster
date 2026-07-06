@@ -208,6 +208,15 @@ export class PixiGridRenderer {
     const t1 = PIXI.Texture.from('sprite-terrain1')
     const t2 = PIXI.Texture.from('sprite-terrain2')
 
+    // pixi.js v8 defaults every texture's addressMode to 'clamp-to-edge'. TilingSprite
+    // does NOT override this itself, so without setting 'repeat' explicitly the pattern
+    // never actually tiles — it clamps to the texture's own edge pixels (this asset's
+    // transparent/black diamond corners) everywhere beyond the first copy. At the
+    // terrain quad's full WORLD_W x WORLD_H size that shows as large blank areas with
+    // no grass texture (#363).
+    t1.source.addressMode = 'repeat'
+    t2.source.addressMode = 'repeat'
+
     // pixi.js v8: TilingSprite constructor takes an options object
     this.terrain1 = new PIXI.TilingSprite({ texture: t1, width: WORLD_W, height: WORLD_H })
     this.terrain1.tilePosition.set(0, 0)
