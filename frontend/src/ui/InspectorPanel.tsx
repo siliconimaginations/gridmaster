@@ -166,22 +166,39 @@ function LineCard({ id, network }: { id: string; network: GridNetworkDto }) {
   )
 }
 
+type BusRole = 'gen' | 'load' | 'sub'
+
+interface BusStats {
+  role: BusRole
+  genMw: number
+  genMaxMw: number
+  loadMw: number
+}
+
 /**
- * Derived bus role, mirroring model/GridGraph.ts's BusRole logic: 'gen' if the
- * bus hosts any generator capacity, 'load' if it hosts load demand, 'sub'
- * otherwise. Recomputed here (rather than threaded in from GridGraph) because
- * InspectorPanel only has the raw GridNetworkDto, not the renderer's graph.
+ * Derived bus role + aggregate generation/load figures, mirroring
+ * model/GridGraph.ts's BusRole logic: 'gen' if the bus hosts any generator
+ * capacity, 'load' if it hosts load demand, 'sub' otherwise. Recomputed here
+ * (rather than threaded in from GridGraph) because InspectorPanel only has
+ * the raw GridNetworkDto, not the renderer's graph. Single pass over each
+ * array — role and metrics are derived together so callers (header label,
+ * BusCard body) don't each re-filter the same arrays (#370 Gemini review).
  */
-function busRole(id: string, network: GridNetworkDto): 'gen' | 'load' | 'sub' {
-  const genMaxMw = network.generators
-    .filter((g) => g.busId === id)
-    .reduce((s, g) => s + g.maxActivePowerMw, 0)
-  if (genMaxMw > 0) return 'gen'
-  const loadMw = network.loads
-    .filter((l) => l.busId === id)
-    .reduce((s, l) => s + l.activePowerMw, 0)
-  if (loadMw > 0) return 'load'
-  return 'sub'
+function busStats(id: string, network: GridNetworkDto): BusStats {
+  let genMw = 0
+  let genMaxMw = 0
+  for (const g of network.generators) {
+    if (g.busId !== id) continue
+    genMw += g.activePowerMw
+    genMaxMw += g.maxActivePowerMw
+  }
+  let loadMw = 0
+  for (const l of network.loads) {
+    if (l.busId !== id) continue
+    loadMw += l.activePowerMw
+  }
+  const role: BusRole = genMaxMw > 0 ? 'gen' : loadMw > 0 ? 'load' : 'sub'
+  return { role, genMw, genMaxMw, loadMw }
 }
 
 function BusCard({ id, network }: { id: string; network: GridNetworkDto }) {
@@ -205,12 +222,7 @@ function BusCard({ id, network }: { id: string; network: GridNetworkDto }) {
   // voltage/topology rows and was always labelled "Substation" regardless of
   // what's actually attached to it. Show generation/load figures for buses
   // that host generators or loads, in addition to the shared rows.
-  const role = busRole(id, network)
-  const gensHere = network.generators.filter((g) => g.busId === id)
-  const loadsHere = network.loads.filter((l) => l.busId === id)
-  const genMw = gensHere.reduce((s, g) => s + g.activePowerMw, 0)
-  const genMaxMw = gensHere.reduce((s, g) => s + g.maxActivePowerMw, 0)
-  const loadMw = loadsHere.reduce((s, l) => s + l.activePowerMw, 0)
+  const { role, genMw, genMaxMw, loadMw } = busStats(id, network)
 
   return (
     <>
@@ -265,8 +277,8 @@ const TYPE_LABEL: Record<string, string> = {
   LOAD: '🏘 City',
 }
 
-/** Header labels for BUS elements, keyed by the derived {@link busRole} (#370). */
-const BUS_ROLE_LABEL: Record<'gen' | 'load' | 'sub', string> = {
+/** Header labels for BUS elements, keyed by the derived {@link BusRole} (#370). */
+const BUS_ROLE_LABEL: Record<BusRole, string> = {
   gen: '⚡ Generator',
   load: '🏘 City',
   sub: '🔌 Substation',
@@ -300,7 +312,7 @@ export function InspectorPanel() {
   const hasViolation = elementHasViolation(elementId, elementType, violations)
   const headerLabel =
     elementType === 'BUS'
-      ? BUS_ROLE_LABEL[busRole(elementId, network)]
+      ? BUS_ROLE_LABEL[busStats(elementId, network).role]
       : (TYPE_LABEL[elementType] ?? elementType)
 
   return (
