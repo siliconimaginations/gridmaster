@@ -7,6 +7,7 @@ import {
   formatGameTime,
   gridHealthStatus,
   totalLoadMw,
+  totalProductionCostGbpPerHour,
   TREND_GLYPH,
 } from './hud'
 import type { HealthSeverity, TrendDirection } from './hud'
@@ -16,8 +17,15 @@ import styles from './TopHud.module.css'
 /**
  * Top HUD — four pill badges centred at the top of the screen.
  *
- * Displays: game clock · total load (+ trend arrow) · system price ·
+ * Displays: game clock · total load (+ trend arrow) · total production cost ·
  *           grid health (+ trend arrow).
+ *
+ * The "Cost" pill shows the total production cost rate (£/h) across all
+ * committed generators — Σ (output MW × each generator's own marginal cost),
+ * i.e. what the player is actually paying to run the grid right now. This
+ * replaced a system-marginal-cost-only "Price" ticker (#377), which only
+ * reflected the cost of the single most-expensive dispatched unit rather
+ * than the total production cost.
  *
  * Trend arrows compare the metric over the last 5 game ticks (§274):
  *   - Load: ↑ amber (higher demand), ↓ green (falling demand), — grey (stable)
@@ -28,6 +36,7 @@ import styles from './TopHud.module.css'
  *
  * @see docs/engineering/13-hud.md
  * @see issue #274
+ * @see issue #377
  */
 
 const HISTORY_LENGTH = 5
@@ -98,11 +107,7 @@ export function TopHud() {
 
   const health = useMemo(() => gridHealthStatus(violations), [violations])
   const displayedLoad = useMemo(() => totalLoadMw(network), [network])
-  const displayedPrice = useMemo(() => {
-    const smc = network?.systemMarginalCostPerMwh
-    if (smc == null || smc <= 0) return null
-    return `£${Math.round(smc)}/MWh`
-  }, [network])
+  const displayedProductionCost = useMemo(() => totalProductionCostGbpPerHour(network), [network])
 
   const severityClass: Record<HealthSeverity, string> = {
     ok: styles.severityOk,
@@ -133,10 +138,12 @@ export function TopHud() {
         </span>
       </div>
 
-      {/* Price — system marginal cost from last dispatch solve (#283) */}
-      <div className={styles.pill} data-testid="pill-price">
-        <span className={styles.label}>Price</span>
-        <span data-testid="hud-price">{displayedPrice ?? '— /MWh'}</span>
+      {/* Total production cost — Σ (output MW × marginal cost) across
+          committed generators, replacing the old system-marginal-cost-only
+          "Price" ticker (#377) */}
+      <div className={styles.pill} data-testid="pill-production-cost">
+        <span className={styles.label}>Cost</span>
+        <span data-testid="hud-production-cost">{displayedProductionCost}</span>
       </div>
 
       {/* Health */}

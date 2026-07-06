@@ -172,6 +172,25 @@ describe('InspectorPanel', () => {
     expect(screen.getByTestId('inspector-panel')).toHaveTextContent('Supplied ✓')
   })
 
+  // ── #377: locational marginal price (placeholder) ───────────────────────────
+
+  it('shows an LMP pending placeholder when lmpPerMwh is not set (#377)', () => {
+    mockStore({ elementType: 'BUS', elementId: 'b1' })
+    render(<InspectorPanel />)
+    expect(screen.getByTestId('inspector-panel')).toHaveTextContent('LMP')
+    expect(screen.getByTestId('inspector-panel')).toHaveTextContent('Pending (no nodal pricing yet)')
+  })
+
+  it('shows a real LMP value when the backend supplies one (#377)', () => {
+    const network: GridNetworkDto = {
+      ...NETWORK,
+      buses: NETWORK.buses.map((b) => (b.id === 'b1' ? { ...b, lmpPerMwh: 52.3 } : b)),
+    }
+    mockStore({ elementType: 'BUS', elementId: 'b1' }, network)
+    render(<InspectorPanel />)
+    expect(screen.getByTestId('inspector-panel')).toHaveTextContent('£52.3/MWh')
+  })
+
   it('close button calls selectElement(null)', () => {
     const { selectElement } = mockStore({ elementType: 'GENERATOR', elementId: GEN_ID })
     render(<InspectorPanel />)

@@ -24,6 +24,13 @@ export interface BusDto {
   angleRad: number
   /** Region/substation this bus belongs to; null for unassigned buses. */
   substationId: string | null
+  /**
+   * Locational marginal price (£/MWh) at this bus (#377). Always null today —
+   * the current dispatch model has no per-bus nodal formulation, so there's
+   * no congestion-aware price to report yet. Deliberate placeholder pending
+   * a real nodal/DC-OPF dispatch model.
+   */
+  lmpPerMwh?: number | null
 }
 
 export interface BranchDto {
