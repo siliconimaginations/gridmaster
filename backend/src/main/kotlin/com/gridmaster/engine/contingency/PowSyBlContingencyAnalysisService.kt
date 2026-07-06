@@ -16,13 +16,11 @@ import com.powsybl.security.PostContingencyComputationStatus
 import com.powsybl.security.SecurityAnalysis
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.time.Instant
@@ -43,6 +41,22 @@ import kotlin.system.measureTimeMillis
  *   is first evaluated with a DC power flow using PowSyBl network variants.
  * - Only contingencies with DC violations are escalated to full AC SecurityAnalysis.
  *   This reduces AC solve count by typically 80–90%.
+ *
+ * ### Thread safety (#360)
+ * The background consumer executes [runAnalysis] on [Dispatchers.Default], entirely
+ * independently of whatever thread called [triggerAsync]. Both the trigger-time
+ * clone and the full background run mutate `network.variantManager` — clone,
+ * setWorkingVariant, removeVariant — none of which PowSyBl guarantees safe under
+ * concurrent access. Previously nothing serialized this against the tick loop's
+ * own `powerFlowService.solve()` calls on the same live network; at low speed the
+ * analysis reliably finished between ticks so the race was never hit, but at 100×
+ * speed (10 ms/tick) the tick loop's solve calls and a still-running analysis
+ * overlap almost every time, corrupting the shared variant array
+ * (`ArrayIndexOutOfBoundsException` in `TDoubleArrayList`/`VariantManagerImpl`).
+ * [runAnalysis] is not a `suspend fun` — none of its own work suspends, it only
+ * calls blocking PowSyBl/solver code — so its entire body, plus the trigger-time
+ * clone in [triggerAsync], can be wrapped in a plain `synchronized(lock)` block
+ * using the caller-supplied lock (see [ContingencyAnalysisService.triggerAsync]).
  */
 @Service
 class PowSyBlContingencyAnalysisService(
@@ -64,10 +78,14 @@ class PowSyBlContingencyAnalysisService(
 
     init {
         // Background consumer — runs analyses serially as requests arrive.
+        // The entire run is held under the caller-supplied lock (#360) — runAnalysis
+        // is a plain blocking function (no suspension inside), so a JVM monitor here
+        // is safe and serializes against the tick loop / REST controller / command
+        // handler, all of which touch the same network under the same lock.
         scope.launch {
             triggerChannel.consumeEach { request ->
                 try {
-                    runAnalysis(request)
+                    synchronized(request.lock) { runAnalysis(request) }
                 } catch (e: Exception) {
                     if (e is kotlinx.coroutines.CancellationException) throw e
                     log.error("Contingency analysis run failed unexpectedly", e)
@@ -78,20 +96,28 @@ class PowSyBlContingencyAnalysisService(
 
     override fun triggerAsync(
         network: Network,
+        lock: Any,
         parameters: ContingencyAnalysisParameters,
     ) {
         // Clone the network state synchronously so the analysis always runs on the
         // state at the time of the trigger call, not some later (post-mutation) state.
+        // Synchronized against the same lock the background run (below) and every
+        // other caller use — PowSyBl's VariantManager is not safe for concurrent
+        // mutation (#360).
         val variantId = "ca-analysis-${System.nanoTime()}"
-        network.variantManager.cloneVariant(VariantManagerConstants.INITIAL_VARIANT_ID, variantId, true)
+        synchronized(lock) {
+            network.variantManager.cloneVariant(VariantManagerConstants.INITIAL_VARIANT_ID, variantId, true)
 
-        // Clean up any previously-pending variant that is being replaced (CONFLATED channel).
-        pendingVariantId.getAndSet(variantId)?.let { dropped ->
-            runCatching { network.variantManager.removeVariant(dropped) }
-                .onFailure { log.warn("Failed to remove dropped variant {}", dropped, it) }
+            // Clean up any previously-pending variant that is being replaced (CONFLATED channel).
+            pendingVariantId.getAndSet(variantId)?.let { dropped ->
+                runCatching { network.variantManager.removeVariant(dropped) }
+                    .onFailure { log.warn("Failed to remove dropped variant {}", dropped, it) }
+            }
         }
 
-        triggerChannel.trySend(RunRequest(network, parameters, variantId))
+        // trySend() doesn't touch the network, so it doesn't need the lock — keep the
+        // critical section limited to the actual variant-manager calls (Gemini review, PR #362).
+        triggerChannel.trySend(RunRequest(network, parameters, variantId, lock))
     }
 
     override fun latestResult(): ContingencyAnalysisResult? = cache.latest()
@@ -108,7 +134,7 @@ class PowSyBlContingencyAnalysisService(
     // Analysis execution
     // -------------------------------------------------------------------------
 
-    private suspend fun runAnalysis(request: RunRequest) {
+    private fun runAnalysis(request: RunRequest) {
         val (network, parameters, analysisVariantId) = request
         log.info("Starting contingency analysis run")
 
@@ -200,7 +226,7 @@ class PowSyBlContingencyAnalysisService(
      * Runs a DC power flow for each contingency using PowSyBl network variants.
      * Returns a pair of (secure/pre-screened results, contingencies needing AC).
      */
-    private suspend fun dcPreScreen(
+    private fun dcPreScreen(
         network: Network,
         contingencies: List<Contingency>,
         parameters: ContingencyAnalysisParameters,
@@ -242,13 +268,16 @@ class PowSyBlContingencyAnalysisService(
                 log.warn("DC pre-screen failed for contingency ${contingency.id}: ${e.message}")
                 needsAc += contingency
             } finally {
-                withContext(NonCancellable) {
-                    runCatching {
-                        network.variantManager.setWorkingVariant(sourceVariantId)
-                    }
-                    runCatching {
-                        network.variantManager.removeVariant(variantId)
-                    }
+                // No `withContext(NonCancellable)` needed here (Gemini review, PR #362, flagged
+                // its removal): dcPreScreen is a plain blocking function now, not `suspend` — it
+                // has no suspension points a cancelled Job could interrupt mid-cleanup, so these
+                // two calls always run to completion as ordinary try/finally semantics, with no
+                // dependency on coroutine cancellation state.
+                runCatching {
+                    network.variantManager.setWorkingVariant(sourceVariantId)
+                }
+                runCatching {
+                    network.variantManager.removeVariant(variantId)
                 }
             }
         }
@@ -260,7 +289,7 @@ class PowSyBlContingencyAnalysisService(
     // AC SecurityAnalysis
     // -------------------------------------------------------------------------
 
-    private suspend fun runAcSecurityAnalysis(
+    private fun runAcSecurityAnalysis(
         network: Network,
         contingencies: List<Contingency>,
         parameters: ContingencyAnalysisParameters,
@@ -419,5 +448,6 @@ class PowSyBlContingencyAnalysisService(
         val network: Network,
         val parameters: ContingencyAnalysisParameters,
         val analysisVariantId: String,
+        val lock: Any,
     )
 }

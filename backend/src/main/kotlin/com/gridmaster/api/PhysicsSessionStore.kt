@@ -21,6 +21,17 @@ import java.util.concurrent.ConcurrentHashMap
  * `synchronized(session)` in [com.gridmaster.api.PhysicsController], which already
  * ensures memory visibility. `@Volatile` on individual fields is therefore redundant
  * and has been omitted.
+ *
+ * `synchronized(session)` (using the [PhysicsSession] instance itself as the lock)
+ * is also the convention for every direct touch of [PhysicsSession.iidmNetwork] —
+ * power flow solves and contingency-analysis triggers — across
+ * [com.gridmaster.api.PhysicsController], [com.gridmaster.game.command.CommandHandlerImpl],
+ * and [com.gridmaster.game.TickEngineImpl]. This must extend to the *entire*
+ * background contingency-analysis run, not just the trigger-time variant clone:
+ * PowSyBl's `Network.variantManager` is not safe under concurrent mutation, and the
+ * background run touches it for as long as it takes to complete. See
+ * `com.gridmaster.engine.contingency.ContingencyAnalysisService.triggerAsync`, whose
+ * `lock` parameter should always be the owning session (#360).
  */
 @Component
 class PhysicsSessionStore {

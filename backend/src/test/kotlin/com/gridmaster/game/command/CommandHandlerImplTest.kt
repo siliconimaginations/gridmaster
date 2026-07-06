@@ -351,13 +351,13 @@ class CommandHandlerImplTest {
     @Test
     fun `TripElement triggers async contingency analysis`() {
         handler.handle(PlayerCommand.TripElement(sessionId, "l1", EquipmentType.LINE), userId)
-        verify { contingencyService.triggerAsync(any(), any()) }
+        verify { contingencyService.triggerAsync(any(), any(), any()) }
     }
 
     @Test
     fun `SetGeneratorOutput does not trigger contingency analysis`() {
         handler.handle(PlayerCommand.SetGeneratorOutput(sessionId, "g1", 80.0), userId)
-        verify(exactly = 0) { contingencyService.triggerAsync(any(), any()) }
+        verify(exactly = 0) { contingencyService.triggerAsync(any(), any(), any()) }
     }
 
     // ── Rollback on failure ───────────────────────────────────────────────────

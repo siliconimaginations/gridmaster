@@ -264,15 +264,23 @@ class TickEngineImpl(
             }
 
         // Step 1–4: power flow solve + snapshot update
+        // Synchronized on physicsSession — PowSyBl's Network/VariantManager
+        // is not thread-safe, and the contingency-analysis background run (triggered
+        // below) mutates the same network's variants from a different coroutine. At
+        // high speed (short slotMillis) ticks land while a prior analysis run is still
+        // in flight; without this lock the two race and corrupt the variant array
+        // (ArrayIndexOutOfBoundsException in PowSyBl's VariantManagerImpl — #360).
         val pfResult =
-            try {
-                powerFlowService.solve(physicsSession.iidmNetwork)
-            } catch (e: Exception) {
-                log.error("Power flow solve failed for session {}, tick {}", runtime.sessionId, ctx.tickNumber, e)
-                // Pause (not stop) so the player can inspect the grid and potentially resume. Closes #64.
-                synchronized(runtime) { runtime.clockState = ClockState.PAUSED }
-                triggerAutoSave(runtime)
-                return
+            synchronized(physicsSession) {
+                try {
+                    powerFlowService.solve(physicsSession.iidmNetwork)
+                } catch (e: Exception) {
+                    log.error("Power flow solve failed for session {}, tick {}", runtime.sessionId, ctx.tickNumber, e)
+                    // Pause (not stop) so the player can inspect the grid and potentially resume. Closes #64.
+                    synchronized(runtime) { runtime.clockState = ClockState.PAUSED }
+                    triggerAutoSave(runtime)
+                    return
+                }
             }
 
         physicsSession.latestSnapshot = pfResult.snapshot
@@ -282,8 +290,10 @@ class TickEngineImpl(
         applyAutoSlow(runtime, pfResult)
 
         // Step 6: trigger N-1 contingency analysis every 6 ticks (1 grid-hour)
+        // triggerAsync() and the background run it schedules both synchronize on
+        // physicsSession internally (#360) — no extra wrapping needed here.
         if (ctx.tickNumber % CONTINGENCY_TRIGGER_INTERVAL == 0L) {
-            contingencyAnalysisService.triggerAsync(physicsSession.iidmNetwork)
+            contingencyAnalysisService.triggerAsync(physicsSession.iidmNetwork, physicsSession)
         }
 
         // Step 7: EventEngine.onTick()

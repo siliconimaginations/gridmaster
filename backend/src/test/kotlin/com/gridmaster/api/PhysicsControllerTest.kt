@@ -414,12 +414,12 @@ class PhysicsControllerTest {
 
     @Test
     fun `POST contingencies trigger returns 202`() {
-        every { contingencyService.triggerAsync(any(), any()) } returns Unit
+        every { contingencyService.triggerAsync(any(), any(), any()) } returns Unit
 
         val ctgResult = mvc.post("$BASE/contingencies/trigger").andReturn()
         mvc.perform(asyncDispatch(ctgResult)).andExpect(jStatus().isAccepted())
 
-        verify { contingencyService.triggerAsync(any(), any()) }
+        verify { contingencyService.triggerAsync(any(), any(), any()) }
     }
 
     // -----------------------------------------------------------------------
