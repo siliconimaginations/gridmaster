@@ -354,3 +354,91 @@
 .confirmBtn:hover {
   background: rgba(34, 211, 238, 0.25);
 }
+
+/* ── Cost stack (issue #336) ─────────────────────────────────────────────── */
+
+.costStack {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  padding: 8px 14px 10px;
+}
+
+.costStackHeader {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 2px 0;
+  width: 100%;
+  text-align: left;
+}
+
+.costStackHeader:hover {
+  color: #cbd5e1;
+}
+
+.costStackBody {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  position: relative;
+}
+
+.costStackRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+}
+
+.costStackLabel {
+  width: 90px;
+  flex-shrink: 0;
+  color: #cbd5e1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.costStackTrack {
+  flex: 1;
+  position: relative;
+  height: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+}
+
+.costStackBar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  border-radius: 3px;
+}
+
+.costStackValue {
+  width: 56px;
+  flex-shrink: 0;
+  text-align: right;
+  color: #94a3b8;
+}
+
+.costStackSmcLine {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background: #22d3ee;
+}
+
+.costStackSmcLabel {
+  position: absolute;
+  top: -14px;
+  transform: translateX(-50%);
+  font-size: 9px;
+  color: #22d3ee;
+  white-space: nowrap;
+}

@@ -17,16 +17,21 @@ function makeGenerator(overrides: Partial<GeneratorDto> = {}): GeneratorDto {
     activePowerMw: 200,
     maxActivePowerMw: 500,
     committed: true,
+    marginalCostPerMwh: 48.6,
     ...overrides,
   }
 }
 
-function makeNetwork(generators: GeneratorDto[]): GridNetworkDto {
+function makeNetwork(
+  generators: GeneratorDto[],
+  systemMarginalCostPerMwh: number | null = null,
+): GridNetworkDto {
   return {
     generators,
     loads: [{ id: 'load-1', busId: 'bus-1', name: 'City Load', activePowerMw: 300, reactivePowerMvar: 0 }],
     buses: [],
     branches: [],
+    systemMarginalCostPerMwh,
   } as unknown as GridNetworkDto
 }
 
@@ -120,13 +125,22 @@ describe('DispatchPanel', () => {
       setStoreState(makeNetwork([makeGenerator({ id: 'gen-1', name: 'Didcot Gas' })]))
       renderPanel(true)
       expect(screen.getByTestId('dispatch-row-gen-1')).toBeInTheDocument()
-      expect(screen.getByText('Didcot Gas')).toBeInTheDocument()
+      // "Didcot Gas" also appears in the cost-stack chart's bar label (#336),
+      // so scope this assertion to the merit-order row rather than the whole
+      // document.
+      expect(screen.getByTestId('dispatch-row-gen-1')).toHaveTextContent('Didcot Gas')
     })
 
     it('sorts generators by marginal cost (renewable first)', () => {
       const gens = [
-        makeGenerator({ id: 'coal-1', name: 'Coal Plant', fuelType: 'COAL', activePowerMw: 100, maxActivePowerMw: 400 }),
-        makeGenerator({ id: 'wind-1', name: 'Wind Farm', fuelType: 'WIND', activePowerMw: 80, maxActivePowerMw: 200 }),
+        makeGenerator({
+          id: 'coal-1', name: 'Coal Plant', fuelType: 'COAL',
+          activePowerMw: 100, maxActivePowerMw: 400, marginalCostPerMwh: 90.0,
+        }),
+        makeGenerator({
+          id: 'wind-1', name: 'Wind Farm', fuelType: 'WIND',
+          activePowerMw: 80, maxActivePowerMw: 200, marginalCostPerMwh: 42.0,
+        }),
       ]
       setStoreState(makeNetwork(gens))
       renderPanel(true)
@@ -281,6 +295,52 @@ describe('DispatchPanel', () => {
       expect(mockSendCommand).toHaveBeenCalledWith(
         expect.objectContaining({ commandType: 'RunUnitCommitment' }),
       )
+    })
+  })
+
+  describe('Cost stack chart (#336)', () => {
+    it('renders a bar per generator, sorted by marginal cost ascending', () => {
+      const gens = [
+        makeGenerator({ id: 'coal-1', name: 'Coal Plant', fuelType: 'COAL', marginalCostPerMwh: 90.0 }),
+        makeGenerator({ id: 'wind-1', name: 'Wind Farm', fuelType: 'WIND', marginalCostPerMwh: 42.0 }),
+        makeGenerator({ id: 'gas-1', name: 'Gas Plant', fuelType: 'GAS', marginalCostPerMwh: 48.6 }),
+      ]
+      setStoreState(makeNetwork(gens))
+      renderPanel(true)
+
+      const chart = screen.getByTestId('cost-stack-chart')
+      expect(chart).toBeInTheDocument()
+      // DOCUMENT_POSITION_FOLLOWING (4) — cheapest (wind) must render before
+      // the more expensive gas and coal bars.
+      const windBar = screen.getByTestId('cost-stack-bar-wind-1')
+      const gasBar = screen.getByTestId('cost-stack-bar-gas-1')
+      const coalBar = screen.getByTestId('cost-stack-bar-coal-1')
+      expect(windBar.compareDocumentPosition(gasBar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(gasBar.compareDocumentPosition(coalBar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    })
+
+    it('shows the SMC marker and value when the server supplies one', () => {
+      setStoreState(makeNetwork([makeGenerator({ id: 'gen-1', marginalCostPerMwh: 48.6 })], 45.2))
+      renderPanel(true)
+
+      expect(screen.getByTestId('cost-stack-toggle')).toHaveTextContent('£45.2/MWh')
+      expect(screen.getByTestId('cost-stack-smc-line')).toBeInTheDocument()
+    })
+
+    it('omits the SMC marker when the network has no dispatch result yet', () => {
+      setStoreState(makeNetwork([makeGenerator({ id: 'gen-1' })], null))
+      renderPanel(true)
+
+      expect(screen.queryByTestId('cost-stack-smc-line')).toBeNull()
+    })
+
+    it('collapses on toggle click', () => {
+      setStoreState(makeNetwork([makeGenerator({ id: 'gen-1' })]))
+      renderPanel(true)
+
+      expect(screen.getByTestId('cost-stack-chart')).toBeInTheDocument()
+      fireEvent.click(screen.getByTestId('cost-stack-toggle'))
+      expect(screen.queryByTestId('cost-stack-chart')).toBeNull()
     })
   })
 })

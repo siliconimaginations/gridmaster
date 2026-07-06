@@ -17,8 +17,12 @@ const FUEL_EMOJI: Record<string, string> = {
 }
 
 /**
- * Approximate marginal cost (£/MWh) derived from fuel type.
- * Used for merit-order sorting when the server does not supply per-generator cost.
+ * Fallback marginal cost (£/MWh) derived from fuel type, used only when the
+ * server hasn't supplied a real per-generator `marginalCostPerMwh` (e.g. an
+ * unmapped/OTHER fuel type, which defaults to 0 backend-side). As of #336 the
+ * backend supplies real per-generator costs (derived from the MATPOWER
+ * case14 generator cost curves) — see costGbpMwh() below, which is what the
+ * rest of this component should call instead of this heuristic directly.
  */
 function estimatedCostGbpMwh(fuelType: string): number {
   switch (fuelType.toUpperCase()) {
@@ -33,8 +37,28 @@ function estimatedCostGbpMwh(fuelType: string): number {
   }
 }
 
+/** Real per-generator marginal cost (£/MWh), falling back to the fuel-type heuristic if unset (#336). */
+function costGbpMwh(gen: GeneratorDto): number {
+  return gen.marginalCostPerMwh > 0 ? gen.marginalCostPerMwh : estimatedCostGbpMwh(gen.fuelType)
+}
+
 function fuelEmoji(fuelType: string): string {
   return FUEL_EMOJI[fuelType.toUpperCase()] ?? '⚡'
+}
+
+/** Bar colour per fuel type for the cost-stack chart (#336). */
+const FUEL_COLOR: Record<string, string> = {
+  SOLAR: '#f6c945',
+  WIND: '#38bdf8',
+  HYDRO: '#0ea5e9',
+  NUCLEAR: '#a78bfa',
+  GAS: '#fb923c',
+  COAL: '#78716c',
+  OIL: '#7c2d12',
+}
+
+function fuelColor(fuelType: string): string {
+  return FUEL_COLOR[fuelType.toUpperCase()] ?? '#64748b'
 }
 
 // ── Real-time tab ─────────────────────────────────────────────────────────────
@@ -65,7 +89,7 @@ function MeritOrderRow({ rank, gen, expanded, onToggleExpand, onSetOutput, onTog
         <span className={styles.rank}>{rank}</span>
         <span className={styles.genName}>{gen.name}</span>
         <span className={styles.genFuel}>{fuelEmoji(gen.fuelType)}</span>
-        <span className={styles.genCost}>£{estimatedCostGbpMwh(gen.fuelType)}/MWh</span>
+        <span className={styles.genCost}>£{costGbpMwh(gen).toFixed(1)}/MWh</span>
         <div className={styles.outputCell}>
           <div className={styles.outputBar}>
             <div className={styles.outputFill} style={{ width: `${Math.min(pct, 100)}%` }} />
@@ -112,7 +136,7 @@ function MeritOrderTab({ generators }: { generators: GeneratorDto[] }) {
 
   const sorted = [...generators].sort((a, b) => {
     if (a.committed !== b.committed) return a.committed ? -1 : 1
-    return estimatedCostGbpMwh(a.fuelType) - estimatedCostGbpMwh(b.fuelType)
+    return costGbpMwh(a) - costGbpMwh(b)
   })
 
   const totalOutput = generators.filter((g) => g.committed).reduce((sum, g) => sum + g.activePowerMw, 0)
@@ -200,9 +224,7 @@ function UCScheduleTab({ generators }: { generators: GeneratorDto[] }) {
   }
 
   function autoFill() {
-    const meritOrder = [...generators].sort(
-      (a, b) => estimatedCostGbpMwh(a.fuelType) - estimatedCostGbpMwh(b.fuelType),
-    )
+    const meritOrder = [...generators].sort((a, b) => costGbpMwh(a) - costGbpMwh(b))
     setSchedule((prev) => {
       const next = { ...prev }
       for (const gen of meritOrder) {
@@ -267,6 +289,72 @@ function UCScheduleTab({ generators }: { generators: GeneratorDto[] }) {
   )
 }
 
+// ── Cost stack chart (issue #336) ─────────────────────────────────────────────
+
+/**
+ * Collapsible bar chart of generators sorted by marginal cost, coloured by
+ * fuel type, with a vertical marker at the system marginal cost (SMC) — the
+ * cost of the last (most expensive) unit needed to meet demand. Pure CSS
+ * bars, no chart library, per issue #336's acceptance criteria.
+ */
+function CostStackSection({
+  generators,
+  systemMarginalCostPerMwh,
+}: {
+  generators: GeneratorDto[]
+  systemMarginalCostPerMwh: number | null | undefined
+}) {
+  const [expanded, setExpanded] = useState(true)
+
+  if (generators.length === 0) return null
+
+  const sorted = [...generators].sort((a, b) => costGbpMwh(a) - costGbpMwh(b))
+  const smc = typeof systemMarginalCostPerMwh === 'number' ? systemMarginalCostPerMwh : null
+  const maxCost = Math.max(...sorted.map(costGbpMwh), smc ?? 0, 1)
+  const smcPct = smc !== null ? Math.min((smc / maxCost) * 100, 100) : null
+
+  return (
+    <div className={styles.costStack} data-testid="cost-stack-section">
+      <button
+        type="button"
+        className={styles.costStackHeader}
+        onClick={() => setExpanded((e) => !e)}
+        data-testid="cost-stack-toggle"
+      >
+        {expanded ? '▾' : '▸'} Cost stack {smc !== null ? `— SMC £${smc.toFixed(1)}/MWh` : ''}
+      </button>
+
+      {expanded && (
+        <div className={styles.costStackBody} data-testid="cost-stack-chart">
+          {sorted.map((gen) => {
+            const cost = costGbpMwh(gen)
+            const pct = Math.min((cost / maxCost) * 100, 100)
+            return (
+              <div key={gen.id} className={styles.costStackRow} data-testid={`cost-stack-bar-${gen.id}`}>
+                <span className={styles.costStackLabel} title={gen.name}>{gen.name}</span>
+                <div className={styles.costStackTrack}>
+                  <div
+                    className={styles.costStackBar}
+                    style={{ width: `${pct}%`, background: fuelColor(gen.fuelType) }}
+                  />
+                  {smcPct !== null && (
+                    <div
+                      className={styles.costStackSmcLine}
+                      style={{ left: `${smcPct}%` }}
+                      data-testid="cost-stack-smc-line"
+                    />
+                  )}
+                </div>
+                <span className={styles.costStackValue}>£{cost.toFixed(1)}</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── DispatchPanel ─────────────────────────────────────────────────────────────
 
 type Tab = 'realtime' | 'dayahead'
@@ -318,6 +406,11 @@ export function DispatchPanel({ open, onClose }: { open: boolean; onClose: () =>
         </div>
         <button className={styles.closeBtn} onClick={onClose} aria-label="Close dispatch panel">×</button>
       </div>
+
+      <CostStackSection
+        generators={generators}
+        systemMarginalCostPerMwh={network.systemMarginalCostPerMwh}
+      />
 
       {/* Tab content */}
       {activeTab === 'realtime'

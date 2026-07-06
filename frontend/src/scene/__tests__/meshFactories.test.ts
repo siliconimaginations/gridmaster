@@ -89,7 +89,7 @@ const mockScene = {
 
 const makeGen = (committed: boolean, activePowerMw: number): GeneratorDto => ({
   id: 'g1', busId: 'b1', name: 'Gen1', maxActivePowerMw: 200, fuelType: 'GAS',
-  committed, activePowerMw,
+  committed, activePowerMw, marginalCostPerMwh: 48.6,
 })
 
 const makeViolation = (elementId: string): ViolationDto => ({
