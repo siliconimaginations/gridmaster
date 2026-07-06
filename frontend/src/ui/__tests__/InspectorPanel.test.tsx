@@ -101,8 +101,10 @@ describe('InspectorPanel', () => {
     expect(screen.getByTestId('inspector-panel')).toHaveTextContent('132 kV')
     // b1 has one connected branch (br-1, to b2) and shares SUB_ID with no
     // other bus in this fixture, so both grouping counts should read 1.
-    expect(screen.getByTestId('inspector-panel')).toHaveTextContent('Buses1')
-    expect(screen.getByTestId('inspector-panel')).toHaveTextContent('Lines1')
+    // Negative lookahead (Gemini review, PR #368) so "Buses1" can't
+    // false-match a future fixture where the count is e.g. 10.
+    expect(screen.getByTestId('inspector-panel')).toHaveTextContent(/Buses1(?!\d)/)
+    expect(screen.getByTestId('inspector-panel')).toHaveTextContent(/Lines1(?!\d)/)
   })
 
   it('renders nothing for a BUS element id that matches no bus (regression for #364)', () => {
@@ -127,7 +129,7 @@ describe('InspectorPanel', () => {
     mockStore({ elementType: 'BUS', elementId: 'b1' }, network)
     render(<InspectorPanel />)
     // b1 and b3 now share SUB_ID — Buses count reflects both.
-    expect(screen.getByTestId('inspector-panel')).toHaveTextContent('Buses2')
+    expect(screen.getByTestId('inspector-panel')).toHaveTextContent(/Buses2(?!\d)/)
   })
 
   it('shows load metrics', () => {
