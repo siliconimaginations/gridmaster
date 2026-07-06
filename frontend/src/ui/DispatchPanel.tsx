@@ -124,7 +124,7 @@ function MeritOrderTab({ generators }: { generators: GeneratorDto[] }) {
 
   const handleSetOutput = useCallback((id: string, mw: number) => {
     sendCommandOptimistic(
-      { commandType: 'SetGeneratorOutput', payload: { generatorId: id, activePowerMw: mw } },
+      { commandType: 'SetGeneratorOutput', payload: { generatorId: id, targetMw: mw } },
       (prev) => ({
         ...prev,
         generators: prev.generators.map((g) => (g.id === id ? { ...g, activePowerMw: mw } : g)),

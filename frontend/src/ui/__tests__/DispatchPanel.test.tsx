@@ -192,6 +192,24 @@ describe('DispatchPanel', () => {
       )
     })
 
+    it('slider mouseUp sends SetGeneratorOutput with a targetMw payload (#365)', () => {
+      // The backend's PlayerCommand.SetGeneratorOutput expects `targetMw`, not
+      // `activePowerMw` — a prior mismatch here made every dispatch command
+      // fail with "'targetMw' must be a number".
+      setStoreState(makeNetwork([makeGenerator({ id: 'gen-1', committed: true, maxActivePowerMw: 500 })]))
+      renderPanel(true)
+      fireEvent.click(screen.getByTestId('dispatch-row-gen-1'))
+      const slider = screen.getByLabelText(/Output for/)
+      fireEvent.mouseUp(slider, { target: { value: '250' } })
+      expect(mockSendCommandOptimistic).toHaveBeenCalledWith(
+        {
+          commandType: 'SetGeneratorOutput',
+          payload: { generatorId: 'gen-1', targetMw: 250 },
+        },
+        expect.any(Function),
+      )
+    })
+
     it('does not expand slider for decommitted generator', () => {
       setStoreState(makeNetwork([makeGenerator({ id: 'gen-1', committed: false })]))
       renderPanel(true)
