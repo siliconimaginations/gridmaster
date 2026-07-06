@@ -271,4 +271,44 @@ describe('NodeLayer', () => {
       expect(() => layer.rebuild(makeGraph([bus]), makeTextures(), 1)).not.toThrow()
     },
   )
+
+  // ── Sprite scale on LOD tier crossing (#359) ──────────────────────────────
+
+  it('sprite scale after crossing LOD tiers stays derived from configured size, never native texture size', () => {
+    const graph = makeGraph([makeBus('A', 'gen')])
+    layer.rebuild(graph, makeTextures(), 2)
+    const group = layer.container.children[0]
+    const sprite = group.getChildByName('sprite') as unknown as { scale: { x: number; y: number } }
+
+    // Base scale derived from SPRITE_PARAMS.gen (130x130) against the mock's
+    // 1024px native texture — this is the "correct" full-size (tier 2) scale.
+    const baseScale = 130 / 1024
+    expect(sprite.scale.x).toBeCloseTo(baseScale, 5)
+
+    // Cross down to tier 1: must be 0.75x the *base* scale, not an absolute
+    // 0.75 (which would be ~10x too large relative to the base scale).
+    layer.applyLod(1)
+    expect(sprite.scale.x).toBeCloseTo(baseScale * 0.75, 5)
+    expect(sprite.scale.x).not.toBeCloseTo(0.75, 2)
+
+    // Cross back up to tier 2: must return to the exact original base scale.
+    layer.applyLod(2)
+    expect(sprite.scale.x).toBeCloseTo(baseScale, 5)
+
+    // Repeated tier crossings must not drift or compound.
+    layer.applyLod(1)
+    layer.applyLod(2)
+    layer.applyLod(1)
+    expect(sprite.scale.x).toBeCloseTo(baseScale * 0.75, 5)
+  })
+
+  it('rebuild at tier 1 applies the tier-1 scale factor immediately, before any applyLod call', () => {
+    const graph = makeGraph([makeBus('A', 'sub')])
+    layer.rebuild(graph, makeTextures(), 1)
+    const group = layer.container.children[0]
+    const sprite = group.getChildByName('sprite') as unknown as { scale: { x: number; y: number } }
+
+    const baseScale = 145 / 1024 // SPRITE_PARAMS.sub w=145
+    expect(sprite.scale.x).toBeCloseTo(baseScale * 0.75, 5)
+  })
 })

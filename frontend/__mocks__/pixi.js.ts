@@ -63,10 +63,49 @@ export class Graphics extends Container {
 
 // ── Sprite ─────────────────────────────────────────────────────────────────────
 
+/**
+ * Mirrors real PixiJS v8 Sprite semantics closely enough to catch scale bugs
+ * like #359: setting `.width`/`.height` derives `.scale` from the texture's
+ * native size, and reading `.scale.x/.y` after a `.scale.set(x, y)` call
+ * reflects the values actually passed. A shallow `scale = { set: vi.fn() }`
+ * stub (as used previously) can't detect regressions where LOD code
+ * overwrites scale with an absolute value instead of scaling relative to the
+ * sprite's configured base size.
+ */
 export class Sprite extends Container {
   tint = 0xffffff
-  constructor(public texture: unknown = null) {
+  texture: { orig?: { width: number; height: number } } | null
+
+  constructor(texture: { orig?: { width: number; height: number } } | null = null) {
     super()
+    this.texture = texture
+
+    const texW = () => this.texture?.orig?.width ?? 1024
+    const texH = () => this.texture?.orig?.height ?? 1024
+
+    // Own `scale` object (shadows Container's fluent-set stub) whose x/y
+    // reflect whatever was last actually passed to `.set()` or derived from
+    // `.width`/`.height` — matching real PixiJS v8 Sprite semantics closely
+    // enough to catch scale regressions like #359.
+    this.scale = {
+      x: 1,
+      y: 1,
+      set: vi.fn((x: number, y?: number) => {
+        this.scale.x = x
+        this.scale.y = y ?? x
+      }),
+    }
+
+    Object.defineProperty(this, 'width', {
+      configurable: true,
+      get: () => this.scale.x * texW(),
+      set: (v: number) => { this.scale.x = v / texW() },
+    })
+    Object.defineProperty(this, 'height', {
+      configurable: true,
+      get: () => this.scale.y * texH(),
+      set: (v: number) => { this.scale.y = v / texH() },
+    })
   }
 }
 
@@ -75,6 +114,7 @@ export class Sprite extends Container {
 export class Texture {
   static WHITE = new Texture()
   static from(_src: string) { return new Texture() }
+  orig = { width: 1024, height: 1024 }
 }
 
 // ── Assets ────────────────────────────────────────────────────────────────────
