@@ -104,6 +104,8 @@ data class GeneratorWsDto(
     /** True when the generator terminal is connected (committed to the grid). */
     val committed: Boolean,
     val fuelType: String,
+    /** £/MWh — from [com.gridmaster.engine.network.GeneratorMetadata] (issue #336). */
+    val marginalCostPerMwh: Double,
 )
 
 data class LoadWsDto(
@@ -308,6 +310,7 @@ fun GridNetwork.toNetworkWsDto(smc: Double? = null): GridNetworkWsDto {
                 maxActivePowerMw = gen.maxActivePowerMw,
                 committed = gen.connected,
                 fuelType = gen.fuelType.name,
+                marginalCostPerMwh = gen.marginalCostPerMwh,
             )
         }
 

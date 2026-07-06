@@ -44,6 +44,8 @@ export interface GeneratorDto {
   maxActivePowerMw: number
   committed: boolean
   fuelType: string
+  /** Real per-generator marginal cost (£/MWh) from backend GeneratorMetadata (#336). */
+  marginalCostPerMwh: number
 }
 
 export interface LoadDto {

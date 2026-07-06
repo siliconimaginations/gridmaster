@@ -12,7 +12,7 @@ const mockScene = {
 } as never
 
 const makeBus = (id: string): BusDto => ({ id, name: id, voltageKv: 220, voltagePu: 1, angleRad: 0, substationId: `s_${id}` })
-const makeGen = (id: string): GeneratorDto => ({ id, busId: 'b1', name: id, activePowerMw: 100, maxActivePowerMw: 200, committed: true, fuelType: 'GAS' })
+const makeGen = (id: string): GeneratorDto => ({ id, busId: 'b1', name: id, activePowerMw: 100, maxActivePowerMw: 200, committed: true, fuelType: 'GAS', marginalCostPerMwh: 48.6 })
 const makeLoad = (id: string): LoadDto => ({ id, busId: 'b2', name: id, activePowerMw: 50, reactivePowerMvar: 0 })
 const makeBranch = (id: string): BranchDto => ({ id, fromBusId: 'b1', toBusId: 'b2', activePowerMw: 100, reactivePowerMvar: 10, connected: true, loadingPercent: 50 })
 

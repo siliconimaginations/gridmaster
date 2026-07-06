@@ -20,8 +20,8 @@ const makeDto = (overrides: Partial<GridNetworkDto> = {}): GridNetworkDto => ({
     { id: 'B3', name: 'SubBus',  voltageKv: 110, voltagePu: null as unknown as number, angleRad: 0, substationId: 'S1' },
   ],
   generators: [
-    { id: 'G1', busId: 'B1', name: 'Gen1', activePowerMw: 80, maxActivePowerMw: 120, committed: true,  fuelType: 'COAL' },
-    { id: 'G2', busId: 'B1', name: 'Gen2', activePowerMw: 20, maxActivePowerMw:  80, committed: false, fuelType: 'GAS'  },
+    { id: 'G1', busId: 'B1', name: 'Gen1', activePowerMw: 80, maxActivePowerMw: 120, committed: true,  fuelType: 'COAL', marginalCostPerMwh: 90.0 },
+    { id: 'G2', busId: 'B1', name: 'Gen2', activePowerMw: 20, maxActivePowerMw:  80, committed: false, fuelType: 'GAS',  marginalCostPerMwh: 48.6 },
   ],
   loads: [
     { id: 'L1', busId: 'B2', name: 'Load1', activePowerMw: 50, reactivePowerMvar: 10 },

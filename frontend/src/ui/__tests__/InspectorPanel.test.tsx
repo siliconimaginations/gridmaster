@@ -26,7 +26,7 @@ const NETWORK: GridNetworkDto = {
     { id: 'b2', name: 'Bus 2', voltageKv: 132, voltagePu: 1.02, angleRad: 0, substationId: 'sub-2' },
   ],
   generators: [
-    { id: GEN_ID, busId: 'b1', name: 'CCGT-1', activePowerMw: 400, maxActivePowerMw: 600, committed: true, fuelType: 'Gas' },
+    { id: GEN_ID, busId: 'b1', name: 'CCGT-1', activePowerMw: 400, maxActivePowerMw: 600, committed: true, fuelType: 'Gas', marginalCostPerMwh: 48.6 },
   ],
   branches: [
     { id: BRANCH_ID, fromBusId: 'b1', toBusId: 'b2', activePowerMw: 150, reactivePowerMvar: 10, loadingPercent: 75, connected: true },
