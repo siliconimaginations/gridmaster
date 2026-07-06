@@ -104,8 +104,8 @@ class PowSyBlContingencyAnalysisService(
         // Synchronized against the same lock the background run (below) and every
         // other caller use — PowSyBl's VariantManager is not safe for concurrent
         // mutation (#360).
+        val variantId = "ca-analysis-${System.nanoTime()}"
         synchronized(lock) {
-            val variantId = "ca-analysis-${System.nanoTime()}"
             network.variantManager.cloneVariant(VariantManagerConstants.INITIAL_VARIANT_ID, variantId, true)
 
             // Clean up any previously-pending variant that is being replaced (CONFLATED channel).
@@ -113,9 +113,11 @@ class PowSyBlContingencyAnalysisService(
                 runCatching { network.variantManager.removeVariant(dropped) }
                     .onFailure { log.warn("Failed to remove dropped variant {}", dropped, it) }
             }
-
-            triggerChannel.trySend(RunRequest(network, parameters, variantId, lock))
         }
+
+        // trySend() doesn't touch the network, so it doesn't need the lock — keep the
+        // critical section limited to the actual variant-manager calls (Gemini review, PR #362).
+        triggerChannel.trySend(RunRequest(network, parameters, variantId, lock))
     }
 
     override fun latestResult(): ContingencyAnalysisResult? = cache.latest()
@@ -266,6 +268,11 @@ class PowSyBlContingencyAnalysisService(
                 log.warn("DC pre-screen failed for contingency ${contingency.id}: ${e.message}")
                 needsAc += contingency
             } finally {
+                // No `withContext(NonCancellable)` needed here (Gemini review, PR #362, flagged
+                // its removal): dcPreScreen is a plain blocking function now, not `suspend` — it
+                // has no suspension points a cancelled Job could interrupt mid-cleanup, so these
+                // two calls always run to completion as ordinary try/finally semantics, with no
+                // dependency on coroutine cancellation state.
                 runCatching {
                     network.variantManager.setWorkingVariant(sourceVariantId)
                 }
