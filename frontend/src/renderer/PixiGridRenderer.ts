@@ -143,7 +143,13 @@ export class PixiGridRenderer {
       .pinch()
       .wheel()
       .decelerate()
-      .clampZoom({ minScale: 0.15, maxScale: 4 })
+      // minScale was 0.15, which let players zoom out far enough to see
+      // several screens' worth of flat background past the WORLD_W x
+      // WORLD_H terrain quad's edge (the terrain doesn't extend beyond it —
+      // see #363). Raised to 0.35 so the terrain quad still roughly fills
+      // the viewport at max zoom-out instead of shrinking to a small island
+      // surrounded by empty space.
+      .clampZoom({ minScale: 0.35, maxScale: 4 })
 
     this.app.stage.addChild(this.viewport)
 

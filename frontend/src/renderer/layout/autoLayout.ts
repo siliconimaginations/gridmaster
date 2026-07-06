@@ -13,7 +13,13 @@
 
 import type { GridGraph, BusNode } from '../../model/GridGraph'
 
-const PADDING = 80  // px inset from viewport edges
+// px inset from viewport edges — kept generous (rather than the terrain
+// quad's actual physical edge) so buildings/sprites never sit right at the
+// grass boundary. Bumped from 80 -> 220 per feedback that objects looked
+// too close to the terrain edge, especially once zoomed out (see also the
+// clampZoom minScale bump in PixiGridRenderer.ts, which limits how far a
+// player can zoom out past the terrain quad in the first place).
+const PADDING = 220
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
