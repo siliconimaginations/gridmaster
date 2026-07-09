@@ -38,7 +38,11 @@ const makeNetwork = (id = 'net1'): GridNetworkDto => ({
   buses: [{ id, name: id, voltageKv: 220, voltagePu: 1.0, angleRad: 0, substationId: 's1' }],
   branches: [],
   generators: [
-    { id: 'gen1', busId: id, name: 'Gen1', activePowerMw: 100, maxActivePowerMw: 200, committed: true, fuelType: 'GAS', marginalCostPerMwh: 48.6 },
+    {
+      id: 'gen1', busId: id, name: 'Gen1', activePowerMw: 100, setpointMw: 100,
+      maxActivePowerMw: 200, committed: true, fuelType: 'GAS', marginalCostPerMwh: 48.6,
+      dispatchable: true,
+    },
   ],
   loads: [],
 })

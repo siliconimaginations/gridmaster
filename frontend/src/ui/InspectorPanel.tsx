@@ -48,6 +48,10 @@ function GeneratorCard({ id, network }: { id: string; network: GridNetworkDto })
   return (
     <>
       <Row label="Output" value={`${fmt(gen.activePowerMw)} MW`} />
+      {/* Setpoint only makes sense for dispatchable generators — WIND/SOLAR
+          aren't user-settable, so there's nothing to show alongside their
+          actual output (#382). */}
+      {gen.dispatchable && <Row label="Setpoint" value={`${fmt(gen.setpointMw)} MW`} />}
       <Row label="Max" value={`${fmt(gen.maxActivePowerMw)} MW`} />
       <Row
         label="Loading"
@@ -56,6 +60,7 @@ function GeneratorCard({ id, network }: { id: string; network: GridNetworkDto })
       />
       <Row label="Fuel" value={gen.fuelType} />
       <Row label="Status" value={gen.committed ? 'Committed' : 'Decommitted'} />
+      {!gen.dispatchable && <Row label="Dispatch" value="Not dispatchable (weather-driven)" />}
     </>
   )
 }

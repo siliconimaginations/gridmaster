@@ -110,19 +110,42 @@ function MeritOrderRow({ rank, gen, expanded, onToggleExpand, onSetOutput, onTog
       </div>
       {expanded && gen.committed && (
         <div className={styles.sliderRow} data-testid={`slider-row-${gen.id}`}>
-          <label className={styles.sliderLabel}>Set output</label>
-          <input
-            type="range"
-            min={0}
-            max={gen.maxActivePowerMw}
-            step={1}
-            defaultValue={gen.activePowerMw}
-            className={styles.slider}
-            onMouseUp={(e) => onSetOutput(gen.id, Number((e.target as HTMLInputElement).value))}
-            onTouchEnd={(e) => onSetOutput(gen.id, Number((e.target as HTMLInputElement).value))}
-            aria-label={`Output for ${gen.name}`}
-          />
-          <span className={styles.sliderMax}>{Math.round(gen.maxActivePowerMw)} MW</span>
+          {gen.dispatchable ? (
+            <>
+              <label className={styles.sliderLabel}>Setpoint</label>
+              {/* Slider tracks setpointMw (the editable target), not activePowerMw
+                  (the live solved output) — conflating the two here previously let
+                  players "edit" a value that the next solve would silently
+                  overwrite (issue #382). */}
+              <input
+                type="range"
+                min={0}
+                max={gen.maxActivePowerMw}
+                step={1}
+                defaultValue={gen.setpointMw}
+                className={styles.slider}
+                onMouseUp={(e) => onSetOutput(gen.id, Number((e.target as HTMLInputElement).value))}
+                onTouchEnd={(e) => onSetOutput(gen.id, Number((e.target as HTMLInputElement).value))}
+                aria-label={`Output for ${gen.name}`}
+              />
+              <span className={styles.sliderMax}>{Math.round(gen.maxActivePowerMw)} MW</span>
+              <span className={styles.actualOutput} data-testid={`actual-output-${gen.id}`}>
+                Actual: {Math.round(gen.activePowerMw)} MW
+              </span>
+            </>
+          ) : (
+            <>
+              <label className={styles.sliderLabel}>Output</label>
+              {/* WIND/SOLAR generators aren't user-settable — show the actual
+                  solved output read-only instead of an editable slider (#382). */}
+              <span
+                className={styles.readonlyOutput}
+                data-testid={`readonly-output-${gen.id}`}
+              >
+                {Math.round(gen.activePowerMw)} MW (not dispatchable — weather-driven)
+              </span>
+            </>
+          )}
         </div>
       )}
     </>

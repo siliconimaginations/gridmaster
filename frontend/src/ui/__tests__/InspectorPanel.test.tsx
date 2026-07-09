@@ -26,7 +26,11 @@ const NETWORK: GridNetworkDto = {
     { id: 'b2', name: 'Bus 2', voltageKv: 132, voltagePu: 1.02, angleRad: 0, substationId: 'sub-2' },
   ],
   generators: [
-    { id: GEN_ID, busId: 'b1', name: 'CCGT-1', activePowerMw: 400, maxActivePowerMw: 600, committed: true, fuelType: 'Gas', marginalCostPerMwh: 48.6 },
+    {
+      id: GEN_ID, busId: 'b1', name: 'CCGT-1', activePowerMw: 400, setpointMw: 400,
+      maxActivePowerMw: 600, committed: true, fuelType: 'Gas', marginalCostPerMwh: 48.6,
+      dispatchable: true,
+    },
   ],
   branches: [
     { id: BRANCH_ID, fromBusId: 'b1', toBusId: 'b2', activePowerMw: 150, reactivePowerMvar: 10, loadingPercent: 75, connected: true },
@@ -82,6 +86,34 @@ describe('InspectorPanel', () => {
     expect(screen.getByTestId('inspector-panel')).toHaveTextContent('400.0 MW')
     expect(screen.getByTestId('inspector-panel')).toHaveTextContent('Gas')
     expect(screen.getByTestId('inspector-panel')).toHaveTextContent('Committed')
+  })
+
+  // ── #382: setpoint vs actual output, dispatchable vs non-dispatchable ──────
+
+  it('shows the setpoint alongside actual output for a dispatchable generator (#382)', () => {
+    const network: GridNetworkDto = {
+      ...NETWORK,
+      generators: [{ ...NETWORK.generators[0], activePowerMw: 380, setpointMw: 400, dispatchable: true }],
+    }
+    mockStore({ elementType: 'GENERATOR', elementId: GEN_ID }, network)
+    render(<InspectorPanel />)
+    expect(screen.getByTestId('inspector-panel')).toHaveTextContent('Output')
+    expect(screen.getByTestId('inspector-panel')).toHaveTextContent('380.0 MW')
+    expect(screen.getByTestId('inspector-panel')).toHaveTextContent('Setpoint')
+    expect(screen.getByTestId('inspector-panel')).toHaveTextContent('400.0 MW')
+  })
+
+  it('hides the setpoint row and shows a not-dispatchable note for WIND/SOLAR generators (#382)', () => {
+    const network: GridNetworkDto = {
+      ...NETWORK,
+      generators: [{
+        ...NETWORK.generators[0], fuelType: 'WIND', activePowerMw: 65, setpointMw: 65, dispatchable: false,
+      }],
+    }
+    mockStore({ elementType: 'GENERATOR', elementId: GEN_ID }, network)
+    render(<InspectorPanel />)
+    expect(screen.queryByTestId('inspector-panel')).not.toHaveTextContent('Setpoint')
+    expect(screen.getByTestId('inspector-panel')).toHaveTextContent('Not dispatchable (weather-driven)')
   })
 
   it('shows line metrics', () => {

@@ -25,7 +25,8 @@ const makeNetworkWithGenerator = (
   generators: [
     {
       id: 'g1', busId: 'b1', name: 'Gen1', fuelType: 'GAS',
-      activePowerMw, maxActivePowerMw: 500, committed, marginalCostPerMwh,
+      activePowerMw, setpointMw: activePowerMw, maxActivePowerMw: 500, committed, marginalCostPerMwh,
+      dispatchable: true,
     },
   ],
 })

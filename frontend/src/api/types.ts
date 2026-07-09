@@ -47,12 +47,24 @@ export interface GeneratorDto {
   id: string
   busId: string
   name: string
+  /**
+   * Actual active power output (MW), read back from the last power-flow solve.
+   * Falls back to `setpointMw` before the first solve. Use this for anything
+   * production-related (cost, chart bars) — never `setpointMw` (issue #382).
+   */
   activePowerMw: number
+  /**
+   * Player/algorithm-settable active power setpoint (MW). Not settable for
+   * WIND/SOLAR generators — see `dispatchable` (issue #382).
+   */
+  setpointMw: number
   maxActivePowerMw: number
   committed: boolean
   fuelType: string
   /** Real per-generator marginal cost (£/MWh) from backend GeneratorMetadata (#336). */
   marginalCostPerMwh: number
+  /** False for WIND/SOLAR — the setpoint control should be disabled in the UI (issue #382). */
+  dispatchable: boolean
 }
 
 export interface LoadDto {
