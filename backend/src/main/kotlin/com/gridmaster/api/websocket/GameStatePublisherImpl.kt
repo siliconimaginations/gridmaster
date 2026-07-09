@@ -5,6 +5,7 @@ import com.gridmaster.engine.powerflow.EquipmentType
 import com.gridmaster.engine.powerflow.NetworkViolation
 import com.gridmaster.engine.powerflow.PowerFlowResult
 import com.gridmaster.game.ClockState
+import com.gridmaster.game.DailyLoadCurve
 import com.gridmaster.game.command.Alert
 import com.gridmaster.game.event.EventCard
 import org.slf4j.LoggerFactory
@@ -178,6 +179,7 @@ class GameStatePublisherImpl(
                 healthScore = healthScore,
                 tutorialStep = tutorialStep,
                 challengeTimeRemainingMinutes = challengeTimeRemainingMinutes,
+                dailyLoadMultiplier = DailyLoadCurve.multiplierForGameTimeMinutes(gameTimeMinutes),
             )
 
         val state = sessionState.getOrPut(sessionId) { SessionPublishState() }
@@ -235,6 +237,7 @@ class GameStatePublisherImpl(
                 healthScore = healthScore,
                 tutorialStep = tutorialStep,
                 challengeTimeRemainingMinutes = challengeTimeRemainingMinutes,
+                dailyLoadMultiplier = DailyLoadCurve.multiplierForGameTimeMinutes(gameTimeMinutes),
             )
 
         if (networkChanged) state.lastNetworkHash = networkDto.hashCode()

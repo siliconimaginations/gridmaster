@@ -5,6 +5,8 @@ import com.gridmaster.api.SessionNotFoundException
 import com.gridmaster.api.websocket.GameOverDto
 import com.gridmaster.api.websocket.GameStatePublisher
 import com.gridmaster.engine.contingency.ContingencyAnalysisService
+import com.gridmaster.engine.model.NetworkMutation
+import com.gridmaster.engine.network.IidmNetworkMapper
 import com.gridmaster.engine.network.NetworkRepository
 import com.gridmaster.engine.powerflow.ConvergenceStatus
 import com.gridmaster.engine.powerflow.NetworkViolation
@@ -67,8 +69,18 @@ class TickEngineImpl(
     private val tutorialEngine: TutorialEngine,
     private val challengeEngine: com.gridmaster.game.challenge.ChallengeEngine,
     private val networkRepository: NetworkRepository,
+    private val networkMapper: IidmNetworkMapper,
     @Value("\${gridmaster.clock.auto-save-interval:$DEFAULT_AUTO_SAVE_INTERVAL}")
     private val autoSaveInterval: Long,
+    /**
+     * Feature flag for issue #383 — when true (the default), each bus load is
+     * scaled every tick by [DailyLoadCurve.multiplierForGameTimeMinutes] so demand
+     * follows a realistic daily shape instead of staying flat. Additive and
+     * backward compatible: existing sessions and tests that assume flat load can
+     * disable it via `gridmaster.daily-load-curve.enabled=false`.
+     */
+    @Value("\${gridmaster.daily-load-curve.enabled:true}")
+    private val dailyLoadCurveEnabled: Boolean,
 ) : TickEngine {
     private val log = LoggerFactory.getLogger(TickEngineImpl::class.java)
 
@@ -273,6 +285,9 @@ class TickEngineImpl(
         val pfResult =
             synchronized(physicsSession) {
                 try {
+                    if (dailyLoadCurveEnabled) {
+                        applyDailyLoadCurve(runtime, physicsSession, ctx.gameTimeMinutes)
+                    }
                     powerFlowService.solve(physicsSession.iidmNetwork)
                 } catch (e: Exception) {
                     log.error("Power flow solve failed for session {}, tick {}", runtime.sessionId, ctx.tickNumber, e)
@@ -388,6 +403,52 @@ class TickEngineImpl(
             slotMs,
             slipped,
         )
+    }
+
+    // -------------------------------------------------------------------------
+    // Daily load curve (issue #383)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Scale every load in [physicsSession] by the current time-of-day multiplier
+     * from [DailyLoadCurve]. The first call for a session captures each load's
+     * original (flat) active power in [SessionRuntime.baseLoadMw] so scaling is
+     * always relative to the network's baseline rather than compounding across
+     * ticks. [SessionRuntime] is constructed fresh in [start] every time a session
+     * (re)starts, so [SessionRuntime.baseLoadMw] can never carry over stale values
+     * from a previous run — there is no separate reset path to maintain. Must be
+     * called while holding the lock on [physicsSession] — it mutates the live IIDM
+     * network via [networkMapper], same as any other NetworkMutation application.
+     *
+     * A per-load mutation failure is logged at error level but does not abort the
+     * tick: [loadId] values come directly from the session's own network snapshot,
+     * so a failure here indicates a mapper bug rather than a transient condition,
+     * and letting the remaining loads scale normally is preferable to stalling the
+     * whole simulation over one bad load.
+     */
+    private fun applyDailyLoadCurve(
+        runtime: SessionRuntime,
+        physicsSession: com.gridmaster.api.PhysicsSession,
+        gameTimeMinutes: Long,
+    ) {
+        var baseLoads = runtime.baseLoadMw
+        if (baseLoads == null) {
+            baseLoads = physicsSession.latestSnapshot.loads.associate { it.id to it.activePowerMw }
+            runtime.baseLoadMw = baseLoads
+        }
+        val multiplier = DailyLoadCurve.multiplierForGameTimeMinutes(gameTimeMinutes)
+        runtime.currentLoadMultiplier = multiplier
+        for ((loadId, baseMw) in baseLoads) {
+            val mutation = NetworkMutation.SetLoadPower(loadId = loadId, activePowerMw = baseMw * multiplier)
+            networkMapper.applyMutation(physicsSession.iidmNetwork, mutation).onFailure {
+                log.error(
+                    "Daily load curve: failed to scale load {} for session {}: {}",
+                    loadId,
+                    runtime.sessionId,
+                    it.message,
+                )
+            }
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -723,6 +784,20 @@ internal class SessionRuntime(
     /** Set to true after game-over is triggered to prevent double-firing. */
     @Volatile
     var gameOverTriggered: Boolean = false
+
+    // ── Daily load curve (issue #383) ───────────────────────────────────────
+
+    /**
+     * Each load's original (flat) active power in MW, captured on the first
+     * tick that applies the daily load curve. Null until then. Scaling is
+     * always `baseLoadMw[id] * multiplier`, so it never compounds across ticks.
+     */
+    @Volatile
+    var baseLoadMw: Map<String, Double>? = null
+
+    /** Most recently applied daily-load-curve multiplier; 1.0 until the first tick. */
+    @Volatile
+    var currentLoadMultiplier: Double = 1.0
 
     /** Snapshot of the current state as an immutable [TickClockStatus]. Synchronized for consistency. */
     fun toStatus(): TickClockStatus =

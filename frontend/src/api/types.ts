@@ -134,6 +134,11 @@ export interface GameStateUpdate {
    * CHALLENGE-mode sessions; clamped to 0 once the deadline passes.
    */
   challengeTimeRemainingMinutes?: number | null
+  /**
+   * Current daily-load-curve multiplier for `gameTimeMinutes` (issue #383),
+   * where 1.0 is the network's flat baseline load.
+   */
+  dailyLoadMultiplier?: number | null
 }
 
 /** Sent in a ConnectionStatus message when type === 'GAME_OVER'. */

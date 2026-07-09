@@ -49,6 +49,13 @@ data class GameStateUpdate(
      * CHALLENGE-mode sessions; clamped to 0 once the deadline passes.
      */
     val challengeTimeRemainingMinutes: Int? = null,
+    /**
+     * Current daily-load-curve multiplier for [gameTimeMinutes] (issue #383),
+     * where 1.0 is the network's flat baseline load. Always populated — this
+     * reflects the time-of-day shape regardless of whether the tick engine's
+     * gridmaster.daily-load-curve.enabled flag is actively scaling loads.
+     */
+    val dailyLoadMultiplier: Double? = null,
 )
 
 enum class UpdateType { FULL, DELTA }

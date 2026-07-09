@@ -73,6 +73,11 @@ interface GameStore {
   tutorialStep: number | null
   /** Game-minutes remaining until challenge deadline; null for non-challenge sessions. */
   challengeTimeRemainingMinutes: number | null
+  /**
+   * Current daily-load-curve multiplier (issue #383), where 1.0 is the
+   * network's flat baseline load. Null until the first server update arrives.
+   */
+  dailyLoadMultiplier: number | null
 
   // Selection slice
   selectedElement: SelectedElementInfo | null
@@ -129,6 +134,7 @@ const INITIAL_GAME_STATE = {
   healthHistory: [] as number[],
   tutorialStep: null as number | null,
   challengeTimeRemainingMinutes: null as number | null,
+  dailyLoadMultiplier: null as number | null,
 } as const satisfies Partial<GameStore>
 
 // ── Store ─────────────────────────────────────────────────────────────────────
@@ -183,6 +189,7 @@ export const useGameStore = create<GameStore>()(subscribeWithSelector((set, get)
         healthHistory: appendHealth(state.healthHistory),
         tutorialStep: update.tutorialStep ?? null,
         challengeTimeRemainingMinutes: update.challengeTimeRemainingMinutes ?? null,
+        dailyLoadMultiplier: update.dailyLoadMultiplier ?? null,
       }))
     } else {
       // DELTA: clock fields are always present — set them unconditionally.
@@ -202,6 +209,7 @@ export const useGameStore = create<GameStore>()(subscribeWithSelector((set, get)
         healthScore: update.healthScore ?? undefined,
         tutorialStep: update.tutorialStep ?? undefined,
         challengeTimeRemainingMinutes: update.challengeTimeRemainingMinutes ?? undefined,
+        dailyLoadMultiplier: update.dailyLoadMultiplier ?? undefined,
       })
       set((state) => ({ ...clockUpdate, ...optionalUpdate, healthHistory: appendHealth(state.healthHistory) }))
     }
