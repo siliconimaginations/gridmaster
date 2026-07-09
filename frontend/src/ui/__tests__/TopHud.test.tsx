@@ -74,6 +74,18 @@ describe('TopHud', () => {
     expect(screen.getByTestId('pill-load')).toHaveTextContent('500 MW')
   })
 
+  it('shows the daily load curve multiplier when present (#383)', () => {
+    mockStore({ dailyLoadMultiplier: 1.184 })
+    render(<TopHud />)
+    expect(screen.getByTestId('hud-daily-load-multiplier')).toHaveTextContent('×1.18')
+  })
+
+  it('omits the daily load curve multiplier when null (#383)', () => {
+    mockStore({ dailyLoadMultiplier: null })
+    render(<TopHud />)
+    expect(screen.queryByTestId('hud-daily-load-multiplier')).toBeNull()
+  })
+
   it('shows — /h when there are no generators (#377)', () => {
     render(<TopHud />)
     expect(screen.getByTestId('hud-production-cost')).toHaveTextContent('— /h')

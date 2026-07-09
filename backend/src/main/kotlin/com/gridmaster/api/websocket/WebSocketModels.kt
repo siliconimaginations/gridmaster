@@ -49,6 +49,13 @@ data class GameStateUpdate(
      * CHALLENGE-mode sessions; clamped to 0 once the deadline passes.
      */
     val challengeTimeRemainingMinutes: Int? = null,
+    /**
+     * Current daily-load-curve multiplier for [gameTimeMinutes] (issue #383),
+     * where 1.0 is the network's flat baseline load. Always populated — this
+     * reflects the time-of-day shape regardless of whether the tick engine's
+     * gridmaster.daily-load-curve.enabled flag is actively scaling loads.
+     */
+    val dailyLoadMultiplier: Double? = null,
 )
 
 enum class UpdateType { FULL, DELTA }
@@ -109,14 +116,25 @@ data class GeneratorWsDto(
     val id: String,
     val busId: String,
     val name: String,
-    /** Active power setpoint (MW). */
+    /**
+     * Actual active power output (MW), read back from the last power-flow solve.
+     * Falls back to [setpointMw] before the first solve. This is the value production
+     * cost must be calculated from — never [setpointMw] (issue #382).
+     */
     val activePowerMw: Double,
+    /**
+     * Player/algorithm-settable active power setpoint (MW). Not settable for WIND/SOLAR
+     * generators — see [dispatchable].
+     */
+    val setpointMw: Double,
     val maxActivePowerMw: Double,
     /** True when the generator terminal is connected (committed to the grid). */
     val committed: Boolean,
     val fuelType: String,
     /** £/MWh — from [com.gridmaster.engine.network.GeneratorMetadata] (issue #336). */
     val marginalCostPerMwh: Double,
+    /** False for WIND/SOLAR — the setpoint control should be disabled in the UI (issue #382). */
+    val dispatchable: Boolean,
 )
 
 data class LoadWsDto(
@@ -273,7 +291,7 @@ data class GameOverDto(
  */
 fun GridNetwork.toNetworkWsDto(smc: Double? = null): GridNetworkWsDto {
     val totalLoad = loads.filter { it.connected }.sumOf { it.activePowerMw }
-    val totalGen = generators.filter { it.connected }.sumOf { it.targetActivePowerMw }
+    val totalGen = generators.filter { it.connected }.sumOf { it.powerOutputMw ?: it.powerSetpointMw }
 
     val buses =
         buses.map { bus ->
@@ -317,11 +335,13 @@ fun GridNetwork.toNetworkWsDto(smc: Double? = null): GridNetworkWsDto {
                 id = gen.id,
                 busId = gen.busId,
                 name = gen.name,
-                activePowerMw = gen.targetActivePowerMw,
+                activePowerMw = gen.powerOutputMw ?: gen.powerSetpointMw,
+                setpointMw = gen.powerSetpointMw,
                 maxActivePowerMw = gen.maxActivePowerMw,
                 committed = gen.connected,
                 fuelType = gen.fuelType.name,
                 marginalCostPerMwh = gen.marginalCostPerMwh,
+                dispatchable = gen.dispatchable,
             )
         }
 

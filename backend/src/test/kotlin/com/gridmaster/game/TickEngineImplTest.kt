@@ -5,6 +5,8 @@ import com.gridmaster.api.PhysicsSessionStore
 import com.gridmaster.api.SessionNotFoundException
 import com.gridmaster.engine.contingency.ContingencyAnalysisService
 import com.gridmaster.engine.model.GridNetwork
+import com.gridmaster.engine.model.Load
+import com.gridmaster.engine.model.NetworkMutation
 import com.gridmaster.engine.powerflow.ConvergenceStatus
 import com.gridmaster.engine.powerflow.PowerFlowResult
 import com.gridmaster.engine.powerflow.PowerFlowService
@@ -44,6 +46,7 @@ class TickEngineImplTest {
     private lateinit var tutorialEngine: com.gridmaster.game.tutorial.TutorialEngine
     private lateinit var challengeEngine: com.gridmaster.game.challenge.ChallengeEngine
     private lateinit var networkRepository: com.gridmaster.engine.network.NetworkRepository
+    private lateinit var networkMapper: com.gridmaster.engine.network.IidmNetworkMapper
     private lateinit var engine: TickEngineImpl
 
     private val sessionId = "session-1"
@@ -61,6 +64,7 @@ class TickEngineImplTest {
         tutorialEngine = mockk(relaxed = true)
         challengeEngine = mockk(relaxed = true)
         networkRepository = mockk(relaxed = true)
+        networkMapper = mockk(relaxed = true)
 
         engine =
             TickEngineImpl(
@@ -72,7 +76,9 @@ class TickEngineImplTest {
                 tutorialEngine = tutorialEngine,
                 challengeEngine = challengeEngine,
                 networkRepository = networkRepository,
+                networkMapper = networkMapper,
                 autoSaveInterval = 5L,
+                dailyLoadCurveEnabled = true,
             )
 
         // Default: session exists and power flow converges with no violations
@@ -82,6 +88,7 @@ class TickEngineImplTest {
         every { gameSessionService.save(any(), any(), any(), any(), any()) } returns buildGameSession()
         every { powerFlowService.solve(any()) } returns convergedResult()
         justRun { contingencyAnalysisService.triggerAsync(any(), any()) }
+        every { networkMapper.applyMutation(any(), any()) } returns Result.success(mockNetwork)
     }
 
     @AfterEach
@@ -302,6 +309,58 @@ class TickEngineImplTest {
             val status = engine.clockStatus(sessionId)
             assertThat(status).isNotNull
             assertThat(status!!.clockState).isEqualTo(ClockState.PAUSED)
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Daily load curve (issue #383)
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `daily load curve scales loads via networkMapper when enabled`() {
+        runBlocking {
+            every { mockSnapshot.loads } returns
+                listOf(
+                    Load(id = "L1", name = "Load 1", busId = "B1", activePowerMw = 100.0, reactivePowerMvar = 10.0, connected = true),
+                )
+            every { gameSessionService.load(sessionId, userId) } returns buildGameSession(multiplier = 100)
+            engine.start(sessionId, userId)
+            delay(100)
+
+            verify(atLeast = 1) {
+                networkMapper.applyMutation(any(), any<NetworkMutation.SetLoadPower>())
+            }
+        }
+    }
+
+    @Test
+    fun `daily load curve is skipped when disabled`() {
+        runBlocking {
+            engine =
+                TickEngineImpl(
+                    physicsSessionStore = physicsSessionStore,
+                    gameSessionService = gameSessionService,
+                    powerFlowService = powerFlowService,
+                    contingencyAnalysisService = contingencyAnalysisService,
+                    eventEngine = eventEngine,
+                    tutorialEngine = tutorialEngine,
+                    challengeEngine = challengeEngine,
+                    networkRepository = networkRepository,
+                    networkMapper = networkMapper,
+                    autoSaveInterval = 5L,
+                    dailyLoadCurveEnabled = false,
+                )
+            every { mockSnapshot.loads } returns
+                listOf(
+                    Load(id = "L1", name = "Load 1", busId = "B1", activePowerMw = 100.0, reactivePowerMvar = 10.0, connected = true),
+                )
+            every { gameSessionService.load(sessionId, userId) } returns buildGameSession(multiplier = 100)
+            engine.start(sessionId, userId)
+            delay(100)
+
+            verify(exactly = 0) {
+                networkMapper.applyMutation(any(), any<NetworkMutation.SetLoadPower>())
+            }
         }
     }
 

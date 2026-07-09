@@ -62,7 +62,7 @@ function healthArrowClass(dir: TrendDirection): string {
 }
 
 export function TopHud() {
-  const { gameTimeMinutes, clockState, tickNumber, network, violations, healthScore, healthHistory } = useGameStore(useShallow((s) => ({
+  const { gameTimeMinutes, clockState, tickNumber, network, violations, healthScore, healthHistory, dailyLoadMultiplier } = useGameStore(useShallow((s) => ({
     gameTimeMinutes: s.gameTimeMinutes,
     clockState: s.clockState,
     tickNumber: s.tickNumber,
@@ -70,6 +70,7 @@ export function TopHud() {
     violations: s.violations,
     healthScore: s.healthScore,
     healthHistory: s.healthHistory,
+    dailyLoadMultiplier: s.dailyLoadMultiplier,
   })))
 
   // ── Metric history ring buffer (last HISTORY_LENGTH ticks) ────────────────
@@ -121,6 +122,15 @@ export function TopHud() {
       <div className={styles.pill} data-testid="pill-clock">
         <span className={styles.label}>Time</span>
         {formatGameTime(gameTimeMinutes)}
+        {dailyLoadMultiplier != null && (
+          <span
+            data-testid="hud-daily-load-multiplier"
+            title="Current demand vs. daily average, following a typical daily load curve (issue #383)"
+            style={{ marginLeft: 4, opacity: 0.75, fontSize: '0.85em' }}
+          >
+            ×{dailyLoadMultiplier.toFixed(2)}
+          </span>
+        )}
         <span data-testid="hud-clock-state" style={{ display: 'none' }}>{clockState}</span>
         <span data-testid="hud-tick-number" style={{ display: 'none' }}>{tickNumber}</span>
       </div>
