@@ -56,7 +56,7 @@ class EventEngineImplTest {
                         busId = "b1",
                         minActivePowerMw = 0.0,
                         maxActivePowerMw = 200.0,
-                        targetActivePowerMw = 100.0,
+                        powerSetpointMw = 100.0,
                         targetReactivePowerMvar = 0.0,
                         targetVoltagePu = 1.0,
                         connected = true,

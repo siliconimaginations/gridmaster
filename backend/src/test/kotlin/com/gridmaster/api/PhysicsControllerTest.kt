@@ -100,7 +100,7 @@ class PhysicsControllerTest {
                             busId = "B1",
                             minActivePowerMw = 20.0,
                             maxActivePowerMw = 100.0,
-                            targetActivePowerMw = 80.0,
+                            powerSetpointMw = 80.0,
                             targetReactivePowerMvar = 10.0,
                             targetVoltagePu = 1.0,
                             connected = true,
@@ -135,7 +135,7 @@ class PhysicsControllerTest {
             .andExpect {
                 status { isOk() }
                 jsonPath("$.generators[0].id") { value("G1") }
-                // WS-DTO field names (not domain GridNetwork names — targetActivePowerMw/connected)
+                // WS-DTO field names (not domain GridNetwork names — powerSetpointMw/connected)
                 jsonPath("$.generators[0].activePowerMw") { value(80.0) }
                 jsonPath("$.generators[0].committed") { value(true) }
                 jsonPath("$.totalGenerationMw") { value(80.0) }

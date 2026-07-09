@@ -1,6 +1,8 @@
 package com.gridmaster.engine.network
 
+import com.gridmaster.engine.model.FuelType
 import com.gridmaster.engine.model.NetworkMutation
+import com.powsybl.iidm.network.extensions.ActivePowerControl
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -56,6 +58,31 @@ class NetworkMutationTest {
 
         assertThat(result.isFailure).isTrue()
         assertThat(result.exceptionOrNull()).isInstanceOf(InvalidMutationException::class.java)
+    }
+
+    @Test
+    fun `SetGeneratorOutput fails for a WIND generator`() {
+        val metadata = mapOf(TestNetworkFactory.GENERATOR_1 to GeneratorMetadata(FuelType.WIND, 0.0))
+        val windMapper = IidmNetworkMapperImpl(MapGeneratorMetadataProvider(metadata))
+        val network = TestNetworkFactory.create()
+        val result = windMapper.applyMutation(network, NetworkMutation.SetGeneratorOutput(TestNetworkFactory.GENERATOR_1, 60.0))
+
+        assertThat(result.isFailure).isTrue()
+        assertThat(result.exceptionOrNull()).isInstanceOf(InvalidMutationException::class.java)
+        assertThat(result.exceptionOrNull()?.message).contains("not dispatchable")
+        // Setpoint is unchanged.
+        assertThat(network.getGenerator(TestNetworkFactory.GENERATOR_1).targetP).isEqualTo(80.0)
+    }
+
+    @Test
+    fun `SetGeneratorOutput fails for a SOLAR generator`() {
+        val metadata = mapOf(TestNetworkFactory.GENERATOR_2 to GeneratorMetadata(FuelType.SOLAR, 0.0))
+        val solarMapper = IidmNetworkMapperImpl(MapGeneratorMetadataProvider(metadata))
+        val network = TestNetworkFactory.create()
+        val result = solarMapper.applyMutation(network, NetworkMutation.SetGeneratorOutput(TestNetworkFactory.GENERATOR_2, 60.0))
+
+        assertThat(result.isFailure).isTrue()
+        assertThat(result.exceptionOrNull()?.message).contains("not dispatchable")
     }
 
     // -------------------------------------------------------------------------
@@ -244,4 +271,56 @@ class NetworkMutationTest {
         assertThat(result.exceptionOrNull()).isInstanceOf(InvalidMutationException::class.java)
         assertThat(result.exceptionOrNull()?.message).contains("no ratio tap changer")
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // configureActivePowerControl
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Test
+    fun `configureActivePowerControl sets participate true for dispatchable generators`() {
+        val network = TestNetworkFactory.create()
+        mapper.configureActivePowerControl(network)
+
+        val apc = network.getGenerator(TestNetworkFactory.GENERATOR_1).activePowerControlExtension()
+        assertThat(apc).isNotNull
+        assertThat(apc!!.isParticipate).isTrue()
+    }
+
+    @Test
+    fun `configureActivePowerControl sets participate false for WIND and SOLAR`() {
+        val metadata =
+            mapOf(
+                TestNetworkFactory.GENERATOR_1 to GeneratorMetadata(FuelType.WIND, 0.0),
+                TestNetworkFactory.GENERATOR_2 to GeneratorMetadata(FuelType.SOLAR, 0.0),
+            )
+        val renewableMapper = IidmNetworkMapperImpl(MapGeneratorMetadataProvider(metadata))
+        val network = TestNetworkFactory.create()
+        renewableMapper.configureActivePowerControl(network)
+
+        listOf(TestNetworkFactory.GENERATOR_1, TestNetworkFactory.GENERATOR_2).forEach { id ->
+            val apc = network.getGenerator(id).activePowerControlExtension()
+            assertThat(apc).isNotNull
+            assertThat(apc!!.isParticipate).isFalse()
+        }
+    }
+
+    @Test
+    fun `configureActivePowerControl is idempotent`() {
+        val network = TestNetworkFactory.create()
+        mapper.configureActivePowerControl(network)
+        mapper.configureActivePowerControl(network)
+
+        val gen = network.getGenerator(TestNetworkFactory.GENERATOR_1)
+        assertThat(gen.activePowerControlExtension()).isNotNull
+    }
 }
+
+/**
+ * Retrieves the ActivePowerControl extension with a concrete type argument.
+ * Kotlin cannot infer the generic Injectable type through a bare `Class<...>` literal
+ * the way javac does, so the class token is cast explicitly (matches the production
+ * code in [IidmNetworkMapperImpl.configureActivePowerControl]).
+ */
+@Suppress("UNCHECKED_CAST")
+private fun com.powsybl.iidm.network.Generator.activePowerControlExtension(): ActivePowerControl<com.powsybl.iidm.network.Generator>? =
+    getExtension(ActivePowerControl::class.java as Class<ActivePowerControl<com.powsybl.iidm.network.Generator>>)

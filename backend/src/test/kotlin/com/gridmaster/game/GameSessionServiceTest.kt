@@ -49,6 +49,7 @@ class GameSessionServiceTest {
 
     @BeforeEach
     fun setUp() {
+        every { networkMapper.configureActivePowerControl(any()) } just runs
         every { networkMapper.toGridNetwork(any()) } returns
             GridNetwork(
                 id = "net",

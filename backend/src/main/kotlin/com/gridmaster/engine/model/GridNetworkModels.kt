@@ -1,5 +1,6 @@
 package com.gridmaster.engine.model
 
+import com.fasterxml.jackson.annotation.JsonIgnore
 import java.time.Instant
 
 /**
@@ -134,6 +135,19 @@ data class ThreeWindingsTransformer(
 
 /**
  * An active/reactive power source.
+ *
+ * [powerSetpointMw] is the player/algorithm-settable active power target (respecting
+ * [minActivePowerMw]/[maxActivePowerMw]). For a slack bus — or any generator
+ * participating in distributed slack via the ActivePowerControl grid model extension —
+ * this setpoint is NOT the same as the generator's actual production: the power flow
+ * solver adjusts participating generators away from their setpoints to balance the
+ * network. WIND and SOLAR generators are not dispatchable, so their setpoint is not
+ * user/algorithm-settable (see [FuelType]).
+ *
+ * [powerOutputMw] is the actual active power produced, read back from the terminal
+ * after a power flow solve; null before the first solve. Production cost must always
+ * be calculated from [powerOutputMw], never from [powerSetpointMw].
+ *
  * [targetVoltagePu] is the voltage setpoint at the terminal bus (per unit).
  * [fuelType] and [marginalCostPerMwh] come from sidecar metadata; not present in IIDM.
  */
@@ -143,13 +157,18 @@ data class Generator(
     val busId: String,
     val minActivePowerMw: Double,
     val maxActivePowerMw: Double,
-    val targetActivePowerMw: Double,
+    val powerSetpointMw: Double,
+    val powerOutputMw: Double? = null,
     val targetReactivePowerMvar: Double,
     val targetVoltagePu: Double,
     val connected: Boolean,
     val fuelType: FuelType,
     val marginalCostPerMwh: Double,
-)
+) {
+    /** True unless [fuelType] is WIND or SOLAR — those generators are not dispatchable. */
+    @get:JsonIgnore
+    val dispatchable: Boolean get() = fuelType != FuelType.WIND && fuelType != FuelType.SOLAR
+}
 
 enum class FuelType { COAL, GAS, NUCLEAR, HYDRO, WIND, SOLAR, OIL, OTHER }
 

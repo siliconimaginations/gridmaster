@@ -6,6 +6,7 @@ import com.gridmaster.engine.contingency.ContingencyAnalysisParameters
 import com.gridmaster.engine.contingency.ContingencyAnalysisService
 import com.gridmaster.engine.dispatch.DispatchParameters
 import com.gridmaster.engine.dispatch.DispatchService
+import com.gridmaster.engine.model.FuelType
 import com.gridmaster.engine.model.GridNetwork
 import com.gridmaster.engine.model.NetworkMutation
 import com.gridmaster.engine.network.IidmNetworkMapper
@@ -377,6 +378,10 @@ class CommandHandlerImpl(
             snapshot.generators.find { it.id == cmd.generatorId }
                 ?: return "Generator '${cmd.generatorId}' not found in session network"
         if (!gen.connected) return "Generator '${cmd.generatorId}' is not committed"
+        if (gen.fuelType == FuelType.WIND || gen.fuelType == FuelType.SOLAR) {
+            return "Generator '${cmd.generatorId}' (${gen.fuelType}) is not dispatchable — " +
+                "its output is determined by power flow, not a settable setpoint"
+        }
         if (cmd.targetMw < gen.minActivePowerMw || cmd.targetMw > gen.maxActivePowerMw) {
             val range = "[${gen.minActivePowerMw}, ${gen.maxActivePowerMw}]"
             return "targetMw ${cmd.targetMw} out of range $range for generator '${cmd.generatorId}'"
@@ -703,15 +708,19 @@ class CommandHandlerImpl(
 // Private mapping helper
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * WIND and SOLAR generators are excluded: they are not dispatchable (issue #382), so
+ * economic dispatch and unit commitment must never be asked to set their output.
+ */
 private fun GridNetwork.toDispatchableGenerators() =
-    generators.map { g ->
+    generators.filter { it.dispatchable }.map { g ->
         com.gridmaster.engine.dispatch.DispatchableGenerator(
             id = g.id,
             name = g.name,
             committed = g.connected,
             minActivePowerMw = g.minActivePowerMw,
             maxActivePowerMw = g.maxActivePowerMw,
-            currentActivePowerMw = g.targetActivePowerMw,
+            currentActivePowerMw = g.powerSetpointMw,
             marginalCostPerMwh = g.marginalCostPerMwh,
         )
     }
