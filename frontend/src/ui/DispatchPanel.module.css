@@ -251,6 +251,24 @@
   flex-shrink: 0;
 }
 
+/* Actual (solved) output shown alongside the editable setpoint slider, so the
+   two values are never visually conflated (#382). */
+.actualOutput {
+  font-size: 11px;
+  color: #22d3ee;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* Read-only output shown in place of the slider for non-dispatchable
+   (WIND/SOLAR) generators (#382). */
+.readonlyOutput {
+  font-size: 11px;
+  color: #94a3b8;
+  font-style: italic;
+  flex: 1;
+}
+
 /* Total footer row */
 .totalRow {
   padding: 6px 14px;

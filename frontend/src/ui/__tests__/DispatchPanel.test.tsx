@@ -15,9 +15,11 @@ function makeGenerator(overrides: Partial<GeneratorDto> = {}): GeneratorDto {
     name: 'Test Gas',
     fuelType: 'GAS',
     activePowerMw: 200,
+    setpointMw: 200,
     maxActivePowerMw: 500,
     committed: true,
     marginalCostPerMwh: 48.6,
+    dispatchable: true,
     ...overrides,
   }
 }
@@ -230,6 +232,38 @@ describe('DispatchPanel', () => {
       fireEvent.click(screen.getByTestId('dispatch-row-gen-1'))
       // `expanded && gen.committed` guard means slider is never shown
       expect(screen.queryByTestId('slider-row-gen-1')).toBeNull()
+    })
+
+    // ── #382: dispatchable vs non-dispatchable (WIND/SOLAR) generators ────────
+
+    it('slider uses setpointMw (not activePowerMw) as its editable value for dispatchable generators', () => {
+      setStoreState(makeNetwork([
+        makeGenerator({ id: 'gen-1', committed: true, dispatchable: true, activePowerMw: 180, setpointMw: 250 }),
+      ]))
+      renderPanel(true)
+      fireEvent.click(screen.getByTestId('dispatch-row-gen-1'))
+      const slider = screen.getByLabelText(/Output for/) as HTMLInputElement
+      expect(slider.value).toBe('250')
+      // Actual (solved) output is shown alongside, distinct from the setpoint.
+      expect(screen.getByTestId('actual-output-gen-1')).toHaveTextContent('180 MW')
+    })
+
+    it('disables editing and shows read-only actual output for a non-dispatchable (WIND/SOLAR) generator', () => {
+      setStoreState(makeNetwork([
+        makeGenerator({
+          id: 'wind-1', name: 'Wind Farm', fuelType: 'WIND',
+          committed: true, dispatchable: false, activePowerMw: 65, setpointMw: 65,
+        }),
+      ]))
+      renderPanel(true)
+      fireEvent.click(screen.getByTestId('dispatch-row-wind-1'))
+
+      // No editable slider for non-dispatchable generators.
+      expect(screen.queryByLabelText(/Output for/)).toBeNull()
+      // Read-only actual output is shown instead.
+      const readonly = screen.getByTestId('readonly-output-wind-1')
+      expect(readonly).toHaveTextContent('65 MW')
+      expect(readonly).toHaveTextContent('not dispatchable')
     })
   })
 
