@@ -1,5 +1,6 @@
 package com.gridmaster.engine.model
 
+import com.fasterxml.jackson.annotation.JsonIgnore
 import java.time.Instant
 
 /**
@@ -165,6 +166,7 @@ data class Generator(
     val marginalCostPerMwh: Double,
 ) {
     /** True unless [fuelType] is WIND or SOLAR — those generators are not dispatchable. */
+    @get:JsonIgnore
     val dispatchable: Boolean get() = fuelType != FuelType.WIND && fuelType != FuelType.SOLAR
 }
 
