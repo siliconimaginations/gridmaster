@@ -1,6 +1,7 @@
 package com.gridmaster.engine.network
 
 import com.gridmaster.engine.model.Bus
+import com.gridmaster.engine.model.FuelType
 import com.gridmaster.engine.model.Generator
 import com.gridmaster.engine.model.GridNetwork
 import com.gridmaster.engine.model.Line
@@ -12,6 +13,8 @@ import com.gridmaster.engine.model.ThreeWindingsTransformer
 import com.gridmaster.engine.model.TwoWindingsTransformer
 import com.powsybl.iidm.network.Network
 import com.powsybl.iidm.network.ShuntCompensatorLinearModel
+import com.powsybl.iidm.network.extensions.ActivePowerControl
+import com.powsybl.iidm.network.extensions.ActivePowerControlAdder
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import kotlin.math.sqrt
@@ -218,13 +221,18 @@ class IidmNetworkMapperImpl(
                     1.0
                 }
             val meta = metadataProvider.getMetadata(gen.id)
+            // IIDM's load-sign convention reports p > 0 as power flowing INTO the terminal
+            // (consumption). A generator produces power, so its terminal.p is negative when
+            // it is exporting; negate it to get a positive MW output for the domain model.
+            val powerOutputMw = gen.terminal.p.orNull()?.let { -it }
             Generator(
                 id = gen.id,
                 name = gen.nameOrId,
                 busId = busId,
                 minActivePowerMw = gen.minP,
                 maxActivePowerMw = gen.maxP,
-                targetActivePowerMw = gen.targetP,
+                powerSetpointMw = gen.targetP,
+                powerOutputMw = powerOutputMw,
                 targetReactivePowerMvar = gen.targetQ,
                 targetVoltagePu = targetVoltagePu,
                 connected = gen.terminal.isConnected,
@@ -297,6 +305,13 @@ class IidmNetworkMapperImpl(
                     val gen =
                         network.getGenerator(mutation.generatorId)
                             ?: throw InvalidMutationException("Generator not found: ${mutation.generatorId}")
+                    val fuelType = metadataProvider.getMetadata(mutation.generatorId).fuelType
+                    if (fuelType == FuelType.WIND || fuelType == FuelType.SOLAR) {
+                        throw InvalidMutationException(
+                            "Generator ${mutation.generatorId} ($fuelType) is not dispatchable — its power " +
+                                "output is determined by power flow, not a settable setpoint",
+                        )
+                    }
                     require(mutation.targetPMw >= gen.minP && mutation.targetPMw <= gen.maxP) {
                         "targetPMw ${mutation.targetPMw} outside [${gen.minP}, ${gen.maxP}] for ${mutation.generatorId}"
                     }
@@ -399,6 +414,29 @@ class IidmNetworkMapperImpl(
         }
 
     // -------------------------------------------------------------------------
+    // ActivePowerControl
+    // -------------------------------------------------------------------------
+
+    @Suppress("UNCHECKED_CAST")
+    override fun configureActivePowerControl(network: Network) {
+        // PowSyBl's extension API is generic over the injectable type (here IIDM's
+        // Generator). Kotlin cannot infer that type parameter through Class<...>
+        // literals the way javac does, so the Class tokens are cast explicitly.
+        val apcClass = ActivePowerControl::class.java as Class<ActivePowerControl<com.powsybl.iidm.network.Generator>>
+        val apcAdderClass =
+            ActivePowerControlAdder::class.java as Class<ActivePowerControlAdder<com.powsybl.iidm.network.Generator>>
+        network.generators.forEach { gen ->
+            val fuelType = metadataProvider.getMetadata(gen.id).fuelType
+            val dispatchable = fuelType != FuelType.WIND && fuelType != FuelType.SOLAR
+            gen.removeExtension(apcClass)
+            gen.newExtension(apcAdderClass)
+                .withParticipate(dispatchable)
+                .withDroop(DEFAULT_DROOP_PERCENT)
+                .add()
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
 
@@ -432,6 +470,14 @@ class IidmNetworkMapperImpl(
 
     companion object {
         private val SQRT3 = sqrt(3.0)
+
+        /**
+         * Default droop (%) applied to dispatchable generators' ActivePowerControl
+         * extension. Only affects DROOP-based distributed slack; the game's default
+         * balance types (proportional to Pmax / remaining margin) ignore droop and use
+         * only the participate flag, so this value is a safe, conventional placeholder.
+         */
+        private const val DEFAULT_DROOP_PERCENT = 4.0
     }
 }
 

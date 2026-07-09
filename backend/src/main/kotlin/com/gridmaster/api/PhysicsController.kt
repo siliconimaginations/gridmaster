@@ -495,16 +495,17 @@ private fun DispatchRequest.toDomain(): DispatchParameters =
  * Derive [DispatchableGenerator] list from a [GridNetwork] snapshot.
  * Committed = generator is connected. Startup cost and min up/down times
  * default to zero (will be enriched by Module 06 generator metadata).
+ * WIND and SOLAR generators are excluded: they are not dispatchable (issue #382).
  */
 private fun GridNetwork.toDispatchableGenerators(): List<DispatchableGenerator> =
-    generators.map { g ->
+    generators.filter { it.dispatchable }.map { g ->
         DispatchableGenerator(
             id = g.id,
             name = g.name,
             committed = g.connected,
             minActivePowerMw = g.minActivePowerMw,
             maxActivePowerMw = g.maxActivePowerMw,
-            currentActivePowerMw = g.targetActivePowerMw,
+            currentActivePowerMw = g.powerSetpointMw,
             marginalCostPerMwh = g.marginalCostPerMwh,
         )
     }

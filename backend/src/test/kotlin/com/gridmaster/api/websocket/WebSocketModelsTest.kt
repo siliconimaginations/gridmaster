@@ -51,7 +51,7 @@ class WebSocketModelsTest {
         busId = busId,
         minActivePowerMw = 0.0,
         maxActivePowerMw = maxMw,
-        targetActivePowerMw = targetMw,
+        powerSetpointMw = targetMw,
         targetReactivePowerMvar = 0.0,
         targetVoltagePu = 1.0,
         connected = connected,
@@ -142,13 +142,16 @@ class WebSocketModelsTest {
 
     // region generator mapping
 
-    /** Verifies the naming fix from #237: domain targetActivePowerMw -> DTO activePowerMw. */
+    /** Verifies the naming fix from #237: domain powerSetpointMw -> DTO activePowerMw. */
     @Test
-    fun `activePowerMw maps from domain targetActivePowerMw`() {
+    fun `activePowerMw maps from domain powerSetpointMw before first solve`() {
         val network = minimalNetwork(generators = listOf(generator("G1", "B1", targetMw = 250.0)))
         val dto = network.toNetworkWsDto()
         assertThat(dto.generators).hasSize(1)
+        // powerOutputMw is null before the first power flow solve, so activePowerMw falls
+        // back to the setpoint (issue #382).
         assertThat(dto.generators[0].activePowerMw).isEqualTo(250.0)
+        assertThat(dto.generators[0].setpointMw).isEqualTo(250.0)
     }
 
     /** Verifies the naming fix from #237: domain connected -> DTO committed. */
@@ -176,6 +179,30 @@ class WebSocketModelsTest {
         val network = minimalNetwork(generators = listOf(generator("G1", "B1", targetMw = 100.0, fuelType = FuelType.NUCLEAR)))
         val dto = network.toNetworkWsDto()
         assertThat(dto.generators[0].fuelType).isEqualTo("NUCLEAR")
+    }
+
+    @Test
+    fun `dispatchable is false for WIND and SOLAR, true otherwise`() {
+        val gens =
+            listOf(
+                generator("G1", "B1", targetMw = 100.0, fuelType = FuelType.WIND),
+                generator("G2", "B1", targetMw = 100.0, fuelType = FuelType.SOLAR),
+                generator("G3", "B1", targetMw = 100.0, fuelType = FuelType.GAS),
+            )
+        val dto = minimalNetwork(generators = gens).toNetworkWsDto()
+        assertThat(dto.generators[0].dispatchable).isFalse()
+        assertThat(dto.generators[1].dispatchable).isFalse()
+        assertThat(dto.generators[2].dispatchable).isTrue()
+    }
+
+    @Test
+    fun `activePowerMw uses actual output over setpoint once power flow has solved`() {
+        val gen =
+            generator("G1", "B1", targetMw = 250.0).copy(powerOutputMw = 180.0)
+        val dto = minimalNetwork(generators = listOf(gen)).toNetworkWsDto()
+        assertThat(dto.generators[0].activePowerMw).isEqualTo(180.0)
+        assertThat(dto.generators[0].setpointMw).isEqualTo(250.0)
+        assertThat(dto.totalGenerationMw).isEqualTo(180.0)
     }
 
     // endregion

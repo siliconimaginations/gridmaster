@@ -61,6 +61,24 @@ interface IidmNetworkMapper {
         network: Network,
         mutation: NetworkMutation,
     ): Result<Network>
+
+    /**
+     * Applies PowSyBl's ActivePowerControl grid model extension to every generator in
+     * [network] so that distributed-slack power flow (see
+     * [com.gridmaster.engine.powerflow.PowerFlowParameters]) shares the active power
+     * imbalance across dispatchable generators only.
+     *
+     * Dispatchable generators (any fuel type other than WIND or SOLAR) participate with
+     * a default droop. WIND and SOLAR generators get participate = false so their output
+     * is never adjusted by slack distribution — it is determined solely by their
+     * setpoint and the resource availability the game models elsewhere, not by grid
+     * balancing.
+     *
+     * Idempotent: calling this again replaces any previously applied extension. Should
+     * be called once after a network is created or deserialised, before the first power
+     * flow solve.
+     */
+    fun configureActivePowerControl(network: Network)
 }
 
 /** Thrown when a [NetworkMutation] cannot be applied (e.g. element not found, out-of-range value). */

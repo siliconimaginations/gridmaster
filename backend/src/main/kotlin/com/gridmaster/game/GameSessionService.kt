@@ -56,6 +56,7 @@ class GameSessionService(
         networkPreset: String,
     ): GameSession {
         val network = PresetNetworkFactory.create(networkPreset)
+        networkMapper.configureActivePowerControl(network)
         val iidmXml = serializeNetwork(network)
         val sessionId = UUID.randomUUID().toString()
         val now = Instant.now()
@@ -109,6 +110,9 @@ class GameSessionService(
             // Lazily correct any sentinel ±9999 MW limits from sessions created before PR #275.
             // Safe to call on any network — generators with realistic bounds are unchanged.
             PresetNetworkFactory.normalizeGeneratorBounds(network)
+            // Lazily (re)apply ActivePowerControl for sessions persisted before issue #382.
+            // Idempotent, so safe to re-run on every rehydration.
+            networkMapper.configureActivePowerControl(network)
             val snapshot = networkMapper.toGridNetwork(network)
             physicsSessionStore.create(sessionId, network, snapshot)
             log.info("Re-hydrated session {} into PhysicsSessionStore", sessionId)

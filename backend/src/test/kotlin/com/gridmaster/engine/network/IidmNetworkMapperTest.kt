@@ -214,7 +214,7 @@ class IidmNetworkMapperTest {
         assertThat(g1.busId).isEqualTo(TestNetworkFactory.BUS_1)
         assertThat(g1.minActivePowerMw).isEqualTo(20.0)
         assertThat(g1.maxActivePowerMw).isEqualTo(100.0)
-        assertThat(g1.targetActivePowerMw).isEqualTo(80.0)
+        assertThat(g1.powerSetpointMw).isEqualTo(80.0)
         assertThat(g1.connected).isTrue()
     }
 
@@ -240,6 +240,37 @@ class IidmNetworkMapperTest {
         // targetV=220kV, nominalV=220kV → 1.0 pu
         val g1 = snapshot.generators.first { it.id == TestNetworkFactory.GENERATOR_1 }
         assertThat(g1.targetVoltagePu).isEqualTo(1.0, org.assertj.core.data.Offset.offset(1e-6))
+    }
+
+    @Test
+    fun `generator powerOutputMw is null before power flow`() {
+        val network = TestNetworkFactory.create()
+        val snapshot = mapper.toGridNetwork(network)
+
+        snapshot.generators.forEach { gen -> assertThat(gen.powerOutputMw).isNull() }
+    }
+
+    @Test
+    fun `generator dispatchable is true for non-renewable fuel types`() {
+        val network = TestNetworkFactory.create()
+        val snapshot = mapper.toGridNetwork(network)
+
+        // Metadata provider in setUp() assigns GAS/COAL — both dispatchable.
+        snapshot.generators.forEach { gen -> assertThat(gen.dispatchable).isTrue() }
+    }
+
+    @Test
+    fun `generator dispatchable is false for WIND and SOLAR`() {
+        val metadata =
+            mapOf(
+                TestNetworkFactory.GENERATOR_1 to GeneratorMetadata(FuelType.WIND, 0.0),
+                TestNetworkFactory.GENERATOR_2 to GeneratorMetadata(FuelType.SOLAR, 0.0),
+            )
+        val renewableMapper = IidmNetworkMapperImpl(MapGeneratorMetadataProvider(metadata))
+        val network = TestNetworkFactory.create()
+        val snapshot = renewableMapper.toGridNetwork(network)
+
+        snapshot.generators.forEach { gen -> assertThat(gen.dispatchable).isFalse() }
     }
 
     @Test
