@@ -414,9 +414,17 @@ class TickEngineImpl(
      * from [DailyLoadCurve]. The first call for a session captures each load's
      * original (flat) active power in [SessionRuntime.baseLoadMw] so scaling is
      * always relative to the network's baseline rather than compounding across
-     * ticks. Must be called while holding the lock on [physicsSession] — it
-     * mutates the live IIDM network via [networkMapper], same as any other
-     * NetworkMutation application.
+     * ticks. [SessionRuntime] is constructed fresh in [start] every time a session
+     * (re)starts, so [SessionRuntime.baseLoadMw] can never carry over stale values
+     * from a previous run — there is no separate reset path to maintain. Must be
+     * called while holding the lock on [physicsSession] — it mutates the live IIDM
+     * network via [networkMapper], same as any other NetworkMutation application.
+     *
+     * A per-load mutation failure is logged at error level but does not abort the
+     * tick: [loadId] values come directly from the session's own network snapshot,
+     * so a failure here indicates a mapper bug rather than a transient condition,
+     * and letting the remaining loads scale normally is preferable to stalling the
+     * whole simulation over one bad load.
      */
     private fun applyDailyLoadCurve(
         runtime: SessionRuntime,
@@ -433,7 +441,12 @@ class TickEngineImpl(
         for ((loadId, baseMw) in baseLoads) {
             val mutation = NetworkMutation.SetLoadPower(loadId = loadId, activePowerMw = baseMw * multiplier)
             networkMapper.applyMutation(physicsSession.iidmNetwork, mutation).onFailure {
-                log.warn("Daily load curve: failed to scale load {} for session {}: {}", loadId, runtime.sessionId, it.message)
+                log.error(
+                    "Daily load curve: failed to scale load {} for session {}: {}",
+                    loadId,
+                    runtime.sessionId,
+                    it.message,
+                )
             }
         }
     }

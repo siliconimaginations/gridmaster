@@ -31,8 +31,9 @@ object DailyLoadCurve {
     /**
      * Relative hourly demand weights, hour-of-day 0 (00:00-01:00) through 23
      * (23:00-00:00), sourced from the qualitative EIA / ISO-NE / PJM daily
-     * load-shape pattern described above. Values are relative, not
-     * percentages of a specific rated peak.
+     * load-shape pattern described above. These are arbitrary relative units,
+     * not a percentage of a specific rated peak — only their ratios to each
+     * other matter, since [hourlyMultipliers] renormalizes them to average 1.0.
      */
     private val rawHourlyShape =
         doubleArrayOf(
