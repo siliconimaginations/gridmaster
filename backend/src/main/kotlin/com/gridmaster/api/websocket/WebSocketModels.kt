@@ -364,8 +364,6 @@ fun GridNetwork.toNetworkWsDto(smc: Double? = null): GridNetworkWsDto {
 
     val branches: List<BranchWsDto> =
         lines.map { line ->
-            val currentA = maxOf(line.currentFromA ?: 0.0, line.currentToA ?: 0.0)
-            val hasCurrent = line.currentFromA != null || line.currentToA != null
             BranchWsDto(
                 id = line.id,
                 name = line.name,
@@ -374,14 +372,12 @@ fun GridNetwork.toNetworkWsDto(smc: Double? = null): GridNetworkWsDto {
                 activePowerMw = line.activePowerFromMw ?: 0.0,
                 reactivePowerMvar = line.reactivePowerFromMvar ?: 0.0,
                 loadingPercent = line.loadingPercent(),
-                currentA = if (hasCurrent) currentA else null,
+                currentA = maxCurrentAOrNull(line.currentFromA, line.currentToA),
                 ratingA = line.ratingA,
                 connected = line.connected,
             )
         } +
             twoWindingsTransformers.map { twt ->
-                val currentA = maxOf(twt.currentFromA ?: 0.0, twt.currentToA ?: 0.0)
-                val hasCurrent = twt.currentFromA != null || twt.currentToA != null
                 BranchWsDto(
                     id = twt.id,
                     name = twt.name,
@@ -390,7 +386,7 @@ fun GridNetwork.toNetworkWsDto(smc: Double? = null): GridNetworkWsDto {
                     activePowerMw = twt.activePowerFromMw ?: 0.0,
                     reactivePowerMvar = twt.reactivePowerFromMvar ?: 0.0,
                     loadingPercent = twt.loadingPercent(),
-                    currentA = if (hasCurrent) currentA else null,
+                    currentA = maxCurrentAOrNull(twt.currentFromA, twt.currentToA),
                     ratingA = twt.transformerRatingA(),
                     connected = twt.connected,
                 )
@@ -433,6 +429,22 @@ fun GridNetwork.toNetworkWsDto(smc: Double? = null): GridNetworkWsDto {
         systemMarginalCostPerMwh = smc,
     )
 }
+
+/**
+ * Larger of the two terminal currents, or null when both are null (no power-flow
+ * solve yet). Computes `maxOf` only when at least one side is present, per Gemini
+ * review feedback on #395 — avoids an unnecessary comparison when there is no
+ * current to report at all.
+ */
+private fun maxCurrentAOrNull(
+    fromA: Double?,
+    toA: Double?,
+): Double? =
+    if (fromA == null && toA == null) {
+        null
+    } else {
+        maxOf(fromA ?: 0.0, toA ?: 0.0)
+    }
 
 private fun Line.loadingPercent(): Double {
     val rating = ratingA ?: return 0.0
