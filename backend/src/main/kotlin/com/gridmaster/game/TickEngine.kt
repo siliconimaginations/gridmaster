@@ -141,4 +141,3 @@ data class TickClockStatus(
     /** Region/zone id this weather reading applies to; null under the same conditions. */
     val weatherRegionId: String? = null,
 )
-

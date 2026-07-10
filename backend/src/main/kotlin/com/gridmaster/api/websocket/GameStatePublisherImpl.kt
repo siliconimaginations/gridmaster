@@ -389,4 +389,3 @@ private fun EventCard.toDto(): EventCardDto =
                 EventCardOptionDto(id = idx.toString(), label = opt.label, tag = opt.tag, costGbp = opt.costGbp)
             },
     )
-

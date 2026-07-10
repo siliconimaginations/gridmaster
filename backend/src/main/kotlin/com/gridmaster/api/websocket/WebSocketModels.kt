@@ -425,4 +425,3 @@ private fun TwoWindingsTransformer.loadingPercent(): Double {
     val maxCurrent = maxOf(currentFromA ?: 0.0, currentToA ?: 0.0)
     return maxCurrent / ratingA * 100.0
 }
-
