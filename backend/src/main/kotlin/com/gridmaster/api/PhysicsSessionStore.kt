@@ -81,6 +81,13 @@ data class PhysicsSession(
      * by `GET /api/sessions/{sessionId}/history`. Lives for the same lifetime as
      * this [PhysicsSession] — created once at session start, lost on backend
      * restart (in-memory-only for v1, see [HistoryRingBuffer] KDoc).
+     *
+     * Intentionally `val`, not `var`: the mutation happens inside
+     * [HistoryRingBuffer]'s own `@Synchronized` methods, not by reassigning
+     * this field — same pattern as holding a `val` reference to any other
+     * mutable collection/object in Kotlin. [PhysicsSession] is never
+     * `.copy()`'d anywhere in this codebase, so there is no risk of two
+     * copies silently sharing (or diverging on) the same buffer instance.
      */
     val history: HistoryRingBuffer = HistoryRingBuffer(),
 )

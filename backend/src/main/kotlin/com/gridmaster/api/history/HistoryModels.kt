@@ -55,10 +55,15 @@ class HistoryRingBuffer(
      * sample) are returned — this lets the server slice for a range selector
      * (24h/48h/72h/week/month) without shipping the full month every time.
      * Null or an empty buffer returns the full buffer as-is.
+     *
+     * The empty-buffer check is evaluated first (`buffer.isEmpty()` before
+     * `buffer.last()`), so an empty buffer with a non-null [rangeMinutes]
+     * always short-circuits to the early return below and never reaches
+     * [ArrayDeque.last].
      */
     @Synchronized
     fun snapshot(rangeMinutes: Long? = null): List<HistorySampleDto> {
-        if (rangeMinutes == null || buffer.isEmpty()) return buffer.toList()
+        if (buffer.isEmpty() || rangeMinutes == null) return buffer.toList()
         val latest = buffer.last().gameTimeMinutes
         val cutoff = latest - rangeMinutes
         return buffer.filter { it.gameTimeMinutes >= cutoff }

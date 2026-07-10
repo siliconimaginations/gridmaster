@@ -416,7 +416,11 @@ function HistoryTab({ sessionId }: { sessionId: string | null }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const rangeMinutes = HISTORY_RANGES.find((r) => r.label === rangeLabel)!.rangeMinutes
+  // HISTORY_RANGES is a fixed const array and rangeLabel is typed to its own
+  // label union, so this lookup can never miss — the fallback to the default
+  // 24h entry only guards against a future HISTORY_RANGES edit dropping a
+  // label that HistoryRangeLabel still allows (Gemini review, #392).
+  const rangeMinutes = (HISTORY_RANGES.find((r) => r.label === rangeLabel) ?? HISTORY_RANGES[0]).rangeMinutes
 
   useEffect(() => {
     if (!sessionId) return
