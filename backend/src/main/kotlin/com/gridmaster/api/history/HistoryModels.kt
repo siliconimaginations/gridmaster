@@ -60,13 +60,18 @@ class HistoryRingBuffer(
      * `buffer.last()`), so an empty buffer with a non-null [rangeMinutes]
      * always short-circuits to the early return below and never reaches
      * [ArrayDeque.last].
+     *
+     * Uses [dropWhile] rather than a full [filter] pass (Gemini review,
+     * #392): [record] only ever appends, so [buffer] is always sorted
+     * ascending by [HistorySampleDto.gameTimeMinutes] — dropWhile can walk
+     * just the stale prefix instead of testing every element.
      */
     @Synchronized
     fun snapshot(rangeMinutes: Long? = null): List<HistorySampleDto> {
         if (buffer.isEmpty() || rangeMinutes == null) return buffer.toList()
         val latest = buffer.last().gameTimeMinutes
         val cutoff = latest - rangeMinutes
-        return buffer.filter { it.gameTimeMinutes >= cutoff }
+        return buffer.dropWhile { it.gameTimeMinutes < cutoff }
     }
 
     companion object {

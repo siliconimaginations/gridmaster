@@ -196,6 +196,18 @@ class PhysicsControllerTest {
             .andExpect { status { isNotFound() } }
     }
 
+    @Test
+    fun `GET history returns 400 for a non-positive rangeMinutes`() {
+        mvc.get("$BASE/history") { param("rangeMinutes", "0") }
+            .andExpect {
+                status { isBadRequest() }
+                jsonPath("$.error") { value("VALIDATION_ERROR") }
+            }
+
+        mvc.get("$BASE/history") { param("rangeMinutes", "-10") }
+            .andExpect { status { isBadRequest() } }
+    }
+
     // -----------------------------------------------------------------------
     // POST /network/mutations
     // -----------------------------------------------------------------------

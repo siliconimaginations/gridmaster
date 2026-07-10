@@ -55,4 +55,21 @@ class HistoryModelsTest {
 
         assertThat(buffer.snapshot(rangeMinutes = null)).hasSize(2)
     }
+
+    @Test
+    fun `snapshot with rangeMinutes exceeding the total time span returns the full buffer`() {
+        val buffer = HistoryRingBuffer()
+        buffer.record(HistorySampleDto(gameTimeMinutes = 0L, totalLoadMw = 100.0, totalGenerationMw = 100.0))
+        buffer.record(HistorySampleDto(gameTimeMinutes = 100L, totalLoadMw = 110.0, totalGenerationMw = 110.0))
+
+        // Buffer only spans 100 minutes; a much larger range should still return everything.
+        val samples = buffer.snapshot(rangeMinutes = 1_000_000L)
+        assertThat(samples.map { it.gameTimeMinutes }).containsExactly(0L, 100L)
+    }
+
+    @Test
+    fun `snapshot on an empty buffer with a non-null rangeMinutes returns empty without throwing`() {
+        val buffer = HistoryRingBuffer()
+        assertThat(buffer.snapshot(rangeMinutes = 1440L)).isEmpty()
+    }
 }

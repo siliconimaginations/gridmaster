@@ -169,13 +169,18 @@ class PhysicsController(
      * Optional `?rangeMinutes=` slices server-side to the last N simulated
      * minutes (e.g. `1440` for 24h, `10080` for a week) so the client doesn't
      * have to fetch and discard the full ~1-month buffer for a short range.
-     * Omit it to get the entire retained history.
+     * Omit it to get the entire retained history. A non-positive value throws
+     * [IllegalArgumentException], mapped to 400 by [GlobalExceptionHandler]
+     * (Gemini review, #392).
      */
     @GetMapping("/history")
     fun getHistory(
         @PathVariable sessionId: String,
         @RequestParam(required = false) rangeMinutes: Long?,
     ): List<HistorySampleDto> {
+        require(rangeMinutes == null || rangeMinutes > 0) {
+            "rangeMinutes must be positive, got $rangeMinutes"
+        }
         val session = sessionStore.get(sessionId)
         return session.history.snapshot(rangeMinutes)
     }
