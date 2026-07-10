@@ -432,19 +432,14 @@ fun GridNetwork.toNetworkWsDto(smc: Double? = null): GridNetworkWsDto {
 
 /**
  * Larger of the two terminal currents, or null when both are null (no power-flow
- * solve yet). Computes `maxOf` only when at least one side is present, per Gemini
- * review feedback on #395 — avoids an unnecessary comparison when there is no
- * current to report at all.
+ * solve yet). Uses [listOfNotNull] + [maxOrNull] (issue #399, per Gemini review on
+ * #396) rather than a `0.0` fallback, so the result is unambiguous regardless of
+ * which side is populated.
  */
 private fun maxCurrentAOrNull(
     fromA: Double?,
     toA: Double?,
-): Double? =
-    if (fromA == null && toA == null) {
-        null
-    } else {
-        maxOf(fromA ?: 0.0, toA ?: 0.0)
-    }
+): Double? = listOfNotNull(fromA, toA).maxOrNull()
 
 private fun Line.loadingPercent(): Double {
     val rating = ratingA ?: return 0.0

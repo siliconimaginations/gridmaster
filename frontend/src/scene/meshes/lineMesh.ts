@@ -33,8 +33,8 @@ const LINE_COLOURS = {
 
 export function lineColour(dto: BranchDto): Color3 {
   if (!dto.connected) return LINE_COLOURS.offline
-  if (dto.loadingPercent > 90) return LINE_COLOURS.critical
-  if (dto.loadingPercent > 70) return LINE_COLOURS.warning
+  if (dto.loadingPercent >= 90) return LINE_COLOURS.critical
+  if (dto.loadingPercent >= 70) return LINE_COLOURS.warning
   return LINE_COLOURS.normal
 }
 
