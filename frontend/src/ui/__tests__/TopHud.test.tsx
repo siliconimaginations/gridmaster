@@ -87,6 +87,31 @@ describe('TopHud', () => {
     expect(screen.queryByTestId('hud-daily-load-multiplier')).toBeNull()
   })
 
+  it('shows the combined weekly/seasonal/annual-growth multiplier when all three are present (#388)', () => {
+    mockStore({ weeklyLoadMultiplier: 0.92, seasonalLoadMultiplier: 1.15, annualGrowthMultiplier: 1.02 })
+    render(<TopHud />)
+    // 0.92 * 1.15 * 1.02 = 1.0791...
+    expect(screen.getByTestId('hud-long-term-load-multiplier')).toHaveTextContent('×1.08')
+  })
+
+  it('omits the combined long-term multiplier when any component is missing (#388)', () => {
+    mockStore({ weeklyLoadMultiplier: 0.92, seasonalLoadMultiplier: null, annualGrowthMultiplier: 1.02 })
+    render(<TopHud />)
+    expect(screen.queryByTestId('hud-long-term-load-multiplier')).toBeNull()
+  })
+
+  it('shows the in-game calendar summary when present (#388)', () => {
+    mockStore({ calendarSummary: 'Year 2 · Day 41 · Wed · Mar' })
+    render(<TopHud />)
+    expect(screen.getByTestId('hud-calendar-summary')).toHaveTextContent('Year 2 · Day 41 · Wed · Mar')
+  })
+
+  it('omits the calendar summary when null (#388)', () => {
+    mockStore({ calendarSummary: null })
+    render(<TopHud />)
+    expect(screen.queryByTestId('hud-calendar-summary')).toBeNull()
+  })
+
   it('shows — /h when there are no generators (#377)', () => {
     render(<TopHud />)
     expect(screen.getByTestId('hud-production-cost')).toHaveTextContent('— /h')

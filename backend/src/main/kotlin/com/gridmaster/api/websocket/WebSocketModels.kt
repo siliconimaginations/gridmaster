@@ -56,6 +56,28 @@ data class GameStateUpdate(
      * gridmaster.daily-load-curve.enabled flag is actively scaling loads.
      */
     val dailyLoadMultiplier: Double? = null,
+    /**
+     * Day-of-week demand multiplier for [gameTimeMinutes] (issue #388), where
+     * 1.0 is the weekly-average baseline. Always populated, independent of the
+     * gridmaster.daily-load-curve.enabled flag (same convention as [dailyLoadMultiplier]).
+     */
+    val weeklyLoadMultiplier: Double? = null,
+    /**
+     * Monthly seasonal demand multiplier for [gameTimeMinutes] (issue #388),
+     * where 1.0 is the annual-average baseline.
+     */
+    val seasonalLoadMultiplier: Double? = null,
+    /**
+     * Compounding year-over-year demand growth multiplier for [gameTimeMinutes]
+     * (issue #388) — the one layer of the four that is *not* normalized to
+     * average 1.0, since it's an intentional long-run increase.
+     */
+    val annualGrowthMultiplier: Double? = null,
+    /**
+     * Human-readable in-game calendar summary for [gameTimeMinutes] (issue #388),
+     * e.g. "Year 2 · Day 41 · Wed · Mar". See [com.gridmaster.game.GameCalendar.describe].
+     */
+    val calendarSummary: String? = null,
 )
 
 enum class UpdateType { FULL, DELTA }
