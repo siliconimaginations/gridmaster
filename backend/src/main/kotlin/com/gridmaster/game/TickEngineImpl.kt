@@ -7,6 +7,7 @@ import com.gridmaster.api.history.HistorySampleDto
 import com.gridmaster.api.websocket.GameOverDto
 import com.gridmaster.api.websocket.GameStatePublisher
 import com.gridmaster.engine.contingency.ContingencyAnalysisService
+import com.gridmaster.engine.model.FuelType
 import com.gridmaster.engine.model.NetworkMutation
 import com.gridmaster.engine.network.IidmNetworkMapper
 import com.gridmaster.engine.network.NetworkRepository
@@ -93,6 +94,17 @@ class TickEngineImpl(
      */
     @Value("\${gridmaster.annual-load-growth.rate:0.02}")
     private val annualLoadGrowthRate: Double = AnnualLoadGrowth.DEFAULT_ANNUAL_GROWTH_RATE,
+    /**
+     * Feature flag for issue #391 -- when true (the default), each tick advances a
+     * per-session [WeatherSimulator] and drives every WIND/SOLAR generator's output
+     * from the current simulated weather + time-of-day via
+     * [applyWeatherAndRenewables]. Additive and backward compatible: existing tests
+     * that assume WIND/SOLAR generators keep whatever setpoint the IIDM file
+     * specifies can disable it via `gridmaster.weather.enabled=false`, same
+     * convention as [dailyLoadCurveEnabled].
+     */
+    @Value("\${gridmaster.weather.enabled:true}")
+    private val weatherEnabled: Boolean,
 ) : TickEngine {
     private val log = LoggerFactory.getLogger(TickEngineImpl::class.java)
 
@@ -300,6 +312,9 @@ class TickEngineImpl(
                     if (dailyLoadCurveEnabled) {
                         applyDailyLoadCurve(runtime, physicsSession, ctx.gameTimeMinutes)
                     }
+                    if (weatherEnabled) {
+                        applyWeatherAndRenewables(runtime, physicsSession, ctx.gameTimeMinutes)
+                    }
                     powerFlowService.solve(physicsSession.iidmNetwork)
                 } catch (e: Exception) {
                     log.error("Power flow solve failed for session {}, tick {}", runtime.sessionId, ctx.tickNumber, e)
@@ -379,6 +394,10 @@ class TickEngineImpl(
             healthScore = tickHealthScore,
             tutorialStep = tutorialEngine.currentStep(runtime.sessionId),
             challengeTimeRemainingMinutes = challengeEngine.challengeTimeRemainingMinutes(runtime.sessionId),
+            weatherState = if (weatherEnabled) runtime.weatherSimulator.currentState else null,
+            weatherCloudCoverPct = if (weatherEnabled) runtime.weatherSimulator.cloudCoverPct else null,
+            weatherWindSpeedMps = if (weatherEnabled) runtime.weatherSimulator.windSpeedMps else null,
+            weatherRegionId = if (weatherEnabled) runtime.weatherSimulator.regionId else null,
         )
 
         // Step 9: auto-save
@@ -491,6 +510,76 @@ class TickEngineImpl(
                 log.error(
                     "Daily load curve: failed to scale load {} for session {}: {}",
                     loadId,
+                    runtime.sessionId,
+                    it.message,
+                )
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Weather + renewable generation (issue #391)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Advance [runtime]'s [WeatherSimulator] by one tick and drive every WIND/SOLAR
+     * generator's output from the resulting weather reading + [gameTimeMinutes]
+     * time-of-day: [SolarGenerationModel] for SOLAR, [WindGenerationModel] for WIND.
+     *
+     * Applied via [NetworkMutation.SetGeneratorOutput] with `isSystemControlled = true`
+     * -- see that mutation's KDoc for why this is necessary: #382's WIND/SOLAR
+     * non-dispatchable guard in [IidmNetworkMapper.applyMutation] would otherwise
+     * reject the very mutations this method needs to make every tick, since it
+     * can't distinguish "the weather system is setting renewable output" from
+     * "a player is trying to override a non-dispatchable generator" without this
+     * flag.
+     *
+     * Must be called while holding the lock on [physicsSession], same as
+     * [applyDailyLoadCurve] -- it mutates the same live IIDM network. A per-generator
+     * mutation failure is logged and skipped rather than aborting the tick, for the
+     * same reasoning as [applyDailyLoadCurve]: generator ids come from the
+     * session's own snapshot, so a failure indicates a mapper bug, not a transient
+     * condition. The blast radius of a skipped mutation is bounded to that one
+     * generator keeping its previous output for this tick (retried again next tick
+     * from a fresh weather reading) -- it does not corrupt the rest of the network
+     * state or the tick pipeline, so aborting the whole tick over one bad generator
+     * would trade a contained, self-correcting glitch for a much more disruptive
+     * failure (identical trade-off already made by [applyDailyLoadCurve]).
+     */
+    private fun applyWeatherAndRenewables(
+        runtime: SessionRuntime,
+        physicsSession: com.gridmaster.api.PhysicsSession,
+        gameTimeMinutes: Long,
+    ) {
+        runtime.weatherSimulator.advanceTick()
+        val reading = runtime.weatherSimulator.currentReading()
+        for (generator in physicsSession.latestSnapshot.generators) {
+            val outputMw =
+                when (generator.fuelType) {
+                    FuelType.SOLAR ->
+                        SolarGenerationModel.outputMw(
+                            ratedMw = generator.maxActivePowerMw,
+                            gameTimeMinutes = gameTimeMinutes,
+                            cloudCoverPct = reading.cloudCoverPct,
+                        )
+                    FuelType.WIND ->
+                        WindGenerationModel.outputMw(
+                            ratedMw = generator.maxActivePowerMw,
+                            windSpeedMps = reading.windSpeedMps,
+                        )
+                    else -> continue
+                }
+            val mutation =
+                NetworkMutation.SetGeneratorOutput(
+                    generatorId = generator.id,
+                    targetPMw = outputMw,
+                    isSystemControlled = true,
+                )
+            networkMapper.applyMutation(physicsSession.iidmNetwork, mutation).onFailure {
+                log.error(
+                    "Weather-driven output: failed to set {} generator {} for session {}: {}",
+                    generator.fuelType,
+                    generator.id,
                     runtime.sessionId,
                     it.message,
                 )
@@ -846,6 +935,17 @@ internal class SessionRuntime(
     @Volatile
     var currentLoadMultiplier: Double = 1.0
 
+    // -- Weather (issue #391) ------------------------------------------------
+
+    /**
+     * This session's weather simulator. A fresh instance (starting in
+     * [WeatherState.CLEAR]) is created every time [SessionRuntime] is constructed
+     * (i.e. every session start/restart) -- weather is not persisted across
+     * restarts, the same limitation [baseLoadMw] has for its captured baselines.
+     * Single-writer: only the tick loop calls [WeatherSimulator.advanceTick].
+     */
+    val weatherSimulator: WeatherSimulator = WeatherSimulator()
+
     /** Snapshot of the current state as an immutable [TickClockStatus]. Synchronized for consistency. */
     fun toStatus(): TickClockStatus =
         synchronized(this) {
@@ -855,6 +955,10 @@ internal class SessionRuntime(
                 gameTimeMinutes = gameTimeMinutes,
                 tickCount = tickCount,
                 autoSlowed = autoSlowed,
+                weatherState = weatherSimulator.currentState,
+                weatherCloudCoverPct = weatherSimulator.cloudCoverPct,
+                weatherWindSpeedMps = weatherSimulator.windSpeedMps,
+                weatherRegionId = weatherSimulator.regionId,
             )
         }
 }

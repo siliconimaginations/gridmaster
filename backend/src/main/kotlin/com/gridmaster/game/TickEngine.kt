@@ -129,4 +129,15 @@ data class TickClockStatus(
     val tickCount: Long,
     /** True if the clock was automatically slowed due to a critical condition. */
     val autoSlowed: Boolean,
+    /**
+     * Current simulated [WeatherState] (issue #391), or null if
+     * `gridmaster.weather.enabled` is false. See [WeatherSimulator].
+     */
+    val weatherState: WeatherState? = null,
+    /** Current cloud-cover percent (0-100) for [weatherState]; null under the same conditions. */
+    val weatherCloudCoverPct: Double? = null,
+    /** Current wind speed in m/s for [weatherState]; null under the same conditions. */
+    val weatherWindSpeedMps: Double? = null,
+    /** Region/zone id this weather reading applies to; null under the same conditions. */
+    val weatherRegionId: String? = null,
 )

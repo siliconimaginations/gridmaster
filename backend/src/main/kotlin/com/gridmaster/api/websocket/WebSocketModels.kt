@@ -6,6 +6,7 @@ import com.gridmaster.engine.model.TwoWindingsTransformer
 import com.gridmaster.engine.powerflow.ConvergenceStatus
 import com.gridmaster.engine.powerflow.SQRT3
 import com.gridmaster.game.ClockState
+import com.gridmaster.game.WeatherState
 import com.gridmaster.game.command.Alert
 import java.util.UUID
 import kotlin.math.PI
@@ -78,6 +79,25 @@ data class GameStateUpdate(
      * e.g. "Year 2 · Day 41 · Wed · Mar". See [com.gridmaster.game.GameCalendar.describe].
      */
     val calendarSummary: String? = null,
+    /**
+     * Current simulated weather state (issue #391), driving WIND/SOLAR generator
+     * output. Null only if `gridmaster.weather.enabled` is false — unlike the
+     * daily/weekly/seasonal/annual load multipliers above, weather is stateful
+     * (a Markov chain, not a pure function of [gameTimeMinutes]), so it can't be
+     * recomputed independently on every publish the way those are.
+     * See [com.gridmaster.game.WeatherSimulator].
+     */
+    val weatherState: WeatherState? = null,
+    /** Current cloud-cover percent (0-100) for [weatherState]. */
+    val weatherCloudCoverPct: Double? = null,
+    /** Current wind speed in m/s for [weatherState]. */
+    val weatherWindSpeedMps: Double? = null,
+    /**
+     * Region/zone id this weather reading applies to (issue #391), defaulting to
+     * [com.gridmaster.game.GLOBAL_WEATHER_REGION_ID] while weather is uniform
+     * across the whole network.
+     */
+    val weatherRegionId: String? = null,
 )
 
 enum class UpdateType { FULL, DELTA }

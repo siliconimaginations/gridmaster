@@ -16,6 +16,7 @@ import type {
   PowerFlowStatus,
   SelectedElementInfo,
   ViolationDto,
+  WeatherState,
 } from '../api/types'
 
 /** Number of health-score samples kept for the TopHud sparkline (#333). */
@@ -98,6 +99,17 @@ interface GameStore {
    * (issue #388). Null until the first server update arrives.
    */
   calendarSummary: string | null
+  /**
+   * Current simulated weather state (issue #391). Null until the first server
+   * update arrives, or if weather is disabled server-side.
+   */
+  weatherState: WeatherState | null
+  /** Current cloud-cover percent (0-100) for `weatherState`. */
+  weatherCloudCoverPct: number | null
+  /** Current wind speed in m/s for `weatherState`. */
+  weatherWindSpeedMps: number | null
+  /** Region/zone id this weather reading applies to (issue #391), defaults to "global". */
+  weatherRegionId: string | null
 
   // Selection slice
   selectedElement: SelectedElementInfo | null
@@ -159,6 +171,10 @@ const INITIAL_GAME_STATE = {
   seasonalLoadMultiplier: null as number | null,
   annualGrowthMultiplier: null as number | null,
   calendarSummary: null as string | null,
+  weatherState: null as WeatherState | null,
+  weatherCloudCoverPct: null as number | null,
+  weatherWindSpeedMps: null as number | null,
+  weatherRegionId: null as string | null,
 } as const satisfies Partial<GameStore>
 
 // ── Store ─────────────────────────────────────────────────────────────────────
@@ -218,6 +234,10 @@ export const useGameStore = create<GameStore>()(subscribeWithSelector((set, get)
         seasonalLoadMultiplier: update.seasonalLoadMultiplier ?? null,
         annualGrowthMultiplier: update.annualGrowthMultiplier ?? null,
         calendarSummary: update.calendarSummary ?? null,
+        weatherState: update.weatherState ?? null,
+        weatherCloudCoverPct: update.weatherCloudCoverPct ?? null,
+        weatherWindSpeedMps: update.weatherWindSpeedMps ?? null,
+        weatherRegionId: update.weatherRegionId ?? null,
       }))
     } else {
       // DELTA: clock fields are always present — set them unconditionally.
@@ -242,6 +262,10 @@ export const useGameStore = create<GameStore>()(subscribeWithSelector((set, get)
         seasonalLoadMultiplier: update.seasonalLoadMultiplier ?? undefined,
         annualGrowthMultiplier: update.annualGrowthMultiplier ?? undefined,
         calendarSummary: update.calendarSummary ?? undefined,
+        weatherState: update.weatherState ?? undefined,
+        weatherCloudCoverPct: update.weatherCloudCoverPct ?? undefined,
+        weatherWindSpeedMps: update.weatherWindSpeedMps ?? undefined,
+        weatherRegionId: update.weatherRegionId ?? undefined,
       })
       set((state) => ({ ...clockUpdate, ...optionalUpdate, healthHistory: appendHealth(state.healthHistory) }))
     }
@@ -429,3 +453,4 @@ function _handleAck(ack: CommandAck, get: () => GameStore): void {
       }
     })
 }
+

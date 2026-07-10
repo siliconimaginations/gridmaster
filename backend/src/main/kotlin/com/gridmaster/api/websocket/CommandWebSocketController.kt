@@ -129,6 +129,20 @@ class CommandWebSocketController(
                 powerFlowResult = result.powerFlowResult,
                 newAlerts = result.newAlerts,
                 pendingCards = pendingCards,
+                // Issue #391: relay the tick engine's current weather reading (if any)
+                // so a post-command FULL refresh doesn't momentarily blank the HUD's
+                // weather badge — weather is stateful, not derivable from gameTimeMinutes
+                // alone, so it must come from clockStatus rather than being recomputed here.
+                // All four fields are declared nullable end-to-end (TickClockStatus ->
+                // GameStatePublisher -> GameStateUpdate -> frontend WeatherState | null), so
+                // clockStatus being null (session not found in TickEngine) or weather being
+                // disabled (TickClockStatus.weatherState itself null) both safely collapse to
+                // "no weather badge shown" via this `?.` chain — there is no non-null
+                // assumption anywhere in this chain for `?.` to violate.
+                weatherState = clockStatus?.weatherState,
+                weatherCloudCoverPct = clockStatus?.weatherCloudCoverPct,
+                weatherWindSpeedMps = clockStatus?.weatherWindSpeedMps,
+                weatherRegionId = clockStatus?.weatherRegionId,
             )
         }
 

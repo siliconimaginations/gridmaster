@@ -10,10 +10,25 @@ package com.gridmaster.engine.model
  * making them auditable, testable, and replayable.
  */
 sealed class NetworkMutation {
-    /** Set a generator's active power output setpoint in MW. */
+    /**
+     * Set a generator's active power output setpoint in MW.
+     *
+     * [isSystemControlled] distinguishes system-internal callers (issue #391's weather
+     * service, driving WIND/SOLAR output every tick from the simulated weather
+     * state) from user/algorithm-originated mutations. #382 made WIND/SOLAR
+     * non-dispatchable and [IidmNetworkMapper.applyMutation] rejects
+     * [SetGeneratorOutput] for those fuel types unless [isSystemControlled] is true —
+     * that guard exists specifically to stop a *player* (or economic dispatch)
+     * from overriding a setpoint the power flow doesn't actually respect, not to
+     * stop the simulation itself from driving it. Defaults to false so every
+     * existing call site (player commands, economic dispatch) keeps the
+     * pre-#391 rejection behavior unchanged; only the weather service passes
+     * true, and only for WIND/SOLAR generators.
+     */
     data class SetGeneratorOutput(
         val generatorId: String,
         val targetPMw: Double,
+        val isSystemControlled: Boolean = false,
     ) : NetworkMutation()
 
     /** Set a generator's voltage setpoint at its terminal bus (per unit). */
