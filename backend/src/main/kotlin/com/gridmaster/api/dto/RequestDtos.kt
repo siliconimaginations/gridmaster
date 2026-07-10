@@ -45,7 +45,7 @@ data class NetworkMutationDto(
 data class RunPowerFlowRequest(
     val mode: String = "AC",
     val distributedSlack: Boolean = true,
-    val balanceType: String = "PROPORTIONAL_TO_LOAD",
+    val balanceType: String = "PROPORTIONAL_TO_GENERATION_P_MAX",
 )
 
 // ---------------------------------------------------------------------------

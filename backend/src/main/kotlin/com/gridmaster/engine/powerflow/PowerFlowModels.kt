@@ -8,19 +8,12 @@ const val SQRT3 = 1.7320508075688772
 /**
  * Parameters for a single power flow solve.
  * Defaults represent normal game-tick AC operation with distributed slack.
- *
- * [balanceType] defaults to [BalanceType.PROPORTIONAL_TO_LOAD] rather than
- * [BalanceType.PROPORTIONAL_TO_GENERATION_P_MAX] (#397): the latter fails to
- * converge on the ieee14 preset's `L1-2-1` N-1 outage - empirically verified
- * with the real OpenLoadFlow solver (NR reaches MAX_ITERATION_REACHED under
- * P_MAX; PROPORTIONAL_TO_LOAD converges in 17 iterations for the same case
- * and does not regress the no-outage baseline).
  */
 data class PowerFlowParameters(
     val mode: SolveMode = SolveMode.AC,
     /** Distribute active power imbalance across participating generators. */
     val distributedSlack: Boolean = true,
-    val balanceType: BalanceType = BalanceType.PROPORTIONAL_TO_LOAD,
+    val balanceType: BalanceType = BalanceType.PROPORTIONAL_TO_GENERATION_P_MAX,
 )
 
 enum class SolveMode { AC, DC }

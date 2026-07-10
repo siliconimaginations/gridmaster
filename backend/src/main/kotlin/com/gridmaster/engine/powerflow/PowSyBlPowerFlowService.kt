@@ -18,6 +18,15 @@ import kotlin.system.measureTimeMillis
  * snapshot and scans for violations.
  *
  * DC is NOT used as an automatic fallback for AC divergence — see design doc §1.
+ *
+ * AC solves that fail to converge (`NETWORK_FAILURE`) with the caller's requested
+ * [PowerFlowParameters.balanceType] automatically retry once with
+ * [BalanceType.PROPORTIONAL_TO_LOAD] before giving up (#397): the ieee14 preset's
+ * `L1-2-1` N-1 outage does not converge under the default
+ * `PROPORTIONAL_TO_GENERATION_P_MAX` balance type (Newton-Raphson hits
+ * MAX_ITERATION_REACHED), but converges under `PROPORTIONAL_TO_LOAD` — empirically
+ * verified with the real OpenLoadFlow solver. The retry is skipped when the mode
+ * isn't AC, or when the caller already requested `PROPORTIONAL_TO_LOAD`.
  */
 @Service
 class PowSyBlPowerFlowService(
@@ -33,8 +42,10 @@ class PowSyBlPowerFlowService(
         val params = buildPowSyBlParams(parameters)
         var loadFlowResult: com.powsybl.loadflow.LoadFlowResult? = null
         var exception: Exception? = null
+        var solveTimeMs = 0L
 
-        val solveTimeMs =
+        // Primary attempt, using the caller's requested balance type.
+        solveTimeMs +=
             measureTimeMillis {
                 try {
                     loadFlowResult = LoadFlow.run(network, params)
@@ -59,7 +70,68 @@ class PowSyBlPowerFlowService(
 
         // Guard above guarantees loadFlowResult is non-null here.
         val lfResult = checkNotNull(loadFlowResult)
-        val (status, iterationCount, slackBusIds) = parseComponentResults(lfResult)
+        var (status, iterationCount, slackBusIds) = parseComponentResults(lfResult)
+
+        val shouldRetryWithProportionalToLoad =
+            status == ConvergenceStatus.NETWORK_FAILURE &&
+                parameters.mode == SolveMode.AC &&
+                parameters.balanceType != BalanceType.PROPORTIONAL_TO_LOAD
+
+        if (shouldRetryWithProportionalToLoad) {
+            log.warn(
+                "AC power flow did not converge with balanceType={} — retrying with PROPORTIONAL_TO_LOAD",
+                parameters.balanceType,
+            )
+            val retryParameters = parameters.copy(balanceType = BalanceType.PROPORTIONAL_TO_LOAD)
+            val retryParams = buildPowSyBlParams(retryParameters)
+            var retryLoadFlowResult: com.powsybl.loadflow.LoadFlowResult? = null
+            var retryException: Exception? = null
+
+            solveTimeMs +=
+                measureTimeMillis {
+                    try {
+                        retryLoadFlowResult = LoadFlow.run(network, retryParams)
+                    } catch (e: Exception) {
+                        log.error("PowSyBl LoadFlow threw an unexpected exception during PROPORTIONAL_TO_LOAD retry", e)
+                        retryException = e
+                    }
+                }
+
+            if (retryException != null || retryLoadFlowResult == null) {
+                val snapshot = safeSnapshot(network, parameters)
+                return PowerFlowResult(
+                    status = ConvergenceStatus.FAILED,
+                    solveMode = parameters.mode,
+                    iterationCount = 0,
+                    snapshot = snapshot,
+                    slackBusIds = emptyList(),
+                    violations = emptyList(),
+                    solveTimeMs = solveTimeMs,
+                )
+            }
+
+            val retryLfResult = checkNotNull(retryLoadFlowResult)
+            val (retryStatus, retryIterationCount, retrySlackBusIds) = parseComponentResults(retryLfResult)
+
+            if (retryStatus == ConvergenceStatus.NETWORK_FAILURE) {
+                log.warn("PROPORTIONAL_TO_LOAD retry also failed to converge — raising NETWORK_FAILURE")
+                val snapshot = safeSnapshot(network, parameters)
+                return PowerFlowResult(
+                    status = ConvergenceStatus.NETWORK_FAILURE,
+                    solveMode = parameters.mode,
+                    iterationCount = retryIterationCount,
+                    snapshot = snapshot,
+                    slackBusIds = retrySlackBusIds,
+                    violations = emptyList(),
+                    solveTimeMs = solveTimeMs,
+                )
+            }
+
+            // Retry converged (or partially converged) — use its outcome.
+            status = retryStatus
+            iterationCount = retryIterationCount
+            slackBusIds = retrySlackBusIds
+        }
 
         if (status == ConvergenceStatus.NETWORK_FAILURE) {
             log.warn("AC power flow did not converge — raising NETWORK_FAILURE")
