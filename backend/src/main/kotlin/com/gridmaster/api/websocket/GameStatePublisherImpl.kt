@@ -41,6 +41,13 @@ class GameStatePublisherImpl(
      * property (issue #388) so the published [GameStateUpdate.annualGrowthMultiplier]
      * always reflects the rate actually applied to loads, even if it's overridden
      * away from [AnnualLoadGrowth.DEFAULT_ANNUAL_GROWTH_RATE].
+     *
+     * The `= AnnualLoadGrowth.DEFAULT_ANNUAL_GROWTH_RATE` Kotlin default is *not*
+     * redundant with the `@Value` default above despite looking that way: `@Value`
+     * only resolves when Spring constructs this bean. Tests that construct
+     * [GameStatePublisherImpl] directly (bypassing Spring, e.g.
+     * [com.gridmaster.api.websocket.GameStatePublisherImplTest]) rely on the plain
+     * Kotlin default instead, so both need to stay in sync.
      */
     @Value("\${gridmaster.annual-load-growth.rate:0.02}")
     private val annualLoadGrowthRate: Double = AnnualLoadGrowth.DEFAULT_ANNUAL_GROWTH_RATE,

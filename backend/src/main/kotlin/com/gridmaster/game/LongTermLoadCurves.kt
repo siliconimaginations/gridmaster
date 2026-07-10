@@ -65,7 +65,14 @@ object GameCalendar {
     /** Fractional years elapsed since session start, e.g. 1.5 = halfway through the second year. */
     fun yearsElapsed(gameTimeMinutes: Long): Double = gameTimeMinutes.toDouble() / (MINUTES_PER_DAY * DAYS_PER_YEAR)
 
-    /** 0-indexed month (0 = January .. 11 = December) for [gameTimeMinutes]. */
+    /**
+     * 0-indexed month (0 = January .. 11 = December) for [gameTimeMinutes].
+     *
+     * [doy] always comes from [dayOfYear], which is already `Math.floorMod`-ed
+     * into `0..364` (including for negative [gameTimeMinutes]), so `doy < 0`
+     * can never happen here and `m` can never end up as `-1` — the `i - 1`
+     * branch is only reachable for `i >= 1`.
+     */
     fun month(gameTimeMinutes: Long): Int {
         val doy = dayOfYear(gameTimeMinutes)
         var m = 11
