@@ -13,11 +13,11 @@ sealed class NetworkMutation {
     /**
      * Set a generator's active power output setpoint in MW.
      *
-     * [systemOverride] distinguishes system-internal callers (issue #391's weather
+     * [isSystemControlled] distinguishes system-internal callers (issue #391's weather
      * service, driving WIND/SOLAR output every tick from the simulated weather
      * state) from user/algorithm-originated mutations. #382 made WIND/SOLAR
      * non-dispatchable and [IidmNetworkMapper.applyMutation] rejects
-     * [SetGeneratorOutput] for those fuel types unless [systemOverride] is true —
+     * [SetGeneratorOutput] for those fuel types unless [isSystemControlled] is true —
      * that guard exists specifically to stop a *player* (or economic dispatch)
      * from overriding a setpoint the power flow doesn't actually respect, not to
      * stop the simulation itself from driving it. Defaults to false so every
@@ -28,7 +28,7 @@ sealed class NetworkMutation {
     data class SetGeneratorOutput(
         val generatorId: String,
         val targetPMw: Double,
-        val systemOverride: Boolean = false,
+        val isSystemControlled: Boolean = false,
     ) : NetworkMutation()
 
     /** Set a generator's voltage setpoint at its terminal bus (per unit). */

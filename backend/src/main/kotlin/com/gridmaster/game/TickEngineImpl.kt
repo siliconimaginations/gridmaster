@@ -526,7 +526,7 @@ class TickEngineImpl(
      * generator's output from the resulting weather reading + [gameTimeMinutes]
      * time-of-day: [SolarGenerationModel] for SOLAR, [WindGenerationModel] for WIND.
      *
-     * Applied via [NetworkMutation.SetGeneratorOutput] with `systemOverride = true`
+     * Applied via [NetworkMutation.SetGeneratorOutput] with `isSystemControlled = true`
      * -- see that mutation's KDoc for why this is necessary: #382's WIND/SOLAR
      * non-dispatchable guard in [IidmNetworkMapper.applyMutation] would otherwise
      * reject the very mutations this method needs to make every tick, since it
@@ -539,7 +539,12 @@ class TickEngineImpl(
      * mutation failure is logged and skipped rather than aborting the tick, for the
      * same reasoning as [applyDailyLoadCurve]: generator ids come from the
      * session's own snapshot, so a failure indicates a mapper bug, not a transient
-     * condition.
+     * condition. The blast radius of a skipped mutation is bounded to that one
+     * generator keeping its previous output for this tick (retried again next tick
+     * from a fresh weather reading) -- it does not corrupt the rest of the network
+     * state or the tick pipeline, so aborting the whole tick over one bad generator
+     * would trade a contained, self-correcting glitch for a much more disruptive
+     * failure (identical trade-off already made by [applyDailyLoadCurve]).
      */
     private fun applyWeatherAndRenewables(
         runtime: SessionRuntime,
@@ -568,7 +573,7 @@ class TickEngineImpl(
                 NetworkMutation.SetGeneratorOutput(
                     generatorId = generator.id,
                     targetPMw = outputMw,
-                    systemOverride = true,
+                    isSystemControlled = true,
                 )
             networkMapper.applyMutation(physicsSession.iidmNetwork, mutation).onFailure {
                 log.error(

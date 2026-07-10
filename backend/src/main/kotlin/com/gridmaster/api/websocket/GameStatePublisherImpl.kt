@@ -64,6 +64,15 @@ class GameStatePublisherImpl(
     /** Tracks delta state per session so we can compute what changed. */
     private val sessionState = ConcurrentHashMap<String, SessionPublishState>()
 
+    /**
+     * The four `weather*` parameters are nullable end-to-end by design, not merely
+     * for null-safety hygiene: [TickEngineImpl] passes null for all four whenever
+     * `gridmaster.weather.enabled` is false (see [com.gridmaster.game.TickEngineImpl]
+     * KDoc), and [GameStateUpdate]'s corresponding fields are equally nullable, so a
+     * null here always means "weather is disabled/unavailable" and is propagated
+     * as-is -- there is no non-null invariant this method needs to enforce or that
+     * the frontend assumes once it arrives.
+     */
     override fun publishTick(
         sessionId: String,
         tickNumber: Long,

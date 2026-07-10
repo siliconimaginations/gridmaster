@@ -432,8 +432,8 @@ class TickEngineImplTest {
             delay(100)
 
             val setOutputMutations = mutationSlot.filterIsInstance<NetworkMutation.SetGeneratorOutput>()
-            assertThat(setOutputMutations.any { it.generatorId == "G-WIND" && it.systemOverride }).isTrue
-            assertThat(setOutputMutations.any { it.generatorId == "G-SOLAR" && it.systemOverride }).isTrue
+            assertThat(setOutputMutations.any { it.generatorId == "G-WIND" && it.isSystemControlled }).isTrue
+            assertThat(setOutputMutations.any { it.generatorId == "G-SOLAR" && it.isSystemControlled }).isTrue
         }
     }
 

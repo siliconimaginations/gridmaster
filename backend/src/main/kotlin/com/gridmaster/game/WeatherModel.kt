@@ -8,12 +8,16 @@ import kotlin.random.Random
 /**
  * Discrete weather states used to drive WIND/SOLAR generation (issue #391).
  *
- * States are ordered from clearest to stormiest -- [WeatherSimulator]'s transition
- * table only ever moves between a state and its neighbors in this ordering (e.g.
- * CLEAR can reach PARTLY_CLOUDY but never jumps straight to STORM), matching the
- * "weather doesn't change all at once" persistence behavior described in the
- * wind-energy Markov weather-window literature (see [WeatherSimulator] KDoc for
- * sources).
+ * States are ordered from clearest to stormiest. [WeatherSimulator]'s transition
+ * table moves each state towards its immediate neighbors most of the time, with
+ * one deliberate exception: CLOUDY can escalate directly to STORM (skipping
+ * OVERCAST) at a low weight, modeling a storm developing faster than the cloud
+ * cover alone would suggest. The only combination the table never allows is a
+ * CLEAR-to-STORM (or STORM-to-CLEAR) jump -- weather always passes through at
+ * least one intermediate state to go from clear skies to a storm or back. This
+ * matches the "weather doesn't change all at once" persistence behavior described
+ * in the wind-energy Markov weather-window literature (see [WeatherSimulator]
+ * KDoc for sources).
  *
  * Cloud-cover-percent and wind-speed-m/s ranges are illustrative starting values
  * (per the issue), tunable without touching [WeatherSimulator]'s transition logic.
@@ -111,12 +115,13 @@ private val weatherProfiles: Map<WeatherState, WeatherStateProfile> =
     )
 
 /**
- * Transition weights rolled when a state's dwell countdown reaches zero. Only
- * neighboring states in the [WeatherState] ordering are reachable from any given
- * state (no CLEAR-to-STORM jumps) -- persistence itself comes from the dwell-time
- * countdown, not from a self-transition weight, so these maps only need to cover
- * "where do we go next" and always sum their values to 1.0 conceptually (values
- * are normalized defensively in [WeatherSimulator.rollNextState] regardless).
+ * Transition weights rolled when a state's dwell countdown reaches zero. Mostly
+ * neighbor-only (see [WeatherState] KDoc for the one deliberate CLOUDY-to-STORM
+ * exception); CLEAR and STORM are never directly reachable from each other in a
+ * single transition. Persistence itself comes from the dwell-time countdown, not
+ * from a self-transition weight, so these maps only need to cover "where do we go
+ * next" and always sum their values to 1.0 conceptually (values are normalized
+ * defensively in [WeatherSimulator.rollNextState] regardless).
  */
 private val transitionWeights: Map<WeatherState, Map<WeatherState, Double>> =
     mapOf(
