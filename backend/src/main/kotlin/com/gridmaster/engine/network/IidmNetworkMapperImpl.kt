@@ -306,7 +306,12 @@ class IidmNetworkMapperImpl(
                         network.getGenerator(mutation.generatorId)
                             ?: throw InvalidMutationException("Generator not found: ${mutation.generatorId}")
                     val fuelType = metadataProvider.getMetadata(mutation.generatorId).fuelType
-                    if (fuelType == FuelType.WIND || fuelType == FuelType.SOLAR) {
+                    // WIND/SOLAR are non-dispatchable (#382) for player/algorithm-originated
+                    // mutations. #391's weather service sets `systemOverride = true` on its own
+                    // SetGeneratorOutput mutations so it can drive renewable output from the
+                    // simulated weather every tick without tripping this guard — see
+                    // NetworkMutation.SetGeneratorOutput's KDoc for the full rationale.
+                    if ((fuelType == FuelType.WIND || fuelType == FuelType.SOLAR) && !mutation.systemOverride) {
                         throw InvalidMutationException(
                             "Generator ${mutation.generatorId} ($fuelType) is not dispatchable — its power " +
                                 "output is determined by power flow, not a settable setpoint",

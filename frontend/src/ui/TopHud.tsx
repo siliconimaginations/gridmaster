@@ -75,6 +75,9 @@ export function TopHud() {
     seasonalLoadMultiplier,
     annualGrowthMultiplier,
     calendarSummary,
+    weatherState,
+    weatherCloudCoverPct,
+    weatherWindSpeedMps,
   } = useGameStore(useShallow((s) => ({
     gameTimeMinutes: s.gameTimeMinutes,
     clockState: s.clockState,
@@ -88,6 +91,9 @@ export function TopHud() {
     seasonalLoadMultiplier: s.seasonalLoadMultiplier,
     annualGrowthMultiplier: s.annualGrowthMultiplier,
     calendarSummary: s.calendarSummary,
+    weatherState: s.weatherState,
+    weatherCloudCoverPct: s.weatherCloudCoverPct,
+    weatherWindSpeedMps: s.weatherWindSpeedMps,
   })))
 
   // Combined weekly × seasonal × annual-growth multiplier (issue #388), shown
@@ -144,6 +150,16 @@ export function TopHud() {
     critical: styles.severityCritical,
   }
 
+  // Compact glyph + label for the weather badge (issue #391). Kept in TopHud rather
+  // than a shared constants file since it's the only consumer so far.
+  const weatherGlyph: Record<string, string> = {
+    CLEAR: '☀',
+    PARTLY_CLOUDY: '⛅',
+    CLOUDY: '☁',
+    OVERCAST: '☁',
+    STORM: '⛈',
+  }
+
   return (
     <div className={styles.root} data-testid="top-hud">
       {/* Clock */}
@@ -175,6 +191,20 @@ export function TopHud() {
             style={{ marginLeft: 6, opacity: 0.6, fontSize: '0.8em' }}
           >
             {calendarSummary}
+          </span>
+        )}
+        {weatherState != null && (
+          <span
+            data-testid="hud-weather"
+            title={`Weather (issue #391): ${weatherState}${weatherCloudCoverPct != null ? `, ${weatherCloudCoverPct.toFixed(0)}% cloud cover` : ''}${weatherWindSpeedMps != null ? `, wind ${weatherWindSpeedMps.toFixed(1)} m/s` : ''}`}
+            style={{ marginLeft: 6, opacity: 0.75, fontSize: '0.9em' }}
+          >
+            {weatherGlyph[weatherState] ?? weatherState}
+            {weatherWindSpeedMps != null && (
+              <span style={{ marginLeft: 2, fontSize: '0.8em', opacity: 0.8 }}>
+                {weatherWindSpeedMps.toFixed(1)}m/s
+              </span>
+            )}
           </span>
         )}
         <span data-testid="hud-clock-state" style={{ display: 'none' }}>{clockState}</span>
@@ -230,3 +260,4 @@ export function TopHud() {
     </div>
   )
 }
+

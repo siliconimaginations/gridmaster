@@ -4,6 +4,8 @@ import com.gridmaster.api.PhysicsSession
 import com.gridmaster.api.PhysicsSessionStore
 import com.gridmaster.api.SessionNotFoundException
 import com.gridmaster.engine.contingency.ContingencyAnalysisService
+import com.gridmaster.engine.model.FuelType
+import com.gridmaster.engine.model.Generator
 import com.gridmaster.engine.model.GridNetwork
 import com.gridmaster.engine.model.Load
 import com.gridmaster.engine.model.NetworkMutation
@@ -79,6 +81,7 @@ class TickEngineImplTest {
                 networkMapper = networkMapper,
                 autoSaveInterval = 5L,
                 dailyLoadCurveEnabled = true,
+                weatherEnabled = false,
             )
 
         // Default: session exists and power flow converges with no violations
@@ -349,6 +352,7 @@ class TickEngineImplTest {
                     networkMapper = networkMapper,
                     autoSaveInterval = 5L,
                     dailyLoadCurveEnabled = false,
+                    weatherEnabled = false,
                 )
             every { mockSnapshot.loads } returns
                 listOf(
@@ -360,6 +364,89 @@ class TickEngineImplTest {
 
             verify(exactly = 0) {
                 networkMapper.applyMutation(any(), any<NetworkMutation.SetLoadPower>())
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Weather-driven renewable generation (issue #391)
+    // -------------------------------------------------------------------------
+
+    private fun windGenerator(id: String = "G-WIND") =
+        Generator(
+            id = id,
+            name = id,
+            busId = "B1",
+            minActivePowerMw = 0.0,
+            maxActivePowerMw = 100.0,
+            powerSetpointMw = 0.0,
+            targetReactivePowerMvar = 0.0,
+            targetVoltagePu = 1.0,
+            connected = true,
+            fuelType = FuelType.WIND,
+            marginalCostPerMwh = 0.0,
+        )
+
+    private fun solarGenerator(id: String = "G-SOLAR") =
+        Generator(
+            id = id,
+            name = id,
+            busId = "B1",
+            minActivePowerMw = 0.0,
+            maxActivePowerMw = 50.0,
+            powerSetpointMw = 0.0,
+            targetReactivePowerMvar = 0.0,
+            targetVoltagePu = 1.0,
+            connected = true,
+            fuelType = FuelType.SOLAR,
+            marginalCostPerMwh = 0.0,
+        )
+
+    @Test
+    fun `weather-driven output is applied to WIND and SOLAR generators when enabled`() {
+        runBlocking {
+            engine =
+                TickEngineImpl(
+                    physicsSessionStore = physicsSessionStore,
+                    gameSessionService = gameSessionService,
+                    powerFlowService = powerFlowService,
+                    contingencyAnalysisService = contingencyAnalysisService,
+                    eventEngine = eventEngine,
+                    tutorialEngine = tutorialEngine,
+                    challengeEngine = challengeEngine,
+                    networkRepository = networkRepository,
+                    networkMapper = networkMapper,
+                    autoSaveInterval = 5L,
+                    dailyLoadCurveEnabled = false,
+                    weatherEnabled = true,
+                )
+            every { mockSnapshot.generators } returns listOf(windGenerator(), solarGenerator())
+            every { gameSessionService.load(sessionId, userId) } returns buildGameSession(multiplier = 100)
+
+            val mutationSlot = mutableListOf<NetworkMutation>()
+            every { networkMapper.applyMutation(any(), capture(mutationSlot)) } answers {
+                Result.success(mockNetwork)
+            }
+
+            engine.start(sessionId, userId)
+            delay(100)
+
+            val setOutputMutations = mutationSlot.filterIsInstance<NetworkMutation.SetGeneratorOutput>()
+            assertThat(setOutputMutations.any { it.generatorId == "G-WIND" && it.systemOverride }).isTrue
+            assertThat(setOutputMutations.any { it.generatorId == "G-SOLAR" && it.systemOverride }).isTrue
+        }
+    }
+
+    @Test
+    fun `weather-driven output is skipped when disabled`() {
+        runBlocking {
+            every { mockSnapshot.generators } returns listOf(windGenerator(), solarGenerator())
+            every { gameSessionService.load(sessionId, userId) } returns buildGameSession(multiplier = 100)
+            engine.start(sessionId, userId) // engine from setUp() has weatherEnabled = false
+            delay(100)
+
+            verify(exactly = 0) {
+                networkMapper.applyMutation(any(), any<NetworkMutation.SetGeneratorOutput>())
             }
         }
     }

@@ -9,6 +9,7 @@ import com.gridmaster.game.ClockState
 import com.gridmaster.game.DailyLoadCurve
 import com.gridmaster.game.GameCalendar
 import com.gridmaster.game.SeasonalLoadCurve
+import com.gridmaster.game.WeatherState
 import com.gridmaster.game.WeeklyLoadCurve
 import com.gridmaster.game.command.Alert
 import com.gridmaster.game.event.EventCard
@@ -75,6 +76,10 @@ class GameStatePublisherImpl(
         healthScore: Int?,
         tutorialStep: Int?,
         challengeTimeRemainingMinutes: Int?,
+        weatherState: WeatherState?,
+        weatherCloudCoverPct: Double?,
+        weatherWindSpeedMps: Double?,
+        weatherRegionId: String?,
     ) {
         val isFull = tickNumber % GameStatePublisher.FULL_STATE_INTERVAL_TICKS == 0L
         val state = sessionState.getOrPut(sessionId) { SessionPublishState() }
@@ -92,6 +97,10 @@ class GameStatePublisherImpl(
                 healthScore = healthScore,
                 tutorialStep = tutorialStep,
                 challengeTimeRemainingMinutes = challengeTimeRemainingMinutes,
+                weatherState = weatherState,
+                weatherCloudCoverPct = weatherCloudCoverPct,
+                weatherWindSpeedMps = weatherWindSpeedMps,
+                weatherRegionId = weatherRegionId,
             )
         } else {
             doPublishDelta(
@@ -107,6 +116,10 @@ class GameStatePublisherImpl(
                 healthScore = healthScore,
                 tutorialStep = tutorialStep,
                 challengeTimeRemainingMinutes = challengeTimeRemainingMinutes,
+                weatherState = weatherState,
+                weatherCloudCoverPct = weatherCloudCoverPct,
+                weatherWindSpeedMps = weatherWindSpeedMps,
+                weatherRegionId = weatherRegionId,
             )
         }
     }
@@ -121,6 +134,10 @@ class GameStatePublisherImpl(
         newAlerts: List<Alert>,
         pendingCards: List<EventCard>,
         missedTicks: Long?,
+        weatherState: WeatherState?,
+        weatherCloudCoverPct: Double?,
+        weatherWindSpeedMps: Double?,
+        weatherRegionId: String?,
     ) {
         if (missedTicks != null) {
             val dest = "/topic/session/$sessionId/state"
@@ -143,6 +160,10 @@ class GameStatePublisherImpl(
             newAlerts,
             pendingCards,
             healthScore = null,
+            weatherState = weatherState,
+            weatherCloudCoverPct = weatherCloudCoverPct,
+            weatherWindSpeedMps = weatherWindSpeedMps,
+            weatherRegionId = weatherRegionId,
         )
     }
 
@@ -186,6 +207,10 @@ class GameStatePublisherImpl(
         healthScore: Int? = null,
         tutorialStep: Int? = null,
         challengeTimeRemainingMinutes: Int? = null,
+        weatherState: WeatherState? = null,
+        weatherCloudCoverPct: Double? = null,
+        weatherWindSpeedMps: Double? = null,
+        weatherRegionId: String? = null,
     ) {
         val smc = sessionStore.find(sessionId)?.latestDispatchResult?.systemMarginalCostPerMwh
         val networkDto = powerFlowResult.snapshot.toNetworkWsDto(smc)
@@ -210,6 +235,10 @@ class GameStatePublisherImpl(
                 seasonalLoadMultiplier = SeasonalLoadCurve.multiplierForGameTimeMinutes(gameTimeMinutes),
                 annualGrowthMultiplier = AnnualLoadGrowth.multiplierForGameTimeMinutes(gameTimeMinutes, annualLoadGrowthRate),
                 calendarSummary = GameCalendar.describe(gameTimeMinutes),
+                weatherState = weatherState,
+                weatherCloudCoverPct = weatherCloudCoverPct,
+                weatherWindSpeedMps = weatherWindSpeedMps,
+                weatherRegionId = weatherRegionId,
             )
 
         val state = sessionState.getOrPut(sessionId) { SessionPublishState() }
@@ -233,6 +262,10 @@ class GameStatePublisherImpl(
         healthScore: Int? = null,
         tutorialStep: Int? = null,
         challengeTimeRemainingMinutes: Int? = null,
+        weatherState: WeatherState? = null,
+        weatherCloudCoverPct: Double? = null,
+        weatherWindSpeedMps: Double? = null,
+        weatherRegionId: String? = null,
     ) {
         val smc = sessionStore.find(sessionId)?.latestDispatchResult?.systemMarginalCostPerMwh
         // Computed every DELTA tick for hash-comparison; O(N) single-pass, negligible at
@@ -272,6 +305,10 @@ class GameStatePublisherImpl(
                 seasonalLoadMultiplier = SeasonalLoadCurve.multiplierForGameTimeMinutes(gameTimeMinutes),
                 annualGrowthMultiplier = AnnualLoadGrowth.multiplierForGameTimeMinutes(gameTimeMinutes, annualLoadGrowthRate),
                 calendarSummary = GameCalendar.describe(gameTimeMinutes),
+                weatherState = weatherState,
+                weatherCloudCoverPct = weatherCloudCoverPct,
+                weatherWindSpeedMps = weatherWindSpeedMps,
+                weatherRegionId = weatherRegionId,
             )
 
         if (networkChanged) state.lastNetworkHash = networkDto.hashCode()
@@ -352,3 +389,4 @@ private fun EventCard.toDto(): EventCardDto =
                 EventCardOptionDto(id = idx.toString(), label = opt.label, tag = opt.tag, costGbp = opt.costGbp)
             },
     )
+

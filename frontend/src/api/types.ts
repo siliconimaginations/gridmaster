@@ -172,7 +172,21 @@ export interface GameStateUpdate {
    * e.g. "Year 2 · Day 41 · Wed · Mar".
    */
   calendarSummary?: string | null
+  /**
+   * Current simulated weather state (issue #391), driving WIND/SOLAR generator
+   * output. Null/absent if weather is disabled server-side.
+   */
+  weatherState?: WeatherState | null
+  /** Current cloud-cover percent (0-100) for `weatherState`. */
+  weatherCloudCoverPct?: number | null
+  /** Current wind speed in m/s for `weatherState`. */
+  weatherWindSpeedMps?: number | null
+  /** Region/zone id this weather reading applies to (issue #391), defaults to "global". */
+  weatherRegionId?: string | null
 }
+
+/** Discrete weather states (issue #391) — see backend `WeatherState`. */
+export type WeatherState = 'CLEAR' | 'PARTLY_CLOUDY' | 'CLOUDY' | 'OVERCAST' | 'STORM' 
 
 /** Sent in a ConnectionStatus message when type === 'GAME_OVER'. */
 export interface GameOverDto {
@@ -353,3 +367,4 @@ export interface HistorySampleDto {
   totalLoadMw: number
   totalGenerationMw: number
 }
+

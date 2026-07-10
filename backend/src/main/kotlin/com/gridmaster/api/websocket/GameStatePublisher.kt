@@ -1,6 +1,7 @@
 package com.gridmaster.api.websocket
 
 import com.gridmaster.engine.powerflow.PowerFlowResult
+import com.gridmaster.game.WeatherState
 import com.gridmaster.game.command.Alert
 import com.gridmaster.game.event.EventCard
 
@@ -44,6 +45,11 @@ interface GameStatePublisher {
         healthScore: Int? = null,
         tutorialStep: Int? = null,
         challengeTimeRemainingMinutes: Int? = null,
+        /** Current simulated weather (issue #391); null if weather is disabled. See [com.gridmaster.game.WeatherSimulator]. */
+        weatherState: WeatherState? = null,
+        weatherCloudCoverPct: Double? = null,
+        weatherWindSpeedMps: Double? = null,
+        weatherRegionId: String? = null,
     )
 
     /**
@@ -62,6 +68,11 @@ interface GameStatePublisher {
         newAlerts: List<Alert>,
         pendingCards: List<EventCard>,
         missedTicks: Long? = null,
+        /** Current simulated weather (issue #391); null if weather is disabled or unavailable. */
+        weatherState: WeatherState? = null,
+        weatherCloudCoverPct: Double? = null,
+        weatherWindSpeedMps: Double? = null,
+        weatherRegionId: String? = null,
     )
 
     /**
@@ -79,3 +90,4 @@ interface GameStatePublisher {
      */
     fun clearSession(sessionId: String)
 }
+
