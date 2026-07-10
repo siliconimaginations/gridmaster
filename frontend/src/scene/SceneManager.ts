@@ -37,6 +37,14 @@ export class SceneManager {
   constructor(
     canvas: HTMLCanvasElement,
     private readonly onElementSelected?: (info: SelectedElementInfo | null) => void,
+    /**
+     * Fired on every pointer move with the hovered mesh's metadata (or null
+     * when the pointer isn't over a pickable mesh) plus the current pointer
+     * screen coordinates. Used to drive the hover tooltip (#395). Reuses the
+     * same `scene.pick` mechanism as click-selection below, rather than a
+     * parallel picking path.
+     */
+    private readonly onElementHover?: (info: SelectedElementInfo | null, screenX: number, screenY: number) => void,
   ) {
     if (!canvas) throw new Error('SceneManager: canvas element is null')
 
@@ -62,10 +70,21 @@ export class SceneManager {
 
     // Click picking — resolve the clicked mesh's metadata and fire the selection callback
     this.scene.onPointerObservable.add((pi) => {
-      if (pi.type !== PointerEventTypes.POINTERUP) return
-      const hit = this.scene.pick(this.scene.pointerX, this.scene.pointerY)
-      const meta = hit?.pickedMesh?.metadata as SelectedElementInfo | null | undefined
-      this.onElementSelected?.(meta ?? null)
+      if (pi.type === PointerEventTypes.POINTERUP) {
+        const hit = this.scene.pick(this.scene.pointerX, this.scene.pointerY)
+        const meta = hit?.pickedMesh?.metadata as SelectedElementInfo | null | undefined
+        this.onElementSelected?.(meta ?? null)
+        return
+      }
+
+      // Hover picking (#395) — reuses the same scene.pick call as click-selection
+      // above, just on POINTERMOVE instead of POINTERUP, so hover and click stay
+      // perfectly consistent about which mesh "counts" as the target.
+      if (pi.type === PointerEventTypes.POINTERMOVE) {
+        const hit = this.scene.pick(this.scene.pointerX, this.scene.pointerY)
+        const meta = hit?.pickedMesh?.metadata as SelectedElementInfo | null | undefined
+        this.onElementHover?.(meta ?? null, this.scene.pointerX, this.scene.pointerY)
+      }
     })
 
     // Resize handler — keeps canvas pixel dimensions in sync with CSS layout

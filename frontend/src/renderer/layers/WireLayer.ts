@@ -2,10 +2,15 @@
  * WireLayer — draws transmission lines as catenary bezier curves.
  *
  * Lines are drawn above terrain and below bus sprites (z=10).
- * Color encodes line loading:
- *   blue  (< 60%)  — under-utilised
- *   amber (60–85%) — approaching limit
- *   red   (> 85%)  — near/over limit
+ * Color encodes line loading, via the isNearLimit/isOverloaded flags computed
+ * in model/GridGraph.ts:
+ *   blue  (<= 70%)  — under-utilised
+ *   amber (70–90%)  — approaching limit (isNearLimit)
+ *   red   (> 90%)   — near/over limit (isOverloaded)
+ *
+ * These thresholds are aligned with the Babylon.js renderer's lineMesh.ts
+ * (issue #395) — the two renderers previously used different cutoffs
+ * (60%/85% here vs 70%/90% there), which was a confusing inconsistency.
  *
  * See docs/engineering/15-pixi-renderer.md §Catenary wires.
  */

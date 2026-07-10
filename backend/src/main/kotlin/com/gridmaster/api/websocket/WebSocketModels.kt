@@ -143,6 +143,7 @@ data class BusWsDto(
 
 data class BranchWsDto(
     val id: String,
+    val name: String,
     val fromBusId: String,
     val toBusId: String,
     /** Active power entering from the from-terminal (MW); 0.0 before first power flow. */
@@ -151,6 +152,20 @@ data class BranchWsDto(
     val reactivePowerMvar: Double,
     /** Current loading as a percentage of the thermal rating; 0.0 if no rating is set. */
     val loadingPercent: Double,
+    /**
+     * Larger of the two terminal currents (A); null before the first power-flow
+     * solve. Exposed for the frontend hover tooltip (#395) so it can show a
+     * real current value alongside loadingPercent, rather than re-deriving one.
+     */
+    val currentA: Double? = null,
+    /**
+     * Thermal current rating (A); null when the underlying element has no
+     * rating (should not happen for lines/transformers built via
+     * PresetNetworkFactory after #395, but persisted sessions created before
+     * this fix may still lack one until re-saved). Exposed for the frontend
+     * hover tooltip (#395).
+     */
+    val ratingA: Double? = null,
     val connected: Boolean,
 )
 
@@ -349,24 +364,34 @@ fun GridNetwork.toNetworkWsDto(smc: Double? = null): GridNetworkWsDto {
 
     val branches: List<BranchWsDto> =
         lines.map { line ->
+            val currentA = maxOf(line.currentFromA ?: 0.0, line.currentToA ?: 0.0)
+            val hasCurrent = line.currentFromA != null || line.currentToA != null
             BranchWsDto(
                 id = line.id,
+                name = line.name,
                 fromBusId = line.fromBusId,
                 toBusId = line.toBusId,
                 activePowerMw = line.activePowerFromMw ?: 0.0,
                 reactivePowerMvar = line.reactivePowerFromMvar ?: 0.0,
                 loadingPercent = line.loadingPercent(),
+                currentA = if (hasCurrent) currentA else null,
+                ratingA = line.ratingA,
                 connected = line.connected,
             )
         } +
             twoWindingsTransformers.map { twt ->
+                val currentA = maxOf(twt.currentFromA ?: 0.0, twt.currentToA ?: 0.0)
+                val hasCurrent = twt.currentFromA != null || twt.currentToA != null
                 BranchWsDto(
                     id = twt.id,
+                    name = twt.name,
                     fromBusId = twt.fromBusId,
                     toBusId = twt.toBusId,
                     activePowerMw = twt.activePowerFromMw ?: 0.0,
                     reactivePowerMvar = twt.reactivePowerFromMvar ?: 0.0,
                     loadingPercent = twt.loadingPercent(),
+                    currentA = if (hasCurrent) currentA else null,
+                    ratingA = twt.transformerRatingA(),
                     connected = twt.connected,
                 )
             }
@@ -417,11 +442,14 @@ private fun Line.loadingPercent(): Double {
 }
 
 private fun TwoWindingsTransformer.loadingPercent(): Double {
-    val ratingA =
-        ratingMva?.let { mva ->
-            if (nominalVoltageFromKv > 0.0) mva * 1000.0 / (SQRT3 * nominalVoltageFromKv) else null
-        } ?: return 0.0
+    val ratingA = transformerRatingA() ?: return 0.0
     if (ratingA <= 0.0) return 0.0
     val maxCurrent = maxOf(currentFromA ?: 0.0, currentToA ?: 0.0)
     return maxCurrent / ratingA * 100.0
 }
+
+/** Converts the transformer's nameplate ratingMva to amps at its from-side nominal voltage. */
+private fun TwoWindingsTransformer.transformerRatingA(): Double? =
+    ratingMva?.let { mva ->
+        if (nominalVoltageFromKv > 0.0) mva * 1000.0 / (SQRT3 * nominalVoltageFromKv) else null
+    }

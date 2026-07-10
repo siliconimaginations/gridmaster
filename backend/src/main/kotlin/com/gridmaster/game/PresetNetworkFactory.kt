@@ -1,5 +1,6 @@
 package com.gridmaster.game
 
+import com.gridmaster.engine.network.LineRatingEstimator
 import com.powsybl.ieeecdf.converter.IeeeCdfNetworkFactory
 import com.powsybl.iidm.network.Network
 import com.powsybl.iidm.network.NetworkFactory
@@ -63,7 +64,53 @@ object PresetNetworkFactory {
                 "Unknown network preset: '$networkPreset'. " +
                     "Valid presets: ${knownPresets.joinToString()}",
             )
+        }.also { applyMissingThermalRatings(it) }
+
+    // -------------------------------------------------------------------------
+    // Thermal rating backfill (#395)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Applies an estimated thermal current rating to any line or two-winding
+     * transformer in [network] that has no `currentLimits` set.
+     *
+     * Without this, Line.loadingPercent and TwoWindingsTransformer.loadingPercent
+     * (WebSocketModels.kt) always return 0.0 for unrated elements, so they can
+     * never be flagged as overloaded by ViolationScanner or shown as loaded in
+     * the HUD/renderers. Confirmed unrated before this fix: the entire ieee14
+     * preset (PowSyBl's IeeeCdfNetworkFactory carries no thermal ratings), three
+     * of the four tutorial-preset lines, the tutorial transformer, and every
+     * freeplay50 transformer.
+     *
+     * Idempotent and safe to call on any network: elements that already declare
+     * a `currentLimits1`/`currentLimits2` are left untouched. See
+     * [LineRatingEstimator] for the SIL-based line formula and the
+     * ratedS-based transformer formula.
+     */
+    private fun applyMissingThermalRatings(network: Network) {
+        network.lines.forEach { line ->
+            if (line.currentLimits1.isPresent || line.currentLimits2.isPresent) return@forEach
+            val nominalVoltageKv = line.terminal1.voltageLevel.nominalV
+            val ratingA =
+                LineRatingEstimator.estimateLineRatingAmps(
+                    x = line.x,
+                    b1 = line.b1,
+                    b2 = line.b2,
+                    nominalVoltageKv = nominalVoltageKv,
+                ) ?: return@forEach
+            line.newCurrentLimits1().setPermanentLimit(ratingA).add()
         }
+
+        network.twoWindingsTransformers.forEach { twt ->
+            if (twt.currentLimits1.isPresent || twt.currentLimits2.isPresent) return@forEach
+            val ratingA =
+                LineRatingEstimator.estimateTransformerRatingAmps(
+                    ratedSMva = twt.ratedS,
+                    ratedU1Kv = twt.ratedU1,
+                ) ?: return@forEach
+            twt.newCurrentLimits1().setPermanentLimit(ratingA).add()
+        }
+    }
 
     // -------------------------------------------------------------------------
     // Post-load normalisation

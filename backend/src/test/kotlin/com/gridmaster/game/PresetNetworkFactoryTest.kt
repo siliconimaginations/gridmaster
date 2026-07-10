@@ -232,6 +232,70 @@ class PresetNetworkFactoryTest {
         }
     }
 
+    // -----------------------------------------------------------------------
+    // Thermal rating backfill (#395)
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `every ieee14 line and transformer has a thermal rating after create`() {
+        // Before #395, IeeeCdfNetworkFactory.create14Solved() produced zero rated
+        // elements — none of these carried a currentLimits1/2 at all.
+        val network = PresetNetworkFactory.create("ieee14")
+        network.lines.forEach { line ->
+            assertThat(line.currentLimits1.isPresent || line.currentLimits2.isPresent)
+                .withFailMessage { "Line ${line.id} has no thermal rating" }
+                .isTrue()
+        }
+        network.twoWindingsTransformers.forEach { twt ->
+            assertThat(twt.currentLimits1.isPresent || twt.currentLimits2.isPresent)
+                .withFailMessage { "Transformer ${twt.id} has no thermal rating" }
+                .isTrue()
+        }
+    }
+
+    @Test
+    fun `every tutorial line and transformer has a thermal rating after create`() {
+        // Before #395 only L12 had a currentLimits1 — L23, L34, L14, and TX12 did not.
+        val network = PresetNetworkFactory.create("tutorial")
+        network.lines.forEach { line ->
+            assertThat(line.currentLimits1.isPresent || line.currentLimits2.isPresent)
+                .withFailMessage { "Line ${line.id} has no thermal rating" }
+                .isTrue()
+        }
+        network.twoWindingsTransformers.forEach { twt ->
+            assertThat(twt.currentLimits1.isPresent || twt.currentLimits2.isPresent)
+                .withFailMessage { "Transformer ${twt.id} has no thermal rating" }
+                .isTrue()
+        }
+    }
+
+    @Test
+    fun `tutorial L12's original hardcoded rating is preserved, not overwritten`() {
+        // L12 already had an explicit 500 A permanent limit before #395 — the
+        // backfill must be a no-op for elements that already declare a rating.
+        val network = PresetNetworkFactory.create("tutorial")
+        val l12 = network.getLine("L12")
+        assertThat(l12.currentLimits1.orElse(null)?.permanentLimit).isEqualTo(500.0)
+    }
+
+    @Test
+    fun `every freeplay50 transformer has a thermal rating after create`() {
+        // Before #395, stepDown() never set currentLimits on any freeplay50 transformer.
+        val network = PresetNetworkFactory.create("freeplay50")
+        network.twoWindingsTransformers.forEach { twt ->
+            assertThat(twt.currentLimits1.isPresent || twt.currentLimits2.isPresent)
+                .withFailMessage { "Transformer ${twt.id} has no thermal rating" }
+                .isTrue()
+        }
+    }
+
+    @Test
+    fun `freeplay50 line()-helper ratings are preserved, not overwritten`() {
+        val network = PresetNetworkFactory.create("freeplay50")
+        val line = network.getLine("LN-1")
+        assertThat(line.currentLimits1.orElse(null)?.permanentLimit).isEqualTo(500.0)
+    }
+
     companion object {
         /** True when the powsybl-math-native shared library loaded successfully. */
         val nativeAvailable: Boolean by lazy {

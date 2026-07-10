@@ -122,7 +122,7 @@ describe('networkDtoToGridGraph', () => {
     const g = networkDtoToGridGraph(makeDto())
     const br1 = g.edges.find(e => e.id === 'BR1')!
     expect(br1.loadFactor).toBeCloseTo(0.70)
-    expect(br1.isNearLimit).toBe(false)   // 70% < 85%
+    expect(br1.isNearLimit).toBe(false)   // exactly 70% is not > 70% (#395 threshold)
     expect(br1.isOverloaded).toBe(false)
   })
 

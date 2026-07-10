@@ -115,6 +115,14 @@ interface GameStore {
   selectedElement: SelectedElementInfo | null
   selectElement: (info: SelectedElementInfo | null) => void
 
+  /**
+   * Currently hovered scene element (#395) — distinct from `selectedElement`,
+   * which requires a click. Drives the LineTooltip hover tooltip; updated on
+   * every pointer move via SceneManager's onElementHover callback.
+   */
+  hoveredElement: SelectedElementInfo | null
+  hoverElement: (info: SelectedElementInfo | null) => void
+
   // Actions
   applyUpdate: (update: GameStateUpdate) => void
   connect: (sessionId: string, token: string) => void
@@ -188,6 +196,7 @@ export const useGameStore = create<GameStore>()(subscribeWithSelector((set, get)
   sessionId: null,
   sessionInvalidated: false,
   selectedElement: null,
+  hoveredElement: null,
 
   // ── setUcSchedule ────────────────────────────────────────────────────────────
   setUcSchedule: (schedule: boolean[] | null) => {
@@ -313,12 +322,17 @@ export const useGameStore = create<GameStore>()(subscribeWithSelector((set, get)
     wsClient?.disconnect()
     wsClient = null
     // Resets all game state to initial values so a future session starts clean
-    set({ ...INITIAL_GAME_STATE, connectionStatus: 'disconnected', sessionId: null, sessionInvalidated: false, selectedElement: null, gameOver: null, healthScore: null, healthHistory: [] })
+    set({ ...INITIAL_GAME_STATE, connectionStatus: 'disconnected', sessionId: null, sessionInvalidated: false, selectedElement: null, hoveredElement: null, gameOver: null, healthScore: null, healthHistory: [] })
   },
 
   // ── selectElement ────────────────────────────────────────────────────────────
   selectElement: (info: SelectedElementInfo | null) => {
     set({ selectedElement: info })
+  },
+
+  // ── hoverElement (#395) ──────────────────────────────────────────────────────
+  hoverElement: (info: SelectedElementInfo | null) => {
+    set({ hoveredElement: info })
   },
 
   // ── sendCommand ──────────────────────────────────────────────────────────────

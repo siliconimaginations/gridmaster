@@ -23,7 +23,7 @@ vi.mock('@babylonjs/core', () => {
     pick = vi.fn().mockReturnValue({ pickedMesh: null })
     constructor(_engine: unknown) {}
   }
-  return { Color3, Color4, Engine, Scene, PointerEventTypes: { POINTERUP: 4 } }
+  return { Color3, Color4, Engine, Scene, PointerEventTypes: { POINTERUP: 4, POINTERMOVE: 8 } }
 })
 
 // ── Sub-module mocks (no GPU needed) ─────────────────────────────────────────
@@ -138,5 +138,34 @@ describe('SceneManager', () => {
     // pick returns no mesh
     capturedPointerHandler?.({ type: 4 })
     expect(onElementSelected).toHaveBeenCalledWith(null)
+  })
+
+  // ── hover tooltip picking (#395) ────────────────────────────────────────────
+
+  it('calls onElementHover with mesh metadata and pointer position on POINTERMOVE', () => {
+    const onElementSelected = vi.fn()
+    const onElementHover = vi.fn()
+    const canvas = makeCanvas()
+    const m = new SceneManager(canvas, onElementSelected, onElementHover)
+    const meta = { elementType: 'LINE', elementId: 'l1' }
+    ;(m.scene.pick as ReturnType<typeof vi.fn>).mockReturnValue({ pickedMesh: { metadata: meta } })
+    capturedPointerHandler?.({ type: 8 }) // POINTERMOVE = 8
+    expect(onElementHover).toHaveBeenCalledWith(meta, 10, 20) // mocked scene.pointerX/Y
+  })
+
+  it('calls onElementHover with null when no mesh is picked on POINTERMOVE', () => {
+    const onElementHover = vi.fn()
+    const canvas = makeCanvas()
+    new SceneManager(canvas, undefined, onElementHover)
+    capturedPointerHandler?.({ type: 8 })
+    expect(onElementHover).toHaveBeenCalledWith(null, 10, 20)
+  })
+
+  it('does not call onElementHover on POINTERUP', () => {
+    const onElementHover = vi.fn()
+    const canvas = makeCanvas()
+    new SceneManager(canvas, undefined, onElementHover)
+    capturedPointerHandler?.({ type: 4 })
+    expect(onElementHover).not.toHaveBeenCalled()
   })
 })
