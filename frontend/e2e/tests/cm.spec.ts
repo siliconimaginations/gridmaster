@@ -45,8 +45,9 @@ test.beforeAll(async ({ request }) => {
         headers: { Authorization: `Bearer ${token}` },
       })
       if (networkRes.ok()) {
-        const network = await networkRes.json() as { generators: Array<{ id: string; committed: boolean; maxActivePowerMw: number }> }
-        const gen = network.generators?.find((g) => g.committed)
+        const network = await networkRes.json() as { generators: Array<{ id: string; committed: boolean; maxActivePowerMw: number; dispatchable: boolean }> }
+        // Must be dispatchable (issue #382): WIND/SOLAR generators reject SetGeneratorOutput.
+        const gen = network.generators?.find((g) => g.committed && g.dispatchable)
         if (gen) {
           committedGenId = gen.id
           committedGenMaxMw = gen.maxActivePowerMw
@@ -133,13 +134,21 @@ test('CM-02 toggle generator on → committed=true after decommit baseline', asy
 
 /**
  * CM-03: Send SetGeneratorOutput; verify that the next GameStateUpdate
- * reflects the new activePowerMw setpoint.
+ * reflects the new setpointMw.
  *
  * Target is set to 50% of the generator's max rating, chosen to stay well
  * within min/max bounds across all ieee14 generators while producing a
  * clearly observable change from the initial dispatch value.
+ *
+ * Since #382, `setpointMw` (the player/algorithm-settable target) and
+ * `activePowerMw` (the actual output, read back from the power flow solve)
+ * are distinct fields. Only `setpointMw` is guaranteed to snap to the exact
+ * commanded value — `activePowerMw` may legitimately differ once distributed
+ * slack (ActivePowerControl) redistributes any system-balance mismatch across
+ * participating generators, so this test asserts on `setpointMw` rather than
+ * requiring `activePowerMw` to converge to the setpoint.
  */
-test('CM-03 SetGeneratorOutput → activePowerMw reflects new setpoint', async ({ page }) => {
+test('CM-03 SetGeneratorOutput → setpointMw reflects new setpoint', async ({ page }) => {
   await page.goto('/')
   await page.waitForSelector('[data-testid="bootstrap-overlay"]', {
     state: 'hidden',
@@ -167,21 +176,21 @@ test('CM-03 SetGeneratorOutput → activePowerMw reflects new setpoint', async (
     ([id, mw]) => {
       const { network } = window.__e2e.getStore()
       const gen = network?.generators.find((g) => g.id === id)
-      // Allow ±1 MW tolerance for floating-point rounding in the power flow solve
-      return gen !== undefined && Math.abs(gen.activePowerMw - (mw as number)) < 1.0
+      // Allow ±1 MW tolerance for floating-point rounding
+      return gen !== undefined && Math.abs(gen.setpointMw - (mw as number)) < 1.0
     },
     [committedGenId, targetMw] as [string, number],
     { timeout: 20_000 },
   )
 
   // Final assertion: value is stable in the store after the wait
-  const actualMw = await page.evaluate(
+  const actualSetpointMw = await page.evaluate(
     (id) => {
       const { network } = window.__e2e.getStore()
-      return network?.generators.find((g) => g.id === id)?.activePowerMw ?? -1
+      return network?.generators.find((g) => g.id === id)?.setpointMw ?? -1
     },
     committedGenId,
   )
 
-  expect(Math.abs(actualMw - targetMw)).toBeLessThan(1.0)
+  expect(Math.abs(actualSetpointMw - targetMw)).toBeLessThan(1.0)
 })
