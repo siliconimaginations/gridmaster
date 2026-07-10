@@ -338,3 +338,18 @@ export interface UnitCommitmentRequest {
   /** Exactly 24 hourly load forecast values in MW. */
   hourlyForecastMw: number[]
 }
+
+// ── REST: History ─────────────────────────────────────────────────────────────
+
+/**
+ * One rolling-history sample from `GET /api/sessions/{id}/history` (issue #392).
+ *
+ * `gameTimeMinutes` is simulated game time (the game clock), not wall-clock
+ * time — the Dispatch Panel's 24h/48h/72h/week/month range selector all
+ * operate on this field.
+ */
+export interface HistorySampleDto {
+  gameTimeMinutes: number
+  totalLoadMw: number
+  totalGenerationMw: number
+}

@@ -1,7 +1,9 @@
 package com.gridmaster.game
 
+import com.gridmaster.api.PhysicsSession
 import com.gridmaster.api.PhysicsSessionStore
 import com.gridmaster.api.SessionNotFoundException
+import com.gridmaster.api.history.HistorySampleDto
 import com.gridmaster.api.websocket.GameOverDto
 import com.gridmaster.api.websocket.GameStatePublisher
 import com.gridmaster.engine.contingency.ContingencyAnalysisService
@@ -311,6 +313,10 @@ class TickEngineImpl(
         physicsSession.latestSnapshot = pfResult.snapshot
         physicsSession.latestPowerFlowResult = pfResult
 
+        // Step 4b: append this tick's total load/generation to the rolling history
+        // buffer (issue #392) — read back via GET /api/sessions/{id}/history.
+        recordHistorySample(physicsSession, ctx.gameTimeMinutes)
+
         // Step 5: check auto-slow conditions
         applyAutoSlow(runtime, pfResult)
 
@@ -412,6 +418,36 @@ class TickEngineImpl(
             elapsed,
             slotMs,
             slipped,
+        )
+    }
+
+    // -------------------------------------------------------------------------
+    // Rolling load/generation history (issue #392)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Compute this tick's total load and total generation from
+     * [PhysicsSession.latestSnapshot] and append it to the session's
+     * [com.gridmaster.api.history.HistoryRingBuffer].
+     *
+     * Mirrors the same totalLoadMw/totalGenerationMw formula used by
+     * [com.gridmaster.api.websocket.GridNetworkWsDto] (only connected loads
+     * and generators count towards the total) so the history curve and the
+     * live HUD totals never disagree.
+     */
+    private fun recordHistorySample(
+        physicsSession: PhysicsSession,
+        gameTimeMinutes: Long,
+    ) {
+        val snapshot = physicsSession.latestSnapshot
+        val totalLoad = snapshot.loads.filter { it.connected }.sumOf { it.activePowerMw }
+        val totalGeneration = snapshot.generators.filter { it.connected }.sumOf { it.powerOutputMw ?: it.powerSetpointMw }
+        physicsSession.history.record(
+            HistorySampleDto(
+                gameTimeMinutes = gameTimeMinutes,
+                totalLoadMw = totalLoad,
+                totalGenerationMw = totalGeneration,
+            ),
         )
     }
 

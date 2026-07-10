@@ -15,6 +15,7 @@ import type {
   CreateSessionRequest,
   DispatchRequest,
   GridNetworkDto,
+  HistorySampleDto,
   IssueTokenRequest,
   NetworkMutationDto,
   SessionDetailDto,
@@ -304,4 +305,19 @@ export function runUnitCommitment(sessionId: string, req: UnitCommitmentRequest)
     method: 'POST',
     body: JSON.stringify(req),
   })
+}
+
+// ── History ───────────────────────────────────────────────────────────────────
+
+/**
+ * Returns the rolling total load/generation history for a session (issue #392),
+ * oldest sample first.
+ *
+ * `rangeMinutes` slices server-side to the last N simulated minutes (e.g. 1440
+ * for 24h) so the client doesn't fetch and discard the full ~1-month buffer
+ * for a short range. Omit it to get the entire retained history.
+ */
+export function getHistory(sessionId: string, rangeMinutes?: number): Promise<HistorySampleDto[]> {
+  const query = rangeMinutes != null ? `?rangeMinutes=${rangeMinutes}` : ''
+  return apiFetch<HistorySampleDto[]>(`/api/sessions/${sessionId}/history${query}`)
 }

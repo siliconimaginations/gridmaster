@@ -1,8 +1,10 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import type { GeneratorDto } from '../api/types'
+import { getHistory } from '../api/restClient'
+import type { GeneratorDto, HistorySampleDto } from '../api/types'
 import { useGameStore } from '../state/useGameStore'
 import styles from './DispatchPanel.module.css'
+import { HistoryChart } from './HistoryChart'
 
 // ── Fuel type helpers ─────────────────────────────────────────────────────────
 
@@ -383,9 +385,91 @@ function CostStackSection({
   )
 }
 
+// ── History tab (issue #392) ───────────────────────────────────────────────────
+
+/** Selectable history ranges, all in simulated game-time minutes (not wall-clock). */
+const HISTORY_RANGES = [
+  { label: '24h', rangeMinutes: 24 * 60 },
+  { label: '48h', rangeMinutes: 48 * 60 },
+  { label: '72h', rangeMinutes: 72 * 60 },
+  { label: 'Week', rangeMinutes: 7 * 24 * 60 },
+  { label: 'Month', rangeMinutes: 30 * 24 * 60 },
+] as const
+
+type HistoryRangeLabel = (typeof HISTORY_RANGES)[number]['label']
+
+/**
+ * Range-selectable chart of total load/generation trends (issue #392).
+ *
+ * Fetches from `GET /api/sessions/{id}/history?rangeMinutes=...` whenever the
+ * component mounts (i.e. whenever the Dispatch Panel is opened, since
+ * DispatchPanel returns null and unmounts its whole subtree while closed) or
+ * the selected range changes. The effect's dependency array is just
+ * `[sessionId, rangeMinutes]` — both primitives that only change on a
+ * user-driven range switch or a session change — so this never turns into a
+ * fetch loop from unrelated re-renders (e.g. per-tick WebSocket updates
+ * elsewhere in the store).
+ */
+function HistoryTab({ sessionId }: { sessionId: string | null }) {
+  const [rangeLabel, setRangeLabel] = useState<HistoryRangeLabel>('24h')
+  const [samples, setSamples] = useState<HistorySampleDto[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // HISTORY_RANGES is a fixed const array and rangeLabel is typed to its own
+  // label union, so this lookup can never miss — the fallback to the default
+  // 24h entry only guards against a future HISTORY_RANGES edit dropping a
+  // label that HistoryRangeLabel still allows (Gemini review, #392).
+  const rangeMinutes = (HISTORY_RANGES.find((r) => r.label === rangeLabel) ?? HISTORY_RANGES[0]).rangeMinutes
+
+  useEffect(() => {
+    if (!sessionId) return
+    let cancelled = false
+    setLoading(true)
+    setError(null)
+    getHistory(sessionId, rangeMinutes)
+      .then((result) => {
+        if (!cancelled) setSamples(result)
+      })
+      .catch(() => {
+        if (!cancelled) setError('Could not load history.')
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [sessionId, rangeMinutes])
+
+  return (
+    <div className={styles.tabContent} data-testid="history-tab">
+      <div className={styles.historyRangeBar} role="tablist" aria-label="History range">
+        {HISTORY_RANGES.map(({ label }) => (
+          <button
+            key={label}
+            className={`${styles.historyRangeBtn} ${label === rangeLabel ? styles.historyRangeBtnActive : ''}`}
+            onClick={() => setRangeLabel(label)}
+            role="tab"
+            aria-selected={label === rangeLabel}
+            data-testid={`history-range-${label.toLowerCase()}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className={styles.historyBody}>
+        {loading && <div className={styles.historyLoading} data-testid="history-loading">Loading history…</div>}
+        {!loading && error && <div className={styles.historyError} data-testid="history-error">{error}</div>}
+        {!loading && !error && <HistoryChart samples={samples} />}
+      </div>
+    </div>
+  )
+}
+
 // ── DispatchPanel ─────────────────────────────────────────────────────────────
 
-type Tab = 'realtime' | 'dayahead'
+type Tab = 'realtime' | 'dayahead' | 'history'
 
 /**
  * Slide-up panel showing generator dispatch controls.
@@ -401,7 +485,7 @@ type Tab = 'realtime' | 'dayahead'
  */
 export function DispatchPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [activeTab, setActiveTab] = useState<Tab>('realtime')
-  const { network } = useGameStore(useShallow((s) => ({ network: s.network })))
+  const { network, sessionId } = useGameStore(useShallow((s) => ({ network: s.network, sessionId: s.sessionId })))
 
   if (!open || !network) return null
 
@@ -431,19 +515,30 @@ export function DispatchPanel({ open, onClose }: { open: boolean; onClose: () =>
           >
             Day-ahead
           </button>
+          <button
+            className={`${styles.tab} ${activeTab === 'history' ? styles.tabActive : ''}`}
+            onClick={() => setActiveTab('history')}
+            role="tab"
+            aria-selected={activeTab === 'history'}
+            data-testid="tab-history"
+          >
+            History
+          </button>
         </div>
         <button className={styles.closeBtn} onClick={onClose} aria-label="Close dispatch panel">×</button>
       </div>
 
-      <CostStackSection
-        generators={generators}
-        systemMarginalCostPerMwh={network.systemMarginalCostPerMwh}
-      />
+      {activeTab !== 'history' && (
+        <CostStackSection
+          generators={generators}
+          systemMarginalCostPerMwh={network.systemMarginalCostPerMwh}
+        />
+      )}
 
       {/* Tab content */}
-      {activeTab === 'realtime'
-        ? <MeritOrderTab generators={generators} />
-        : <UCScheduleTab generators={generators} />}
+      {activeTab === 'realtime' && <MeritOrderTab generators={generators} />}
+      {activeTab === 'dayahead' && <UCScheduleTab generators={generators} />}
+      {activeTab === 'history' && <HistoryTab sessionId={sessionId} />}
     </div>
   )
 }

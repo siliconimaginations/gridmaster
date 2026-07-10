@@ -7,6 +7,7 @@ import com.gridmaster.api.dto.DispatchRequest
 import com.gridmaster.api.dto.NetworkMutationDto
 import com.gridmaster.api.dto.RunPowerFlowRequest
 import com.gridmaster.api.dto.UnitCommitmentRequest
+import com.gridmaster.api.history.HistorySampleDto
 import com.gridmaster.api.websocket.GridNetworkWsDto
 import com.gridmaster.api.websocket.toNetworkWsDto
 import com.gridmaster.engine.contingency.ContingencyAnalysisParameters
@@ -40,6 +41,7 @@ import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import java.time.Instant
 
@@ -150,6 +152,37 @@ class PhysicsController(
                 networkMapper.toGridNetwork(network).also { session.latestSnapshot = it }
             }
         return updated
+    }
+
+    // -------------------------------------------------------------------------
+    // Rolling history (issue #392)
+    // -------------------------------------------------------------------------
+
+    /**
+     * GET /api/sessions/{sessionId}/history — rolling total load/generation history.
+     *
+     * One entry per tick, oldest first, `{ gameTimeMinutes, totalLoadMw,
+     * totalGenerationMw }`. [gameTimeMinutes] is simulated game time, not
+     * wall-clock time — the frontend's 24h/48h/72h/week/month range selector
+     * all operate on that field.
+     *
+     * Optional `?rangeMinutes=` slices server-side to the last N simulated
+     * minutes (e.g. `1440` for 24h, `10080` for a week) so the client doesn't
+     * have to fetch and discard the full ~1-month buffer for a short range.
+     * Omit it to get the entire retained history. A non-positive value throws
+     * [IllegalArgumentException], mapped to 400 by [GlobalExceptionHandler]
+     * (Gemini review, #392).
+     */
+    @GetMapping("/history")
+    fun getHistory(
+        @PathVariable sessionId: String,
+        @RequestParam(required = false) rangeMinutes: Long?,
+    ): List<HistorySampleDto> {
+        require(rangeMinutes == null || rangeMinutes > 0) {
+            "rangeMinutes must be positive, got $rangeMinutes"
+        }
+        val session = sessionStore.get(sessionId)
+        return session.history.snapshot(rangeMinutes)
     }
 
     // -------------------------------------------------------------------------

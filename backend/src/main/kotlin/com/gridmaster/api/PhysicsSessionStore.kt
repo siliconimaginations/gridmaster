@@ -1,5 +1,6 @@
 package com.gridmaster.api
 
+import com.gridmaster.api.history.HistoryRingBuffer
 import com.gridmaster.engine.contingency.ContingencyAnalysisResult
 import com.gridmaster.engine.dispatch.DispatchResult
 import com.gridmaster.engine.dispatch.UcResult
@@ -74,4 +75,19 @@ data class PhysicsSession(
     var latestContingencyResult: ContingencyAnalysisResult? = null,
     var latestDispatchResult: DispatchResult? = null,
     var latestUcResult: UcResult? = null,
+    /**
+     * Rolling in-memory history of total load/generation, one sample per tick
+     * (issue #392). Appended to by [com.gridmaster.game.TickEngineImpl] and read
+     * by `GET /api/sessions/{sessionId}/history`. Lives for the same lifetime as
+     * this [PhysicsSession] — created once at session start, lost on backend
+     * restart (in-memory-only for v1, see [HistoryRingBuffer] KDoc).
+     *
+     * Intentionally `val`, not `var`: the mutation happens inside
+     * [HistoryRingBuffer]'s own `@Synchronized` methods, not by reassigning
+     * this field — same pattern as holding a `val` reference to any other
+     * mutable collection/object in Kotlin. [PhysicsSession] is never
+     * `.copy()`'d anywhere in this codebase, so there is no risk of two
+     * copies silently sharing (or diverging on) the same buffer instance.
+     */
+    val history: HistoryRingBuffer = HistoryRingBuffer(),
 )
