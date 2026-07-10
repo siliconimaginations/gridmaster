@@ -68,10 +68,13 @@ object GameCalendar {
     /**
      * 0-indexed month (0 = January .. 11 = December) for [gameTimeMinutes].
      *
-     * [doy] always comes from [dayOfYear], which is already `Math.floorMod`-ed
+     * `doy` always comes from [dayOfYear], which is already `Math.floorMod`-ed
      * into `0..364` (including for negative [gameTimeMinutes]), so `doy < 0`
      * can never happen here and `m` can never end up as `-1` — the `i - 1`
-     * branch is only reachable for `i >= 1`.
+     * branch is only reachable for `i >= 1`. For example, `doy = 0` (Jan 1st):
+     * `monthStartDayOfYear[0] == 0`, so `0 < 0` is false and the loop continues
+     * to `i = 1`, where `0 < monthStartDayOfYear[1]` (31) is true, correctly
+     * setting `m = 1 - 1 = 0` (January).
      */
     fun month(gameTimeMinutes: Long): Int {
         val doy = dayOfYear(gameTimeMinutes)
@@ -199,14 +202,24 @@ object SeasonalLoadCurve {
         val lowerPoint = monthMidpoints[lowerMonth]
         var upperPoint = monthMidpoints[upperMonth]
         var position = doy
+
+        // The two branches below only fire in the December/January wrap segment
+        // (lowerMonth == 11, upperMonth == 0). Both `position` and `upperPoint` are
+        // expressed on the *same* contiguous number line before computing `fraction`
+        // below — otherwise a Dec value (doy close to 365) and a Jan value (doy close
+        // to 0) would look far apart even though they're adjacent on the calendar.
         if (upperMonth == 0) {
             // Wrapping past year-end: project next January's midpoint forward onto a
             // contiguous number line so it's comparable to December's day-of-year values.
+            // E.g. Jan's midpoint (day 15.5) becomes day 380.5 (365 + 15.5).
             upperPoint += daysPerYear
         }
         if (lowerMonth == 11 && doy < lowerPoint) {
-            // Early January (before Jan's own midpoint): this doy actually continues the
-            // segment from *last* December's midpoint, so shift it forward by a year too.
+            // We're actually in *January*, before its own midpoint (e.g. doy = 5), not
+            // in December. Since lowerMonth/upperMonth were resolved as the Dec→Jan wrap
+            // pair above, shift this early-January doy forward by a year (e.g. 5 -> 370)
+            // so it lines up with the already-shifted upperPoint instead of comparing
+            // against December's un-shifted lowerPoint on the wrong side.
             position += daysPerYear
         }
 

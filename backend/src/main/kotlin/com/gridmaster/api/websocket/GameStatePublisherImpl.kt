@@ -48,6 +48,12 @@ class GameStatePublisherImpl(
      * [GameStatePublisherImpl] directly (bypassing Spring, e.g.
      * [com.gridmaster.api.websocket.GameStatePublisherImplTest]) rely on the plain
      * Kotlin default instead, so both need to stay in sync.
+     *
+     * Deliberately kept both, rather than dropping the `@Value` default (i.e.
+     * `@Value("\${gridmaster.annual-load-growth.rate}")` with no fallback): that
+     * would make the property *required* and fail Spring context startup on any
+     * deployment/profile that doesn't set `gridmaster.annual-load-growth.rate`,
+     * which is a worse failure mode than the current (intentional) duplication.
      */
     @Value("\${gridmaster.annual-load-growth.rate:0.02}")
     private val annualLoadGrowthRate: Double = AnnualLoadGrowth.DEFAULT_ANNUAL_GROWTH_RATE,
