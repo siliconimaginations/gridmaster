@@ -78,6 +78,26 @@ interface GameStore {
    * network's flat baseline load. Null until the first server update arrives.
    */
   dailyLoadMultiplier: number | null
+  /**
+   * Day-of-week demand multiplier (issue #388), where 1.0 is the
+   * weekly-average baseline. Null until the first server update arrives.
+   */
+  weeklyLoadMultiplier: number | null
+  /**
+   * Monthly seasonal demand multiplier (issue #388), where 1.0 is the
+   * annual-average baseline. Null until the first server update arrives.
+   */
+  seasonalLoadMultiplier: number | null
+  /**
+   * Compounding year-over-year demand growth multiplier (issue #388). Null
+   * until the first server update arrives.
+   */
+  annualGrowthMultiplier: number | null
+  /**
+   * Human-readable in-game calendar summary, e.g. "Year 2 · Day 41 · Wed · Mar"
+   * (issue #388). Null until the first server update arrives.
+   */
+  calendarSummary: string | null
 
   // Selection slice
   selectedElement: SelectedElementInfo | null
@@ -135,6 +155,10 @@ const INITIAL_GAME_STATE = {
   tutorialStep: null as number | null,
   challengeTimeRemainingMinutes: null as number | null,
   dailyLoadMultiplier: null as number | null,
+  weeklyLoadMultiplier: null as number | null,
+  seasonalLoadMultiplier: null as number | null,
+  annualGrowthMultiplier: null as number | null,
+  calendarSummary: null as string | null,
 } as const satisfies Partial<GameStore>
 
 // ── Store ─────────────────────────────────────────────────────────────────────
@@ -190,6 +214,10 @@ export const useGameStore = create<GameStore>()(subscribeWithSelector((set, get)
         tutorialStep: update.tutorialStep ?? null,
         challengeTimeRemainingMinutes: update.challengeTimeRemainingMinutes ?? null,
         dailyLoadMultiplier: update.dailyLoadMultiplier ?? null,
+        weeklyLoadMultiplier: update.weeklyLoadMultiplier ?? null,
+        seasonalLoadMultiplier: update.seasonalLoadMultiplier ?? null,
+        annualGrowthMultiplier: update.annualGrowthMultiplier ?? null,
+        calendarSummary: update.calendarSummary ?? null,
       }))
     } else {
       // DELTA: clock fields are always present — set them unconditionally.
@@ -210,6 +238,10 @@ export const useGameStore = create<GameStore>()(subscribeWithSelector((set, get)
         tutorialStep: update.tutorialStep ?? undefined,
         challengeTimeRemainingMinutes: update.challengeTimeRemainingMinutes ?? undefined,
         dailyLoadMultiplier: update.dailyLoadMultiplier ?? undefined,
+        weeklyLoadMultiplier: update.weeklyLoadMultiplier ?? undefined,
+        seasonalLoadMultiplier: update.seasonalLoadMultiplier ?? undefined,
+        annualGrowthMultiplier: update.annualGrowthMultiplier ?? undefined,
+        calendarSummary: update.calendarSummary ?? undefined,
       })
       set((state) => ({ ...clockUpdate, ...optionalUpdate, healthHistory: appendHealth(state.healthHistory) }))
     }

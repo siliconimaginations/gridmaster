@@ -73,14 +73,24 @@ class TickEngineImpl(
     @Value("\${gridmaster.clock.auto-save-interval:$DEFAULT_AUTO_SAVE_INTERVAL}")
     private val autoSaveInterval: Long,
     /**
-     * Feature flag for issue #383 — when true (the default), each bus load is
-     * scaled every tick by [DailyLoadCurve.multiplierForGameTimeMinutes] so demand
-     * follows a realistic daily shape instead of staying flat. Additive and
-     * backward compatible: existing sessions and tests that assume flat load can
-     * disable it via `gridmaster.daily-load-curve.enabled=false`.
+     * Feature flag for issue #383 (extended by #388) — when true (the default),
+     * each bus load is scaled every tick by [CompositeLoadCurve.multiplierForGameTimeMinutes]
+     * so demand follows a realistic daily/weekly/seasonal shape and compounds with
+     * annual growth, instead of staying flat. Additive and backward compatible:
+     * existing sessions and tests that assume flat load can disable all four
+     * layers at once via `gridmaster.daily-load-curve.enabled=false`.
      */
     @Value("\${gridmaster.daily-load-curve.enabled:true}")
     private val dailyLoadCurveEnabled: Boolean,
+    /**
+     * Compounding annual demand growth rate applied by [AnnualLoadGrowth] (issue
+     * #388), default 2.0%/year per EIA's Short-Term Energy Outlook. Applies to
+     * all game modes uniformly (tutorial/challenge sessions are short enough
+     * that the effect is negligible; Free Play sessions are the ones expected
+     * to run long enough for it to matter, per `WORK_PLAN.md` Stage 6).
+     */
+    @Value("\${gridmaster.annual-load-growth.rate:0.02}")
+    private val annualLoadGrowthRate: Double = AnnualLoadGrowth.DEFAULT_ANNUAL_GROWTH_RATE,
 ) : TickEngine {
     private val log = LoggerFactory.getLogger(TickEngineImpl::class.java)
 
@@ -406,18 +416,19 @@ class TickEngineImpl(
     }
 
     // -------------------------------------------------------------------------
-    // Daily load curve (issue #383)
+    // Daily / weekly / seasonal / annual load curves (issues #383, #388)
     // -------------------------------------------------------------------------
 
     /**
-     * Scale every load in [physicsSession] by the current time-of-day multiplier
-     * from [DailyLoadCurve]. The first call for a session captures each load's
-     * original (flat) active power in [SessionRuntime.baseLoadMw] so scaling is
-     * always relative to the network's baseline rather than compounding across
-     * ticks. [SessionRuntime] is constructed fresh in [start] every time a session
-     * (re)starts, so [SessionRuntime.baseLoadMw] can never carry over stale values
-     * from a previous run — there is no separate reset path to maintain. Must be
-     * called while holding the lock on [physicsSession] — it mutates the live IIDM
+     * Scale every load in [physicsSession] by the current composed load multiplier
+     * from [CompositeLoadCurve] (daily × weekly × seasonal × annual growth). The
+     * first call for a session captures each load's original (flat) active power
+     * in [SessionRuntime.baseLoadMw] so scaling is always relative to the
+     * network's baseline rather than compounding across ticks. [SessionRuntime] is
+     * constructed fresh in [start] every time a session (re)starts, so
+     * [SessionRuntime.baseLoadMw] can never carry over stale values from a
+     * previous run — there is no separate reset path to maintain. Must be called
+     * while holding the lock on [physicsSession] — it mutates the live IIDM
      * network via [networkMapper], same as any other NetworkMutation application.
      *
      * A per-load mutation failure is logged at error level but does not abort the
@@ -436,7 +447,7 @@ class TickEngineImpl(
             baseLoads = physicsSession.latestSnapshot.loads.associate { it.id to it.activePowerMw }
             runtime.baseLoadMw = baseLoads
         }
-        val multiplier = DailyLoadCurve.multiplierForGameTimeMinutes(gameTimeMinutes)
+        val multiplier = CompositeLoadCurve.multiplierForGameTimeMinutes(gameTimeMinutes, annualLoadGrowthRate)
         runtime.currentLoadMultiplier = multiplier
         for ((loadId, baseMw) in baseLoads) {
             val mutation = NetworkMutation.SetLoadPower(loadId = loadId, activePowerMw = baseMw * multiplier)

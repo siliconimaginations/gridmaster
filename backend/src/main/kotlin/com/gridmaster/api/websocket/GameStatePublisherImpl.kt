@@ -4,11 +4,16 @@ import com.gridmaster.api.PhysicsSessionStore
 import com.gridmaster.engine.powerflow.EquipmentType
 import com.gridmaster.engine.powerflow.NetworkViolation
 import com.gridmaster.engine.powerflow.PowerFlowResult
+import com.gridmaster.game.AnnualLoadGrowth
 import com.gridmaster.game.ClockState
 import com.gridmaster.game.DailyLoadCurve
+import com.gridmaster.game.GameCalendar
+import com.gridmaster.game.SeasonalLoadCurve
+import com.gridmaster.game.WeeklyLoadCurve
 import com.gridmaster.game.command.Alert
 import com.gridmaster.game.event.EventCard
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.messaging.simp.SimpMessagingTemplate
 import org.springframework.stereotype.Component
 import java.util.concurrent.ConcurrentHashMap
@@ -31,6 +36,27 @@ import java.util.concurrent.ConcurrentHashMap
 class GameStatePublisherImpl(
     private val messagingTemplate: SimpMessagingTemplate,
     private val sessionStore: PhysicsSessionStore,
+    /**
+     * Mirrors [com.gridmaster.game.TickEngineImpl]'s `gridmaster.annual-load-growth.rate`
+     * property (issue #388) so the published [GameStateUpdate.annualGrowthMultiplier]
+     * always reflects the rate actually applied to loads, even if it's overridden
+     * away from [AnnualLoadGrowth.DEFAULT_ANNUAL_GROWTH_RATE].
+     *
+     * The `= AnnualLoadGrowth.DEFAULT_ANNUAL_GROWTH_RATE` Kotlin default is *not*
+     * redundant with the `@Value` default above despite looking that way: `@Value`
+     * only resolves when Spring constructs this bean. Tests that construct
+     * [GameStatePublisherImpl] directly (bypassing Spring, e.g.
+     * [com.gridmaster.api.websocket.GameStatePublisherImplTest]) rely on the plain
+     * Kotlin default instead, so both need to stay in sync.
+     *
+     * Deliberately kept both, rather than dropping the `@Value` default (i.e.
+     * `@Value("\${gridmaster.annual-load-growth.rate}")` with no fallback): that
+     * would make the property *required* and fail Spring context startup on any
+     * deployment/profile that doesn't set `gridmaster.annual-load-growth.rate`,
+     * which is a worse failure mode than the current (intentional) duplication.
+     */
+    @Value("\${gridmaster.annual-load-growth.rate:0.02}")
+    private val annualLoadGrowthRate: Double = AnnualLoadGrowth.DEFAULT_ANNUAL_GROWTH_RATE,
 ) : GameStatePublisher {
     private val log = LoggerFactory.getLogger(GameStatePublisherImpl::class.java)
 
@@ -180,6 +206,10 @@ class GameStatePublisherImpl(
                 tutorialStep = tutorialStep,
                 challengeTimeRemainingMinutes = challengeTimeRemainingMinutes,
                 dailyLoadMultiplier = DailyLoadCurve.multiplierForGameTimeMinutes(gameTimeMinutes),
+                weeklyLoadMultiplier = WeeklyLoadCurve.multiplierForGameTimeMinutes(gameTimeMinutes),
+                seasonalLoadMultiplier = SeasonalLoadCurve.multiplierForGameTimeMinutes(gameTimeMinutes),
+                annualGrowthMultiplier = AnnualLoadGrowth.multiplierForGameTimeMinutes(gameTimeMinutes, annualLoadGrowthRate),
+                calendarSummary = GameCalendar.describe(gameTimeMinutes),
             )
 
         val state = sessionState.getOrPut(sessionId) { SessionPublishState() }
@@ -238,6 +268,10 @@ class GameStatePublisherImpl(
                 tutorialStep = tutorialStep,
                 challengeTimeRemainingMinutes = challengeTimeRemainingMinutes,
                 dailyLoadMultiplier = DailyLoadCurve.multiplierForGameTimeMinutes(gameTimeMinutes),
+                weeklyLoadMultiplier = WeeklyLoadCurve.multiplierForGameTimeMinutes(gameTimeMinutes),
+                seasonalLoadMultiplier = SeasonalLoadCurve.multiplierForGameTimeMinutes(gameTimeMinutes),
+                annualGrowthMultiplier = AnnualLoadGrowth.multiplierForGameTimeMinutes(gameTimeMinutes, annualLoadGrowthRate),
+                calendarSummary = GameCalendar.describe(gameTimeMinutes),
             )
 
         if (networkChanged) state.lastNetworkHash = networkDto.hashCode()

@@ -62,7 +62,20 @@ function healthArrowClass(dir: TrendDirection): string {
 }
 
 export function TopHud() {
-  const { gameTimeMinutes, clockState, tickNumber, network, violations, healthScore, healthHistory, dailyLoadMultiplier } = useGameStore(useShallow((s) => ({
+  const {
+    gameTimeMinutes,
+    clockState,
+    tickNumber,
+    network,
+    violations,
+    healthScore,
+    healthHistory,
+    dailyLoadMultiplier,
+    weeklyLoadMultiplier,
+    seasonalLoadMultiplier,
+    annualGrowthMultiplier,
+    calendarSummary,
+  } = useGameStore(useShallow((s) => ({
     gameTimeMinutes: s.gameTimeMinutes,
     clockState: s.clockState,
     tickNumber: s.tickNumber,
@@ -71,7 +84,22 @@ export function TopHud() {
     healthScore: s.healthScore,
     healthHistory: s.healthHistory,
     dailyLoadMultiplier: s.dailyLoadMultiplier,
+    weeklyLoadMultiplier: s.weeklyLoadMultiplier,
+    seasonalLoadMultiplier: s.seasonalLoadMultiplier,
+    annualGrowthMultiplier: s.annualGrowthMultiplier,
+    calendarSummary: s.calendarSummary,
   })))
+
+  // Combined weekly × seasonal × annual-growth multiplier (issue #388), shown
+  // as a single compact badge alongside the existing daily-load-curve badge
+  // (#383) rather than three separate indicators. null unless all three
+  // components have arrived from the server.
+  const longTermMultiplier = useMemo(() => {
+    if (weeklyLoadMultiplier == null || seasonalLoadMultiplier == null || annualGrowthMultiplier == null) {
+      return null
+    }
+    return weeklyLoadMultiplier * seasonalLoadMultiplier * annualGrowthMultiplier
+  }, [weeklyLoadMultiplier, seasonalLoadMultiplier, annualGrowthMultiplier])
 
   // ── Metric history ring buffer (last HISTORY_LENGTH ticks) ────────────────
 
@@ -129,6 +157,24 @@ export function TopHud() {
             style={{ marginLeft: 4, opacity: 0.75, fontSize: '0.85em' }}
           >
             ×{dailyLoadMultiplier.toFixed(2)}
+          </span>
+        )}
+        {longTermMultiplier != null && (
+          <span
+            data-testid="hud-long-term-load-multiplier"
+            title="Combined weekly + seasonal + annual-growth demand multiplier (issue #388)"
+            style={{ marginLeft: 4, opacity: 0.75, fontSize: '0.85em' }}
+          >
+            ×{longTermMultiplier.toFixed(2)}
+          </span>
+        )}
+        {calendarSummary != null && (
+          <span
+            data-testid="hud-calendar-summary"
+            title="In-game calendar (issue #388) — anchored at session start = Monday, January 1"
+            style={{ marginLeft: 6, opacity: 0.6, fontSize: '0.8em' }}
+          >
+            {calendarSummary}
           </span>
         )}
         <span data-testid="hud-clock-state" style={{ display: 'none' }}>{clockState}</span>

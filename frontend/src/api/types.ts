@@ -151,6 +151,27 @@ export interface GameStateUpdate {
    * where 1.0 is the network's flat baseline load.
    */
   dailyLoadMultiplier?: number | null
+  /**
+   * Day-of-week demand multiplier for `gameTimeMinutes` (issue #388), where
+   * 1.0 is the weekly-average baseline.
+   */
+  weeklyLoadMultiplier?: number | null
+  /**
+   * Monthly seasonal demand multiplier for `gameTimeMinutes` (issue #388),
+   * where 1.0 is the annual-average baseline.
+   */
+  seasonalLoadMultiplier?: number | null
+  /**
+   * Compounding year-over-year demand growth multiplier for `gameTimeMinutes`
+   * (issue #388) — not normalized to average 1.0, since it's an intentional
+   * long-run increase.
+   */
+  annualGrowthMultiplier?: number | null
+  /**
+   * Human-readable in-game calendar summary for `gameTimeMinutes` (issue #388),
+   * e.g. "Year 2 · Day 41 · Wed · Mar".
+   */
+  calendarSummary?: string | null
 }
 
 /** Sent in a ConnectionStatus message when type === 'GAME_OVER'. */
