@@ -12,14 +12,14 @@ function fmt(value: number, decimals = 1): string {
 }
 
 function severityClass(pct: number): string {
-  if (pct > 90) return styles.valueCritical
-  if (pct > 70) return styles.valueWarning
+  if (pct >= 90) return styles.valueCritical
+  if (pct >= 70) return styles.valueWarning
   return ''
 }
 
 function borderClass(pct: number): string {
-  if (pct > 90) return styles.tooltipCritical
-  if (pct > 70) return styles.tooltipWarning
+  if (pct >= 90) return styles.tooltipCritical
+  if (pct >= 70) return styles.tooltipWarning
   return ''
 }
 

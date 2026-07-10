@@ -113,6 +113,15 @@ object PresetNetworkFactory {
     // If any preset's topology or generator dispatch changes materially, these
     // hardcoded numbers should be recomputed by rerunning the same kind of
     // discovery analysis and reapplying the 20% margin.
+    //
+    // This is a deliberate manual process, not an automated one (#399, Gemini
+    // review on #396): running the N-1 discovery analysis on every preset build
+    // would reintroduce the runtime-computed-rating approach this file explicitly
+    // moved away from (see the SIL-formula rejection note above). The recompute
+    // recipe: solve the base case, then for every line/transformer disconnect it
+    // alone, re-solve, record the resulting current on every other still-in-service
+    // element, take the max observed current per element across all scenarios, and
+    // apply the 20% margin — the same steps used to produce the numbers below.
 
     /** ieee14 line ratings (A), N-1-derived + 20% margin. See methodology note above. */
     private val IEEE14_LINE_RATINGS_A =
