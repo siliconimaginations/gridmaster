@@ -460,3 +460,93 @@
   color: #22d3ee;
   white-space: nowrap;
 }
+
+/* ── History chart (issue #392) ──────────────────────────────────────────── */
+
+.historyRangeBar {
+  display: flex;
+  gap: 4px;
+  padding: 8px 14px 4px;
+  flex-shrink: 0;
+}
+
+.historyRangeBtn {
+  padding: 3px 10px;
+  border-radius: 4px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 11px;
+  transition: color 120ms, background 120ms, border-color 120ms;
+}
+
+.historyRangeBtn:hover {
+  color: #cbd5e1;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.historyRangeBtnActive {
+  color: #e2e8f0;
+  background: rgba(34, 211, 238, 0.15);
+  border-color: rgba(34, 211, 238, 0.4);
+}
+
+.historyBody {
+  flex: 1;
+  padding: 8px 14px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.historyEmpty {
+  color: #64748b;
+  font-size: 12px;
+  text-align: center;
+  padding: 24px 0;
+}
+
+.historyLoading,
+.historyError {
+  color: #64748b;
+  font-size: 12px;
+  text-align: center;
+  padding: 24px 0;
+}
+
+.historyError {
+  color: #f87171;
+}
+
+.historyLegend {
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+  margin-top: 4px;
+}
+
+.historyLegendItem {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.historyLegendSwatchLoad,
+.historyLegendSwatchGen {
+  display: inline-block;
+  width: 10px;
+  height: 2px;
+  border-radius: 1px;
+}
+
+.historyLegendSwatchLoad {
+  background: #f87171;
+}
+
+.historyLegendSwatchGen {
+  background: #22d3ee;
+}

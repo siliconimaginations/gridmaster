@@ -1,6 +1,7 @@
 package com.gridmaster.api
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.gridmaster.api.history.HistorySampleDto
 import com.gridmaster.api.security.JwtAuthFilter
 import com.gridmaster.api.security.JwtService
 import com.gridmaster.api.security.SecurityConfig
@@ -145,6 +146,53 @@ class PhysicsControllerTest {
     @Test
     fun `GET network returns 404 for unknown session`() {
         mvc.get("/api/sessions/unknown/network")
+            .andExpect { status { isNotFound() } }
+    }
+
+    // -----------------------------------------------------------------------
+    // GET /history (issue #392)
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `GET history returns empty list when no ticks have been recorded`() {
+        mvc.get("$BASE/history")
+            .andExpect {
+                status { isOk() }
+                jsonPath("$") { isArray() }
+                jsonPath("$.length()") { value(0) }
+            }
+    }
+
+    @Test
+    fun `GET history returns recorded samples oldest first`() {
+        mockSession.history.record(HistorySampleDto(gameTimeMinutes = 10L, totalLoadMw = 100.0, totalGenerationMw = 100.0))
+        mockSession.history.record(HistorySampleDto(gameTimeMinutes = 20L, totalLoadMw = 110.0, totalGenerationMw = 110.0))
+
+        mvc.get("$BASE/history")
+            .andExpect {
+                status { isOk() }
+                jsonPath("$[0].gameTimeMinutes") { value(10) }
+                jsonPath("$[1].gameTimeMinutes") { value(20) }
+            }
+    }
+
+    @Test
+    fun `GET history with rangeMinutes slices to recent samples only`() {
+        mockSession.history.record(HistorySampleDto(gameTimeMinutes = 0L, totalLoadMw = 100.0, totalGenerationMw = 100.0))
+        mockSession.history.record(HistorySampleDto(gameTimeMinutes = 1440L, totalLoadMw = 120.0, totalGenerationMw = 120.0))
+        mockSession.history.record(HistorySampleDto(gameTimeMinutes = 2880L, totalLoadMw = 130.0, totalGenerationMw = 130.0))
+
+        mvc.get("$BASE/history") { param("rangeMinutes", "1440") }
+            .andExpect {
+                status { isOk() }
+                jsonPath("$.length()") { value(2) }
+                jsonPath("$[0].gameTimeMinutes") { value(1440) }
+            }
+    }
+
+    @Test
+    fun `GET history returns 404 for unknown session`() {
+        mvc.get("/api/sessions/unknown/history")
             .andExpect { status { isNotFound() } }
     }
 

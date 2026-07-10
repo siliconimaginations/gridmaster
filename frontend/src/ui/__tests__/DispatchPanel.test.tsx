@@ -1,7 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { DispatchPanel } from '../DispatchPanel'
-import type { GridNetworkDto, GeneratorDto } from '../../api/types'
+import type { GridNetworkDto, GeneratorDto, HistorySampleDto } from '../../api/types'
+
+// ── restClient mock ──────────────────────────────────────────────────────────
+
+const mockGetHistory = vi.fn()
+vi.mock('../../api/restClient', () => ({
+  getHistory: (...args: unknown[]) => mockGetHistory(...args),
+}))
 
 // ── Store mock ────────────────────────────────────────────────────────────────
 
@@ -57,13 +64,18 @@ vi.mock('../../state/useGameStore', () => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const { useGameStore } = await import('../../state/useGameStore') as any
 
-function setStoreState(network: GridNetworkDto | null) {
+function setStoreState(network: GridNetworkDto | null, sessionId: string | null = 'session-1') {
   useGameStore.__reset({
     network,
+    sessionId,
     sendCommandOptimistic: mockSendCommandOptimistic,
     sendCommand: mockSendCommand,
     setUcSchedule: vi.fn(),
   })
+}
+
+function makeHistorySample(overrides: Partial<HistorySampleDto> = {}): HistorySampleDto {
+  return { gameTimeMinutes: 0, totalLoadMw: 300, totalGenerationMw: 300, ...overrides }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -80,6 +92,8 @@ describe('DispatchPanel', () => {
   beforeEach(() => {
     mockSendCommandOptimistic.mockReset()
     mockSendCommand.mockReset()
+    mockGetHistory.mockReset()
+    mockGetHistory.mockResolvedValue([])
   })
 
   it('renders nothing when closed', () => {
@@ -375,6 +389,86 @@ describe('DispatchPanel', () => {
       expect(screen.getByTestId('cost-stack-chart')).toBeInTheDocument()
       fireEvent.click(screen.getByTestId('cost-stack-toggle'))
       expect(screen.queryByTestId('cost-stack-chart')).toBeNull()
+    })
+  })
+
+  describe('History tab (#392)', () => {
+    it('switches to History tab and fetches on mount with the default 24h range', async () => {
+      mockGetHistory.mockResolvedValue([makeHistorySample()])
+      setStoreState(makeNetwork([makeGenerator()]))
+      renderPanel(true)
+
+      fireEvent.click(screen.getByTestId('tab-history'))
+      expect(screen.getByTestId('history-tab')).toBeInTheDocument()
+
+      await waitFor(() => expect(mockGetHistory).toHaveBeenCalledWith('session-1', 24 * 60))
+    })
+
+    it('hides the cost-stack section while on the History tab', () => {
+      setStoreState(makeNetwork([makeGenerator()]))
+      renderPanel(true)
+
+      fireEvent.click(screen.getByTestId('tab-history'))
+      expect(screen.queryByTestId('cost-stack-section')).toBeNull()
+    })
+
+    it('renders the chart once samples resolve', async () => {
+      mockGetHistory.mockResolvedValue([
+        makeHistorySample({ gameTimeMinutes: 0, totalLoadMw: 200, totalGenerationMw: 200 }),
+        makeHistorySample({ gameTimeMinutes: 10, totalLoadMw: 210, totalGenerationMw: 205 }),
+      ])
+      setStoreState(makeNetwork([makeGenerator()]))
+      renderPanel(true)
+      fireEvent.click(screen.getByTestId('tab-history'))
+
+      await waitFor(() => expect(screen.getByTestId('history-chart')).toBeInTheDocument())
+      expect(screen.queryByTestId('history-chart-empty')).toBeNull()
+    })
+
+    it('shows the empty state when fewer than 2 samples are returned', async () => {
+      mockGetHistory.mockResolvedValue([makeHistorySample()])
+      setStoreState(makeNetwork([makeGenerator()]))
+      renderPanel(true)
+      fireEvent.click(screen.getByTestId('tab-history'))
+
+      await waitFor(() => expect(screen.getByTestId('history-chart-empty')).toBeInTheDocument())
+    })
+
+    it('switching range triggers a new fetch with the new rangeMinutes', async () => {
+      mockGetHistory.mockResolvedValue([makeHistorySample(), makeHistorySample({ gameTimeMinutes: 10 })])
+      setStoreState(makeNetwork([makeGenerator()]))
+      renderPanel(true)
+      fireEvent.click(screen.getByTestId('tab-history'))
+
+      await waitFor(() => expect(mockGetHistory).toHaveBeenCalledWith('session-1', 24 * 60))
+      mockGetHistory.mockClear()
+
+      fireEvent.click(screen.getByTestId('history-range-week'))
+      await waitFor(() => expect(mockGetHistory).toHaveBeenCalledWith('session-1', 7 * 24 * 60))
+      expect(screen.getByTestId('history-range-week')).toHaveAttribute('aria-selected', 'true')
+    })
+
+    it('does not fetch when there is no active session', () => {
+      setStoreState(makeNetwork([makeGenerator()]), null)
+      renderPanel(true)
+      fireEvent.click(screen.getByTestId('tab-history'))
+
+      expect(mockGetHistory).not.toHaveBeenCalled()
+    })
+
+    it('does not re-fetch on unrelated re-renders while the range and session stay the same', async () => {
+      mockGetHistory.mockResolvedValue([makeHistorySample(), makeHistorySample({ gameTimeMinutes: 10 })])
+      setStoreState(makeNetwork([makeGenerator()]))
+      const { rerender } = render(<DispatchPanel open={true} onClose={vi.fn()} />)
+      fireEvent.click(screen.getByTestId('tab-history'))
+
+      await waitFor(() => expect(mockGetHistory).toHaveBeenCalledTimes(1))
+
+      // Re-render with an unrelated prop change (new onClose reference) — must not
+      // trigger another fetch, guarding against a fetch-loop regression (#392).
+      rerender(<DispatchPanel open={true} onClose={vi.fn()} />)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(mockGetHistory).toHaveBeenCalledTimes(1)
     })
   })
 })

@@ -377,6 +377,28 @@ class TickEngineImplTest {
     }
 
     // -------------------------------------------------------------------------
+    // Rolling load/generation history (issue #392)
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `each tick appends a history sample with that tick's game time`() {
+        val physicsSession = PhysicsSession(sessionId, mockNetwork, mockSnapshot)
+        every { physicsSessionStore.find(sessionId) } returns physicsSession
+        every { gameSessionService.load(sessionId, userId) } returns buildGameSession(multiplier = 100)
+
+        runBlocking {
+            engine.start(sessionId, userId)
+            delay(200)
+        }
+
+        val samples = physicsSession.history.snapshot()
+        assertThat(samples).isNotEmpty
+        assertThat(samples.first().gameTimeMinutes).isEqualTo(0L)
+        // gameTimeMinutes is strictly increasing by GRID_MINUTES_PER_TICK per sample
+        assertThat(samples.map { it.gameTimeMinutes }).isSorted
+    }
+
+    // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
 
