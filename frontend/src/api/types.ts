@@ -35,11 +35,17 @@ export interface BusDto {
 
 export interface BranchDto {
   id: string
+  /** Human-readable name, e.g. "North-Industrial"; optional so older fixtures/tests without it still type-check. */
+  name?: string
   fromBusId: string
   toBusId: string
   activePowerMw: number
   reactivePowerMvar: number
   loadingPercent: number
+  /** Larger of the two terminal currents (A); null before the first power-flow solve (#395). */
+  currentA?: number | null
+  /** Thermal current rating (A); null if the underlying element has no rating (#395). */
+  ratingA?: number | null
   connected: boolean
 }
 

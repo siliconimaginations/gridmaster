@@ -66,6 +66,105 @@ object PresetNetworkFactory {
         }
 
     // -------------------------------------------------------------------------
+    // Thermal rating backfill (#395) — N-1-contingency-derived, hardcoded
+    // -------------------------------------------------------------------------
+    //
+    // Methodology (superseding the earlier SIL-formula estimator, LineRatingEstimator,
+    // removed in this follow-up per direction from Rick): for each preset, a one-off
+    // N-1 contingency analysis was run (see the (deleted) scratch discovery test that
+    // produced these numbers, `LineRatingDiscoveryTest`, run once and captured — not a
+    // runtime computation):
+    //
+    //   1. Solve the base-case AC load flow for the preset network as built below.
+    //   2. For every line and two-winding transformer, disconnect it alone (single
+    //      N-1 outage) on a cloned PowSyBl variant, re-solve, and record the resulting
+    //      current (A) on every still-in-service line/transformer.
+    //   3. Take the max observed current across (base case union all N-1 outages)
+    //      for each element.
+    //   4. Apply a 20% security margin on top: rating = 1.2 x maxObservedCurrentA.
+    //      20% is a difficulty knob (the project's default choice for this pass) —
+    //      lower it to make overload easier to trigger, raise it to make the grid
+    //      more forgiving. Tune per element if a specific preset needs to feel harder
+    //      or easier.
+    //
+    // The result is a concrete number per element that is inherently N-1-safe: the
+    // network can survive the loss of any single line/transformer without the
+    // *other* elements exceeding their rating. This does not model generator N-1 —
+    // see LineRatingDiscoveryTest's KDoc (before deletion) / PR discussion for why:
+    // plain AC LoadFlow doesn't enforce generator maxP, so a generator outage can
+    // force an unrealistic, physically-meaningless redispatch that would inflate
+    // ratings without representing anything the game's dispatch logic could ever
+    // produce. Scope is topology (branch) N-1 only.
+    //
+    // One exception: tutorial's TX12 carries exactly 0 A in every scenario (base
+    // case and all N-1 outages) because its LV bus (B1L) has no load or generation
+    // attached — it's a decorative dead-end step-down in the current topology. A
+    // margined-zero rating would be meaningless (permanently "overloaded" at any
+    // nonzero current), so TX12 uses its own nameplate rating instead
+    // (I = ratedS / (sqrt3 x ratedU1), no additional margin — nameplate capacity is
+    // already the equipment's real thermal limit).
+    //
+    // ieee14's L1-2-1 outage does not converge at all in the base topology (a
+    // voltage-stability/cascading-failure condition, not a thermal-overload one) —
+    // that scenario contributes no current data and is a separate, out-of-scope
+    // finding flagged for Rick; it does not affect the ratings below, which are
+    // still derived from every other (converging) scenario.
+    //
+    // If any preset's topology or generator dispatch changes materially, these
+    // hardcoded numbers should be recomputed by rerunning the same kind of
+    // discovery analysis and reapplying the 20% margin.
+
+    /** ieee14 line ratings (A), N-1-derived + 20% margin. See methodology note above. */
+    private val IEEE14_LINE_RATINGS_A =
+        mapOf(
+            "L1-2-1" to 103_402.9,
+            "L1-5-1" to 49_459.5,
+            "L2-3-1" to 48_656.8,
+            "L2-4-1" to 37_228.6,
+            "L2-5-1" to 27_635.4,
+            "L3-4-1" to 16_439.9,
+            "L4-5-1" to 43_007.0,
+            "L6-11-1" to 5_290.0,
+            "L6-12-1" to 5_295.6,
+            "L6-13-1" to 12_405.4,
+            "L7-8-1" to 11_201.7,
+            "L7-9-1" to 18_707.3,
+            "L9-10-1" to 4_407.7,
+            "L9-14-1" to 6_622.9,
+            "L10-11-1" to 2_713.0,
+            "L12-13-1" to 1_169.8,
+            "L13-14-1" to 3_896.9,
+        )
+
+    /** ieee14 two-winding transformer ratings (A), N-1-derived + 20% margin. */
+    private val IEEE14_TRANSFORMER_RATINGS_A =
+        mapOf(
+            "T4-7-1" to 20_217.1,
+            "T4-9-1" to 10_950.8,
+            "T5-6-1" to 31_135.5,
+        )
+
+    /**
+     * Applies the hardcoded, N-1-analysis-derived thermal current ratings to the
+     * ieee14 network's lines and two-winding transformers.
+     *
+     * Idempotent: only IDs present in [IEEE14_LINE_RATINGS_A]/[IEEE14_TRANSFORMER_RATINGS_A]
+     * are touched, and only if the element doesn't already have a current limit set.
+     */
+    private fun applyIeee14ThermalRatings(network: Network) {
+        IEEE14_LINE_RATINGS_A.forEach { (id, ratingA) ->
+            val line = network.getLine(id) ?: return@forEach
+            if (line.currentLimits1.isPresent || line.currentLimits2.isPresent) return@forEach
+            line.newCurrentLimits1().setPermanentLimit(ratingA).add()
+        }
+        IEEE14_TRANSFORMER_RATINGS_A.forEach { (id, ratingA) ->
+            val twt = network.getTwoWindingsTransformer(id) ?: return@forEach
+            if (twt.currentLimits1.isPresent || twt.currentLimits2.isPresent) return@forEach
+            twt.newCurrentLimits1().setPermanentLimit(ratingA).add()
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // Post-load normalisation
     // -------------------------------------------------------------------------
 
@@ -136,6 +235,7 @@ object PresetNetworkFactory {
                 val clamped = gen.targetP.coerceIn(gen.minP, gen.maxP)
                 if (clamped != gen.targetP) gen.setTargetP(clamped)
             }
+            applyIeee14ThermalRatings(network)
         }
 
     private fun buildTutorialNetwork(): Network {
@@ -179,31 +279,41 @@ object PresetNetworkFactory {
             .setR(0.5).setX(5.0).setB1(0.0).setB2(0.0).setG1(0.0).setG2(0.0)
             .add().also { it.newCurrentLimits1().setPermanentLimit(500.0).add() }
 
+        // Rating (376.9 A): N-1-derived + 20% margin, see PresetNetworkFactory-level
+        // methodology note above applyIeee14ThermalRatings — max observed current across
+        // base case + all single-line/transformer N-1 outages was ~314.1 A.
         network.newLine().setId("L23").setName("Industrial–Riverside")
             .setVoltageLevel1("VL2").setBus1("B2").setConnectableBus1("B2")
             .setVoltageLevel2("VL3").setBus2("B3").setConnectableBus2("B3")
             .setR(0.3).setX(3.0).setB1(1e-4).setB2(1e-4).setG1(0.0).setG2(0.0)
-            .add()
+            .add().also { it.newCurrentLimits1().setPermanentLimit(376.9).add() }
 
+        // Rating (47.4 A): N-1-derived + 20% margin — max observed current ~39.5 A.
         network.newLine().setId("L34").setName("Riverside–South")
             .setVoltageLevel1("VL3").setBus1("B3").setConnectableBus1("B3")
             .setVoltageLevel2("VL4").setBus2("B4").setConnectableBus2("B4")
             .setR(0.4).setX(4.0).setB1(0.0).setB2(0.0).setG1(0.0).setG2(0.0)
-            .add()
+            .add().also { it.newCurrentLimits1().setPermanentLimit(47.4).add() }
 
+        // Rating (213.0 A): N-1-derived + 20% margin — max observed current ~177.5 A.
         network.newLine().setId("L14").setName("North–South")
             .setVoltageLevel1("VL1").setBus1("B1").setConnectableBus1("B1")
             .setVoltageLevel2("VL4").setBus2("B4").setConnectableBus2("B4")
             .setR(0.6).setX(6.0).setB1(0.0).setB2(0.0).setG1(0.0).setG2(0.0)
-            .add()
+            .add().also { it.newCurrentLimits1().setPermanentLimit(213.0).add() }
 
         // Transformer: HV → LV within S1
+        // Rating (524.9 A): TX12 carries 0 A in every N-1 scenario today (its LV bus
+        // B1L has no load/generation attached), so a margined-N-1 number would be
+        // meaningless here. Falls back to the transformer's own nameplate rating
+        // (I = ratedS / (sqrt3 x ratedU1) = 200 MVA / (sqrt3 x 220 kV)), which is a
+        // real physical thermal limit independent of current usage.
         s1.newTwoWindingsTransformer().setId("TX12").setName("North Step-Down")
             .setVoltageLevel1("VL1").setBus1("B1").setConnectableBus1("B1")
             .setVoltageLevel2("VL1L").setBus2("B1L").setConnectableBus2("B1L")
             .setRatedU1(220.0).setRatedU2(110.0).setRatedS(200.0)
             .setR(0.1).setX(10.0).setB(0.0).setG(0.0)
-            .add()
+            .add().also { it.newCurrentLimits1().setPermanentLimit(524.9).add() }
 
         vl1.newGenerator().setId("G1").setName("Gas Peaker")
             .setBus("B1").setConnectableBus("B1")
@@ -270,6 +380,9 @@ object PresetNetworkFactory {
             name: String,
         ) = busBreakerView.newBus().setId(id).setName(name).add()
 
+        // ratingA per transformer: N-1-derived + 20% margin, see the methodology
+        // note on PresetNetworkFactory's ieee14 rating maps above — same one-off
+        // discovery analysis, applied here per freeplay50 step-down transformer.
         fun Substation.stepDown(
             id: String,
             name: String,
@@ -277,6 +390,7 @@ object PresetNetworkFactory {
             busHvId: String,
             vlLvId: String,
             busLvId: String,
+            ratingA: Double,
         ) {
             newTwoWindingsTransformer()
                 .setId(id).setName(name)
@@ -285,6 +399,7 @@ object PresetNetworkFactory {
                 .setRatedU1(220.0).setRatedU2(110.0).setRatedS(200.0)
                 .setR(0.1).setX(10.0).setB(0.0).setG(0.0)
                 .add()
+                .also { it.newCurrentLimits1().setPermanentLimit(ratingA).add() }
         }
 
         fun line(
@@ -414,15 +529,15 @@ object PresetNetworkFactory {
         vlN9L.load("LOAD-N-SUB", "North Suburbs", "N-B9L", p0 = 90.0, q0 = 27.0)
 
         // North step-down transformers (220 kV → 110 kV)
-        sN1.stepDown("TX-N1", "Coal Alpha Step-Down", "N-VL1H", "N-B1H", "N-VL1L", "N-B1L")
-        sN2.stepDown("TX-N2", "Coal Beta Step-Down", "N-VL2H", "N-B2H", "N-VL2L", "N-B2L")
-        sN3.stepDown("TX-N3", "Gas North Step-Down", "N-VL3H", "N-B3H", "N-VL3L", "N-B3L")
-        sN4.stepDown("TX-N4", "CCGT North Step-Down", "N-VL4H", "N-B4H", "N-VL4L", "N-B4L")
-        sN5.stepDown("TX-N5", "Industrial A Step-Down", "N-VL5H", "N-B5H", "N-VL5L", "N-B5L")
-        sN6.stepDown("TX-N6", "Industrial B Step-Down", "N-VL6H", "N-B6H", "N-VL6L", "N-B6L")
-        sN7.stepDown("TX-N7", "City North Step-Down", "N-VL7H", "N-B7H", "N-VL7L", "N-B7L")
-        sN8.stepDown("TX-N8", "Mining Step-Down", "N-VL8H", "N-B8H", "N-VL8L", "N-B8L")
-        sN9.stepDown("TX-N9", "Suburbs N Step-Down", "N-VL9H", "N-B9H", "N-VL9L", "N-B9L")
+        sN1.stepDown("TX-N1", "Coal Alpha Step-Down", "N-VL1H", "N-B1H", "N-VL1L", "N-B1L", ratingA = 132.2)
+        sN2.stepDown("TX-N2", "Coal Beta Step-Down", "N-VL2H", "N-B2H", "N-VL2L", "N-B2L", ratingA = 100.0)
+        sN3.stepDown("TX-N3", "Gas North Step-Down", "N-VL3H", "N-B3H", "N-VL3L", "N-B3L", ratingA = 401.3)
+        sN4.stepDown("TX-N4", "CCGT North Step-Down", "N-VL4H", "N-B4H", "N-VL4L", "N-B4L", ratingA = 65.9)
+        sN5.stepDown("TX-N5", "Industrial A Step-Down", "N-VL5H", "N-B5H", "N-VL5L", "N-B5L", ratingA = 1273.7)
+        sN6.stepDown("TX-N6", "Industrial B Step-Down", "N-VL6H", "N-B6H", "N-VL6L", "N-B6L", ratingA = 1056.8)
+        sN7.stepDown("TX-N7", "City North Step-Down", "N-VL7H", "N-B7H", "N-VL7L", "N-B7L", ratingA = 1484.9)
+        sN8.stepDown("TX-N8", "Mining Step-Down", "N-VL8H", "N-B8H", "N-VL8L", "N-B8L", ratingA = 855.7)
+        sN9.stepDown("TX-N9", "Suburbs N Step-Down", "N-VL9H", "N-B9H", "N-VL9L", "N-B9L", ratingA = 630.2)
 
         // North 220 kV backbone (10 lines)
         line("LN-1", "Coal Alpha–Beta", "N-VL1H", "N-B1H", "N-VL2H", "N-B2H", r = 0.5, x = 5.0)
@@ -498,12 +613,12 @@ object PresetNetworkFactory {
         vlE8L.load("LOAD-E-COAST2", "East Coastal 2", "E-B8L", p0 = 60.0, q0 = 18.0)
 
         // East step-down transformers
-        sE2.stepDown("TX-E2", "Wind 2 Step-Down", "E-VL2H", "E-B2H", "E-VL2L", "E-B2L")
-        sE3.stepDown("TX-E3", "Wind 3 Step-Down", "E-VL3H", "E-B3H", "E-VL3L", "E-B3L")
-        sE5.stepDown("TX-E5", "Coastal Step-Down", "E-VL5H", "E-B5H", "E-VL5L", "E-B5L")
-        sE6.stepDown("TX-E6", "Port Step-Down", "E-VL6H", "E-B6H", "E-VL6L", "E-B6L")
-        sE7.stepDown("TX-E7", "E-Sub Step-Down", "E-VL7H", "E-B7H", "E-VL7L", "E-B7L")
-        sE8.stepDown("TX-E8", "Coast2 Step-Down", "E-VL8H", "E-B8H", "E-VL8L", "E-B8L")
+        sE2.stepDown("TX-E2", "Wind 2 Step-Down", "E-VL2H", "E-B2H", "E-VL2L", "E-B2L", ratingA = 65.9)
+        sE3.stepDown("TX-E3", "Wind 3 Step-Down", "E-VL3H", "E-B3H", "E-VL3L", "E-B3L", ratingA = 132.2)
+        sE5.stepDown("TX-E5", "Coastal Step-Down", "E-VL5H", "E-B5H", "E-VL5L", "E-B5L", ratingA = 1142.5)
+        sE6.stepDown("TX-E6", "Port Step-Down", "E-VL6H", "E-B6H", "E-VL6L", "E-B6L", ratingA = 988.7)
+        sE7.stepDown("TX-E7", "E-Sub Step-Down", "E-VL7H", "E-B7H", "E-VL7L", "E-B7L", ratingA = 552.1)
+        sE8.stepDown("TX-E8", "Coast2 Step-Down", "E-VL8H", "E-B8H", "E-VL8L", "E-B8L", ratingA = 410.2)
 
         // East 220 kV backbone (8 lines)
         line("LE-1", "Wind 1–E Hub", "E-VL1H", "E-B1H", "E-VL9", "E-B9", r = 1.0, x = 10.0)
@@ -581,12 +696,12 @@ object PresetNetworkFactory {
         vlS8L.load("LOAD-S-COMM", "Commercial Centre", "S-B8L", p0 = 100.0, q0 = 30.0)
 
         // South step-down transformers
-        sS3.stepDown("TX-S3", "CCGT South Step-Down", "S-VL3H", "S-B3H", "S-VL3L", "S-B3L")
-        sS4.stepDown("TX-S4", "Gas South Step-Down", "S-VL4H", "S-B4H", "S-VL4L", "S-B4L")
-        sS5.stepDown("TX-S5", "Res A Step-Down", "S-VL5H", "S-B5H", "S-VL5L", "S-B5L")
-        sS6.stepDown("TX-S6", "Res B Step-Down", "S-VL6H", "S-B6H", "S-VL6L", "S-B6L")
-        sS7.stepDown("TX-S7", "Res C Step-Down", "S-VL7H", "S-B7H", "S-VL7L", "S-B7L")
-        sS8.stepDown("TX-S8", "Commercial Step-Down", "S-VL8H", "S-B8H", "S-VL8L", "S-B8L")
+        sS3.stepDown("TX-S3", "CCGT South Step-Down", "S-VL3H", "S-B3H", "S-VL3L", "S-B3L", ratingA = 100.0)
+        sS4.stepDown("TX-S4", "Gas South Step-Down", "S-VL4H", "S-B4H", "S-VL4L", "S-B4L", ratingA = 333.4)
+        sS5.stepDown("TX-S5", "Res A Step-Down", "S-VL5H", "S-B5H", "S-VL5L", "S-B5L", ratingA = 1126.7)
+        sS6.stepDown("TX-S6", "Res B Step-Down", "S-VL6H", "S-B6H", "S-VL6L", "S-B6L", ratingA = 979.0)
+        sS7.stepDown("TX-S7", "Res C Step-Down", "S-VL7H", "S-B7H", "S-VL7L", "S-B7L", ratingA = 842.2)
+        sS8.stepDown("TX-S8", "Commercial Step-Down", "S-VL8H", "S-B8H", "S-VL8L", "S-B8L", ratingA = 693.3)
 
         // South 220 kV backbone (9 lines)
         line("LS-1", "Solar Alpha–S Hub", "S-VL1H", "S-B1H", "S-VL10", "S-B10", r = 1.0, x = 10.0)

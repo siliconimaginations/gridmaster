@@ -8,6 +8,7 @@ import { BootstrapOverlay } from './ui/BootstrapOverlay'
 import { useSessionBootstrap } from './state/sessionBootstrap'
 import { AlertToastContainer } from './ui/AlertToast'
 import { InspectorPanel } from './ui/InspectorPanel'
+import { LineTooltip } from './ui/LineTooltip'
 import { DispatchPanel } from './ui/DispatchPanel'
 import { PlanningPanel } from './ui/PlanningPanel'
 import { TimelineStrip } from './ui/TimelineStrip'
@@ -51,6 +52,9 @@ export default function App() {
   const { status: bootstrapStatus, error: bootstrapError, retry: retryBootstrap } = useSessionBootstrap()
   const [dispatchPanelOpen, setDispatchPanelOpen] = useState(false)
   const [planningPanelOpen, setPlanningPanelOpen] = useState(false)
+  // Pointer screen position for the hover tooltip (#395); Babylon-path only today
+  // (see SceneManager's onElementHover callback below) — PixiJS hover is a fast-follow.
+  const [hoverPosition, setHoverPosition] = useState<{ x: number; y: number } | null>(null)
 
   useEffect(() => {
     // GridCanvas handles its own lifecycle when PixiJS mode is active
@@ -59,7 +63,14 @@ export default function App() {
     const canvas = canvasRef.current
     if (!canvas) return
 
-    const manager = new SceneManager(canvas, (info) => useGameStore.getState().selectElement(info))
+    const manager = new SceneManager(
+      canvas,
+      (info) => useGameStore.getState().selectElement(info),
+      (info, x, y) => {
+        useGameStore.getState().hoverElement(info)
+        setHoverPosition(info ? { x, y } : null)
+      },
+    )
     manager.start()
 
     // Single subscription for both slices ensures atomic updates: no stale-violations
@@ -108,6 +119,7 @@ export default function App() {
         <BottomHud onOpenDispatch={() => setDispatchPanelOpen(true)} onOpenPlanning={() => setPlanningPanelOpen(true)} />
         <AlertToastContainer />
         <InspectorPanel />
+        <LineTooltip position={hoverPosition} />
         <EventCardPanel />
         <DispatchPanel open={dispatchPanelOpen} onClose={() => setDispatchPanelOpen(false)} />
         <PlanningPanel open={planningPanelOpen} onClose={() => setPlanningPanelOpen(false)} />

@@ -330,6 +330,54 @@ class WebSocketModelsTest {
 
     // region branch ordering and load list completeness
 
+    // region branch name/currentA/ratingA mapping (#395)
+
+    @Test
+    fun `branch name maps from domain line and transformer name`() {
+        val dto =
+            minimalNetwork(lines = listOf(line("L1")), transformers = listOf(transformer("T1")))
+                .toNetworkWsDto()
+        assertThat(dto.branches[0].name).isEqualTo("Line L1")
+        assertThat(dto.branches[1].name).isEqualTo("TWT T1")
+    }
+
+    @Test
+    fun `branch currentA is the max of from and to current, or null when both are null`() {
+        val withCurrents =
+            minimalNetwork(lines = listOf(line("L1", ratingA = 400.0, currentFromA = 200.0, currentToA = 320.0)))
+                .toNetworkWsDto()
+        assertThat(withCurrents.branches[0].currentA).isEqualTo(320.0)
+
+        val withoutCurrents =
+            minimalNetwork(lines = listOf(line("L2", ratingA = 400.0))).toNetworkWsDto()
+        assertThat(withoutCurrents.branches[0].currentA).isNull()
+    }
+
+    @Test
+    fun `line branch ratingA maps directly from domain ratingA`() {
+        val dto = minimalNetwork(lines = listOf(line("L1", ratingA = 456.0))).toNetworkWsDto()
+        assertThat(dto.branches[0].ratingA).isEqualTo(456.0)
+    }
+
+    @Test
+    fun `transformer branch ratingA is derived from ratingMva and from-side voltage`() {
+        val ratingMva = 100.0
+        val voltageKv = 132.0
+        val expectedA = ratingMva * 1000.0 / (sqrt(3.0) * voltageKv)
+        val dto =
+            minimalNetwork(transformers = listOf(transformer("T1", ratingMva = ratingMva, nominalVoltageFromKv = voltageKv)))
+                .toNetworkWsDto()
+        assertThat(dto.branches[0].ratingA).isCloseTo(expectedA, within(0.001))
+    }
+
+    @Test
+    fun `transformer branch ratingA is null when ratingMva is null`() {
+        val dto = minimalNetwork(transformers = listOf(transformer("T1", ratingMva = null))).toNetworkWsDto()
+        assertThat(dto.branches[0].ratingA).isNull()
+    }
+
+    // endregion
+
     @Test
     fun `branches list contains lines before transformers`() {
         val dto = minimalNetwork(lines = listOf(line("LINE-1")), transformers = listOf(transformer("TWT-1"))).toNetworkWsDto()

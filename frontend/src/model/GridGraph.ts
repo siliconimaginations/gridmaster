@@ -94,10 +94,20 @@ export interface BranchEdge {
   /** True if the branch is connected (not tripped). */
   connected: boolean
 
-  /** True if loading > 85% of thermal rating. */
+  /**
+   * True if loading > 70% of thermal rating — the "warning" threshold.
+   * Matches the Babylon.js renderer's lineMesh.ts warning threshold (#395);
+   * the two renderers previously disagreed (60%/85% here vs 70%/90% there),
+   * which meant the same line could look "fine" in one renderer and
+   * "near limit" in the other. 70/90 was picked as the canonical pair since
+   * Babylon is the default renderer.
+   */
   isNearLimit: boolean
 
-  /** True if loading > 100% of thermal rating. */
+  /**
+   * True if loading > 90% of thermal rating — the "critical" threshold.
+   * See [isNearLimit] for why this was aligned with lineMesh.ts (#395).
+   */
   isOverloaded: boolean
 }
 
@@ -187,8 +197,10 @@ export function networkDtoToGridGraph(
       toId:        branch.toBusId,
       loadFactor,
       connected:   branch.connected,
-      isNearLimit: loadFactor > 0.85,
-      isOverloaded: loadFactor > 1.0,
+      // Thresholds aligned with the Babylon.js renderer's lineMesh.ts — see
+      // the BranchEdge field docs above (#395).
+      isNearLimit: loadFactor > 0.70,
+      isOverloaded: loadFactor > 0.90,
     }
   })
 
