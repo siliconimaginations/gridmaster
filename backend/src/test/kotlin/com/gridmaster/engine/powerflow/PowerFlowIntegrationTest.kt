@@ -2,6 +2,7 @@ package com.gridmaster.engine.powerflow
 
 import com.gridmaster.engine.network.IidmNetworkMapperImpl
 import com.gridmaster.engine.network.TestNetworkFactory
+import com.gridmaster.game.PresetNetworkFactory
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.BeforeEach
@@ -79,6 +80,19 @@ class PowerFlowIntegrationTest {
 
         assertThat(result.status).isEqualTo(ConvergenceStatus.CONVERGED)
         assertThat(result.slackBusIds).isNotEmpty()
+    }
+
+    @Test
+    fun `AC solve converges on ieee14 after L1-2-1 outage (regression #397)`() {
+        val network = PresetNetworkFactory.create("ieee14")
+        mapper.configureActivePowerControl(network)
+
+        val line = requireNotNull(network.getLine("L1-2-1")) { "Line L1-2-1 not found in the network" }
+        line.terminal1.disconnect()
+        line.terminal2.disconnect()
+
+        val result = service.solve(network)
+        assertThat(result.status).isEqualTo(ConvergenceStatus.CONVERGED)
     }
 
     // -------------------------------------------------------------------------
