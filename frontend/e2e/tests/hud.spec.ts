@@ -52,16 +52,28 @@ test('HUD-02 clicking 10× speed updates store clockSpeedMultiplier', async ({ p
 
   await page.getByTestId('btn-speed-10').click()
 
-  // Store must reflect the new multiplier within 5 s
+  // Store must reflect the new multiplier within 5 s — this is the test's actual
+  // assertion; everything after this point is best-effort cleanup.
   await page.waitForFunction(
     () => window.__e2e.getStore().clockSpeedMultiplier === 10,
     { timeout: 5_000 },
   )
 
-  // Reset to 1× so we don't leave a modified speed behind
-  await page.getByTestId('btn-speed-1').click()
-  await page.waitForFunction(
-    () => window.__e2e.getStore().clockSpeedMultiplier === 1,
-    { timeout: 5_000 },
-  )
+  // At 10x speed a FREE_PLAY ieee14 session can occasionally reach GAME_OVER
+  // (health-score defeat, TickEngineImpl.GAME_OVER_HEALTH_THRESHOLD) within this
+  // test's short real-time window — more likely since #396 started enforcing real
+  // thermal limits on ieee14 (previously all ratings were 0, so no thermal
+  // violation could ever fire). When that happens the game-over overlay covers
+  // the screen and blocks the reset-to-1x click below, timing out the test even
+  // though the assertion above already passed (#400). Skip the reset — there's no
+  // lingering "modified speed" state to worry about once the session has ended.
+  const gameOverVisible = await page.getByTestId('game-over-overlay').isVisible()
+  if (!gameOverVisible) {
+    // Reset to 1× so we don't leave a modified speed behind
+    await page.getByTestId('btn-speed-1').click()
+    await page.waitForFunction(
+      () => window.__e2e.getStore().clockSpeedMultiplier === 1,
+      { timeout: 5_000 },
+    )
+  }
 })
