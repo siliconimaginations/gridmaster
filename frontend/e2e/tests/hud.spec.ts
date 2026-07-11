@@ -64,16 +64,21 @@ test('HUD-02 clicking 10× speed updates store clockSpeedMultiplier', async ({ p
   // test's short real-time window — more likely since #396 started enforcing real
   // thermal limits on ieee14 (previously all ratings were 0, so no thermal
   // violation could ever fire). When that happens the game-over overlay covers
-  // the screen and blocks the reset-to-1x click below, timing out the test even
-  // though the assertion above already passed (#400). Skip the reset — there's no
-  // lingering "modified speed" state to worry about once the session has ended.
-  const gameOverVisible = await page.getByTestId('game-over-overlay').isVisible()
-  if (!gameOverVisible) {
-    // Reset to 1× so we don't leave a modified speed behind
-    await page.getByTestId('btn-speed-1').click()
+  // the screen and blocks the reset-to-1x click below (#400).
+  //
+  // A point-in-time isVisible() check before the click is NOT enough (confirmed
+  // by a second CI failure): GAME_OVER can fire in the gap between the check and
+  // the click, so Playwright's default click-retry loop still gets blocked by the
+  // overlay for up to the full test timeout. Instead, bound the click's own retry
+  // window to 3s and swallow any failure — this is best-effort cleanup, not part
+  // of the test's actual assertion, which already passed above.
+  try {
+    await page.getByTestId('btn-speed-1').click({ timeout: 3_000 })
     await page.waitForFunction(
       () => window.__e2e.getStore().clockSpeedMultiplier === 1,
       { timeout: 5_000 },
     )
+  } catch {
+    // Session likely ended (GAME_OVER) before cleanup could run — nothing left to clean up.
   }
 })
