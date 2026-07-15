@@ -80,6 +80,32 @@ class ContingencyBuilderTest {
     }
 
     @Test
+    fun `buildN1 excludes a disconnected line (issue #407)`() {
+        val network = TestNetworkFactory.create()
+        val line = network.getLine(TestNetworkFactory.LINE_12)
+        line.terminal1.disconnect()
+        line.terminal2.disconnect()
+        val snapshot = mapper.toGridNetwork(network)
+
+        val contingencies = ContingencyBuilder.buildN1(snapshot)
+
+        assertThat(contingencies.map { it.id }).doesNotContain("N1-LINE-${TestNetworkFactory.LINE_12}")
+    }
+
+    @Test
+    fun `buildN1 excludes a disconnected two-winding transformer (issue #407)`() {
+        val network = TestNetworkFactory.create()
+        val twt = network.getTwoWindingsTransformer(TestNetworkFactory.TRANSFORMER_12)
+        twt.terminal1.disconnect()
+        twt.terminal2.disconnect()
+        val snapshot = mapper.toGridNetwork(network)
+
+        val contingencies = ContingencyBuilder.buildN1(snapshot)
+
+        assertThat(contingencies.map { it.id }).doesNotContain("N1-TWT-${TestNetworkFactory.TRANSFORMER_12}")
+    }
+
+    @Test
     fun `toPowSyBl converts line contingency`() {
         val contingency =
             Contingency(
