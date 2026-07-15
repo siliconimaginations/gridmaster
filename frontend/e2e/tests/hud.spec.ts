@@ -52,11 +52,20 @@ test('HUD-02 clicking 10× speed updates store clockSpeedMultiplier', async ({ p
 
   await page.getByTestId('btn-speed-10').click()
 
-  // Store must reflect the new multiplier within 5 s — this is the test's actual
+  // Store must reflect the new multiplier within 15 s — this is the test's actual
   // assertion; everything after this point is best-effort cleanup.
+  //
+  // 15 s (not 5 s) because SetClockSpeed only takes effect on the *next* tick
+  // broadcast (TickEngineImpl.setSpeed() mutates runtime state but does not
+  // itself publish a GameStateUpdate — see executeTick() Step 8). Under CI's
+  // constrained/shared runners, a single tick can take longer than the old 5 s
+  // budget now that #391 (weather) and #396 (real thermal limits + N-1
+  // contingency analysis) added real compute to the tick loop. GC-01 already
+  // uses a 15 s window for the same cold-container / WS-latency reason — this
+  // aligns HUD-02 with that precedent. Issue #404.
   await page.waitForFunction(
     () => window.__e2e.getStore().clockSpeedMultiplier === 10,
-    { timeout: 5_000 },
+    { timeout: 15_000 },
   )
 
   // At 10x speed a FREE_PLAY ieee14 session can occasionally reach GAME_OVER
