@@ -12,13 +12,19 @@ import com.powsybl.contingency.Contingency as PowSyBlContingency
 object ContingencyBuilder {
     /**
      * Build the N-1 contingency list from [network].
-     * Produces one [Contingency] per line, two-winding transformer, and connected generator.
-     * Three-winding transformers are included as single-element outages.
+     * Produces one [Contingency] per connected line, connected two-winding
+     * transformer, three-winding transformer, and connected generator
+     * (issue #407 — lines/two-winding transformers/generators are now all
+     * filtered by connection state; previously only generators were, so a
+     * manually-tripped/disconnected line or transformer produced a nonsensical
+     * "loss of X" scenario for an element already out of service).
+     * Three-winding transformers have no `connected` field in the domain model
+     * yet, so they remain unfiltered — a smaller follow-up if it matters.
      */
     fun buildN1(network: GridNetwork): List<Contingency> {
         val contingencies = mutableListOf<Contingency>()
 
-        network.lines.forEach { line ->
+        network.lines.filter { it.connected }.forEach { line ->
             contingencies +=
                 Contingency(
                     id = "N1-LINE-${line.id}",
@@ -27,7 +33,7 @@ object ContingencyBuilder {
                 )
         }
 
-        network.twoWindingsTransformers.forEach { twt ->
+        network.twoWindingsTransformers.filter { it.connected }.forEach { twt ->
             contingencies +=
                 Contingency(
                     id = "N1-TWT-${twt.id}",
@@ -36,6 +42,8 @@ object ContingencyBuilder {
                 )
         }
 
+        // ThreeWindingsTransformer has no `connected` field in the domain model today
+        // (issue #407 follow-up) — left unfiltered for now, matching prior behavior.
         network.threeWindingsTransformers.forEach { twt3 ->
             contingencies +=
                 Contingency(
