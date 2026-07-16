@@ -316,7 +316,7 @@ class CommandHandlerImpl(
             // on it, matching the `synchronized(session)` this whole pipeline already
             // runs under (#360).
             if (mutations.any { it.isTopologyChange() }) {
-                contingencyService.triggerAsync(network, session, ContingencyAnalysisParameters())
+                contingencyService.triggerAsync(network, sessionId, session, ContingencyAnalysisParameters())
                 log.debug("CommandHandler: triggered async N-1 for session {}", sessionId)
             }
 

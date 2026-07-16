@@ -90,7 +90,7 @@ class TickEngineImplTest {
         every { gameSessionService.load(sessionId, userId) } returns buildGameSession()
         every { gameSessionService.save(any(), any(), any(), any(), any()) } returns buildGameSession()
         every { powerFlowService.solve(any()) } returns convergedResult()
-        justRun { contingencyAnalysisService.triggerAsync(any(), any()) }
+        justRun { contingencyAnalysisService.triggerAsync(any(), any(), any()) }
         every { networkMapper.applyMutation(any(), any()) } returns Result.success(mockNetwork)
     }
 

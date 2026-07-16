@@ -120,7 +120,7 @@ class PhysicsControllerTest {
         every { sessionStore.get(SESSION_ID) } returns mockSession
         every { sessionStore.get(neq(SESSION_ID)) } throws SessionNotFoundException("unknown")
         // Default: the analysis service cache is empty; individual tests override.
-        every { contingencyService.latestResult() } returns null
+        every { contingencyService.latestResult(SESSION_ID) } returns null
     }
 
     // -----------------------------------------------------------------------
@@ -346,7 +346,7 @@ class PhysicsControllerTest {
 
     @Test
     fun `GET contingencies returns 204 when no result cached`() {
-        mockSession.latestContingencyResult = null
+        every { contingencyService.latestResult(SESSION_ID) } returns null
         mvc.get("$BASE/contingencies")
             .andExpect { status { isNoContent() } }
     }
@@ -357,17 +357,16 @@ class PhysicsControllerTest {
 
     @Test
     fun `GET contingency branchId returns 204 when no result cached`() {
-        mockSession.latestContingencyResult = null
+        every { contingencyService.latestResult(SESSION_ID) } returns null
         mvc.get("$BASE/contingency/L1")
             .andExpect { status { isNoContent() } }
     }
 
     @Test
-    fun `GET contingency branchId falls back to the analysis service cache`() {
-        // The tick engine writes results to the service cache, not the session
-        // field — the endpoint must serve them from there (#347).
-        mockSession.latestContingencyResult = null
-        every { contingencyService.latestResult() } returns
+    fun `GET contingency branchId reads the per-session analysis service cache`() {
+        // Results are cached per-sessionId on the service (#347), not on a
+        // PhysicsSession field.
+        every { contingencyService.latestResult(SESSION_ID) } returns
             contingencyAnalysisResult(secureLineResult("L1"))
 
         mvc.get("$BASE/contingency/L1")
@@ -379,9 +378,8 @@ class PhysicsControllerTest {
     }
 
     @Test
-    fun `GET contingencies falls back to the analysis service cache`() {
-        mockSession.latestContingencyResult = null
-        every { contingencyService.latestResult() } returns
+    fun `GET contingencies reads the per-session analysis service cache`() {
+        every { contingencyService.latestResult(SESSION_ID) } returns
             contingencyAnalysisResult(secureLineResult("L1"))
 
         mvc.get("$BASE/contingencies")
@@ -393,7 +391,7 @@ class PhysicsControllerTest {
 
     @Test
     fun `GET contingency branchId returns 404 when branch has no contingency`() {
-        mockSession.latestContingencyResult =
+        every { contingencyService.latestResult(SESSION_ID) } returns
             contingencyAnalysisResult(
                 secureLineResult("L2"),
             )
@@ -413,7 +411,7 @@ class PhysicsControllerTest {
                 loadingPercent = 125.0,
                 severity = ViolationSeverity.CRITICAL,
             )
-        mockSession.latestContingencyResult =
+        every { contingencyService.latestResult(SESSION_ID) } returns
             contingencyAnalysisResult(
                 ContingencyResult(
                     contingency =
@@ -474,12 +472,12 @@ class PhysicsControllerTest {
 
     @Test
     fun `POST contingencies trigger returns 202`() {
-        every { contingencyService.triggerAsync(any(), any(), any()) } returns Unit
+        every { contingencyService.triggerAsync(any(), any(), any(), any()) } returns Unit
 
         val ctgResult = mvc.post("$BASE/contingencies/trigger").andReturn()
         mvc.perform(asyncDispatch(ctgResult)).andExpect(jStatus().isAccepted())
 
-        verify { contingencyService.triggerAsync(any(), any(), any()) }
+        verify { contingencyService.triggerAsync(any(), any(), any(), any()) }
     }
 
     // -----------------------------------------------------------------------

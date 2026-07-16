@@ -1,7 +1,6 @@
 package com.gridmaster.api
 
 import com.gridmaster.api.history.HistoryRingBuffer
-import com.gridmaster.engine.contingency.ContingencyAnalysisResult
 import com.gridmaster.engine.dispatch.DispatchResult
 import com.gridmaster.engine.dispatch.UcResult
 import com.gridmaster.engine.model.GridNetwork
@@ -72,7 +71,6 @@ data class PhysicsSession(
     /** Latest GridNetwork snapshot produced after the most recent power flow solve. */
     var latestSnapshot: GridNetwork,
     var latestPowerFlowResult: PowerFlowResult? = null,
-    var latestContingencyResult: ContingencyAnalysisResult? = null,
     var latestDispatchResult: DispatchResult? = null,
     var latestUcResult: UcResult? = null,
     /**

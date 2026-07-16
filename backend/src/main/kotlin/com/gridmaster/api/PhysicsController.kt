@@ -255,21 +255,19 @@ class PhysicsController(
     /**
      * GET /api/sessions/{sessionId}/contingencies — latest cached N-1 result, or 204 if none.
      *
-     * Reads the per-session snapshot when present, falling back to the analysis
-     * service's own cache: the tick engine (and the trigger endpoint below) run
-     * analyses through [ContingencyAnalysisService], which stores results in its
-     * internal cache — the per-session field is only populated by explicit
-     * session-scoped writes and stays null otherwise (#347).
+     * [ContingencyAnalysisService.latestResult] is cached per-[sessionId] (#347) —
+     * this used to fall back through a `PhysicsSession.latestContingencyResult`
+     * field that was never actually written anywhere, always returning the
+     * service's single global (cross-session-leaking) cache. Both problems are
+     * fixed by keying the service's own cache on sessionId directly; the dead
+     * field has been removed from [PhysicsSession].
      */
     @GetMapping("/contingencies")
     fun getLatestContingencies(
         @PathVariable sessionId: String,
     ): ResponseEntity<ContingencyAnalysisResult> {
-        val session = sessionStore.get(sessionId)
-        val result =
-            session.latestContingencyResult
-                ?: contingencyService.latestResult()
-                ?: return ResponseEntity.noContent().build()
+        sessionStore.get(sessionId) // 404s if the session doesn't exist
+        val result = contingencyService.latestResult(sessionId) ?: return ResponseEntity.noContent().build()
         return ResponseEntity.ok(result)
     }
 
@@ -294,7 +292,7 @@ class PhysicsController(
         // This replaces the former NetworkSerDe XML round-trip (O(network size)) — #38.
         withContext(Dispatchers.IO) {
             synchronized(session) {
-                contingencyService.triggerAsync(session.iidmNetwork, session, ContingencyAnalysisParameters())
+                contingencyService.triggerAsync(session.iidmNetwork, sessionId, session, ContingencyAnalysisParameters())
             }
         }
         return ResponseEntity.accepted().build()
@@ -313,13 +311,9 @@ class PhysicsController(
         @PathVariable sessionId: String,
         @PathVariable branchId: String,
     ): ResponseEntity<ContingencyBranchResultDto> {
-        val session = sessionStore.get(sessionId)
-        // Same read-path as getLatestContingencies: per-session snapshot first,
-        // then the service cache that the tick engine actually writes to (#347).
-        val result =
-            session.latestContingencyResult
-                ?: contingencyService.latestResult()
-                ?: return ResponseEntity.noContent().build()
+        sessionStore.get(sessionId) // 404s if the session doesn't exist
+        // Same read-path as getLatestContingencies -- per-session cache (#347).
+        val result = contingencyService.latestResult(sessionId) ?: return ResponseEntity.noContent().build()
 
         val cr =
             result.resultsByElementId[branchId]

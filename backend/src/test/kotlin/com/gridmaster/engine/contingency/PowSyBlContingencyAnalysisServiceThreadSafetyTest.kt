@@ -83,7 +83,7 @@ class PowSyBlContingencyAnalysisServiceThreadSafetyTest {
                 try {
                     startLatch.await()
                     repeat(iterationsPerThread) {
-                        service.triggerAsync(network, lock, params)
+                        service.triggerAsync(network, "thread-safety-test-session", lock, params)
                         Thread.sleep(1)
                     }
                 } catch (t: Throwable) {

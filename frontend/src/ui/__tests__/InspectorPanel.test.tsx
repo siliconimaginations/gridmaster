@@ -260,6 +260,15 @@ describe('N-1 security section', () => {
     expect(getContingencyForBranch).toHaveBeenCalledWith('sess-1', BRANCH_ID)
   })
 
+  it('shows a loading skeleton chip before the fetch resolves (#345)', () => {
+    // Never-resolving promise -- asserts the pre-resolution render, not the outcome.
+    vi.mocked(getContingencyForBranch).mockReturnValue(new Promise(() => {}))
+    mockStore({ elementType: 'LINE', elementId: BRANCH_ID })
+    render(<InspectorPanel />)
+
+    expect(screen.getByTestId('n1-chip-loading')).toBeInTheDocument()
+  })
+
   it('shows Secure ✓ chip for a SECURE result', async () => {
     vi.mocked(getContingencyForBranch).mockResolvedValue({
       contingencyId: 'N1-LINE-br-1',
@@ -297,7 +306,24 @@ describe('N-1 security section', () => {
     render(<InspectorPanel />)
 
     fireEvent.click(await screen.findByTestId('n1-toggle'))
+    // 'L5' isn't in the NETWORK fixture -- exercises the raw-ID fallback path.
     expect(await screen.findByText('L5')).toBeInTheDocument()
     expect(await screen.findByText(/THERMAL 125\.0%/)).toBeInTheDocument()
+  })
+
+  it('resolves a violating equipment ID to its network name when known (#345)', async () => {
+    vi.mocked(getContingencyForBranch).mockResolvedValue({
+      contingencyId: 'N1-LINE-br-1',
+      status: 'VIOLATION',
+      violations: [{ ...VIOLATION, equipmentId: GEN_ID, equipmentType: 'GENERATOR' }],
+      analysisCompletedAt: '2026-07-04T00:00:00Z',
+    })
+    mockStore({ elementType: 'LINE', elementId: BRANCH_ID })
+    render(<InspectorPanel />)
+
+    fireEvent.click(await screen.findByTestId('n1-toggle'))
+    // GEN_ID ('gen-1') resolves to its network name 'CCGT-1', not the raw ID.
+    expect(await screen.findByText('CCGT-1')).toBeInTheDocument()
+    expect(screen.queryByText('gen-1')).not.toBeInTheDocument()
   })
 })
