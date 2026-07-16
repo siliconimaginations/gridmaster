@@ -103,22 +103,22 @@ class PresetNetworkFactoryTest {
     fun `freeplay50 network has expected topology`() {
         val network = PresetNetworkFactory.create("freeplay50")
 
-        // 29 substations (10 North + 9 East + 10 South)
-        assertThat(network.substationCount).isEqualTo(29)
-        // 13 generators (4N + 4E + 5S)
-        assertThat(network.generatorCount).isEqualTo(13)
-        // 21 loads (9N + 6E + 6S)
+        // 31 substations (10 North + 9 East + 10 South + 2 dormant expansion sites -- #414)
+        assertThat(network.substationCount).isEqualTo(31)
+        // 14 generators (4N + 4E + 5S + 1 dormant expansion generator -- #414)
+        assertThat(network.generatorCount).isEqualTo(14)
+        // 21 loads (9N + 6E + 6S) -- expansion sites add no loads (#414)
         assertThat(network.loadCount).isEqualTo(21)
-        // 30 lines (10N + 8E + 9S + 3 inter-region)
-        assertThat(network.lineCount).isEqualTo(30)
-        // 21 step-down transformers (9N + 6E + 6S)
+        // 33 lines (10N + 8E + 9S + 3 inter-region + 3 dormant expansion lines -- #414)
+        assertThat(network.lineCount).isEqualTo(33)
+        // 21 step-down transformers (9N + 6E + 6S) -- expansion sites add no transformers (#414)
         assertThat(network.twoWindingsTransformerCount).isEqualTo(21)
-        // ~50 buses in bus-breaker view (19N + 15E + 16S)
+        // ~52 buses in bus-breaker view (19N + 15E + 16S + 2 dormant expansion buses -- #414)
         val busCount =
             network.voltageLevels.sumOf { vl ->
                 vl.busBreakerView.buses.toList().size
             }
-        assertThat(busCount).isEqualTo(50)
+        assertThat(busCount).isEqualTo(52)
     }
 
     @Test
