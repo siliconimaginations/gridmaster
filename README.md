@@ -18,7 +18,7 @@ An educational power grid simulation game. Players learn how real power grids ar
 
 ## Game Modes
 
-- **Tutorial** — 8 guided missions covering core power system concepts
+- **Tutorial** — 5-step guided flow covering core power system concepts (observe, dispatch, handle a demand spike, pause/resume, complete)
 - **Free Play** — long-running campaign; grid grows organically as society expands
 - **Challenge** — drop into a pre-loaded crisis scenario, scored resolution
 
