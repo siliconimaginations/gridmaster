@@ -92,6 +92,16 @@ tasks.withType<Test> {
             excludeTags("integration")
         }
     }
+    // Integration-only: surface test stdout (e.g. PowerFlowScaleBenchmarkTest's
+    // CSV output, #423) directly in the CI log instead of only the per-test
+    // XML report, which isn't uploaded as an artifact today. Scoped to
+    // -Pintegration runs only so the much larger default `test` task (run on
+    // every PR) doesn't get noisier.
+    if (project.hasProperty("integration")) {
+        testLogging {
+            showStandardStreams = true
+        }
+    }
 }
 
 jacoco {
