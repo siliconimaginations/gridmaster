@@ -19,11 +19,13 @@ Educational power grid game with client-server architecture.
 | 1 | Physics Engine — design docs | ✅ Complete |
 | 2 | UX Design Docs | ✅ Complete |
 | 3 | Game Engine Core — implementation | ✅ Complete |
-| 4 | 3D Visualization — implementation | 🔄 In Progress |
-| 5 | Tutorial Mode | 🔲 Planned |
-| 6 | Free Play Mode | 🔲 Planned |
-| 7 | Challenge Mode | 🔲 Planned |
-| 8 | Hardening & CI/CD Maturity | 🔲 Planned |
+| 4 | 3D Visualization — implementation | 🔄 In Progress (Babylon.js scene essentially done; parallel PixiJS renderer implemented behind a flag, migration decision still open) |
+| 5 | Tutorial Mode | ✅ Complete (shipped as a 5-step guided flow, scoped down from the original 8-mission plan — see below) |
+| 6 | Free Play Mode | 🔄 In Progress (event engine, panels, and seed network shipped; region-unlock and grid-expansion systems still in design/early implementation) |
+| 7 | Challenge Mode | 🔄 In Progress (1 scripted scenario shipped; scenario framework and scoring screen not yet built) |
+| 8 | Hardening & CI/CD Maturity | 🔄 In Progress |
+
+*(Last reconciled against closed-issue history: 2026-07-16, issue #416.)*
 
 ---
 
@@ -40,7 +42,8 @@ gridmaster/
 │   └── src/test/kotlin/
 ├── frontend/                   # Vite + React + Babylon.js
 │   ├── src/
-│   │   ├── scene/              # Babylon.js 3D scene
+│   │   ├── scene/              # Babylon.js 3D scene (default renderer)
+│   │   ├── renderer/           # PixiJS isometric renderer (behind VITE_USE_PIXI flag)
 │   │   ├── ui/                 # React HUD panels, toasts, overlays
 │   │   ├── state/              # Client game state (Zustand)
 │   │   └── api/                # WebSocket + REST client
@@ -182,8 +185,7 @@ Stage exit criteria met: Game clock ticks at configured speed; events fire on sc
 | Terrain (heightmap, grass, river) | `09-scene-visual-spec.md` | ✅ Done |
 | Grid element meshes (procedural) | `09-scene-visual-spec.md` | ✅ Done (PR #168) |
 | Power flow particle animation | `01-main-layout.md` | ✅ Done |
-| LOD (far = icon sprite, near = mesh) | `09-scene-visual-spec.md` | 🔲 Planned (#80) |
-| City/town mesh LOD tiers | `09-scene-visual-spec.md` | 🔲 Planned (#80) |
+| LOD (far = icon sprite, near = mesh) + city/town mesh LOD tiers | `09-scene-visual-spec.md` | ✅ Done (#80) |
 
 ### 4b — React UI
 
@@ -192,12 +194,13 @@ Stage exit criteria met: Game clock ticks at configured speed; events fire on sc
 | Top HUD — pill badges | `01-main-layout.md` | ✅ Done (PR #168, closes #115) |
 | Bottom HUD — speed controls | `04-time-axis.md` | ✅ Done |
 | Bottom HUD — contextual action buttons | `01-main-layout.md` | ✅ Done |
-| Day-ahead timeline strip | `04-time-axis.md` | 🔲 Planned (#84) |
-| Alert toast system | `03-alert-toasts.md` | 🔲 Planned |
-| Component inspector popup | `02-component-inspector.md` | 🔲 Planned |
-| Event card panel (shared pattern) | `08-event-card.md` | 🔲 Planned |
+| Day-ahead timeline strip | `04-time-axis.md` | ✅ Done (#84) |
+| Alert toast system | `03-alert-toasts.md` | ✅ Done (#85) |
+| Component inspector popup | `02-component-inspector.md` | ✅ Done (#86) |
+| Event card panel (shared pattern) | `08-event-card.md` | ✅ Done (#87) |
 | Dispatch panel (merit order + UC grid) | `06-dispatch-panel.md` | ✅ Done (PR #155, closes #88) |
-| Planning panel (invest + N-1 + forecast) | `07-planning-panel.md` | 🔲 Planned (#89) |
+| Planning panel (invest + N-1 + forecast) | `07-planning-panel.md` | ✅ Done (#89) |
+| Player action log (scrollable command history) | — (not in original UX doc set) | ✅ Done (#196) |
 
 ### 4c — State & API Layer
 
@@ -220,19 +223,65 @@ No external artists needed for MVP.
 
 Icons: written as SVG directly. UI animations: Framer Motion (React) + Babylon.js animation groups (scene).
 
-Exit criteria: IEEE 14-bus renders on screen; lines animate power flow; clicking any element opens its inspector; HUD updates every tick; dispatch panel opens and submits a command.
+### 4e — PixiJS Isometric Renderer (parallel effort)
+
+The UX direction later shifted from real-3D (Babylon.js meshes) toward a
+pseudo-3D isometric 2D renderer; a full PixiJS-based renderer was built as an
+alternative rather than folded into 4a. See
+`docs/engineering/15-pixi-renderer.md` for the architecture and rationale.
+
+| Submodule | Issue | Status |
+|-----------|-------|--------|
+| Renderer core + `GridCanvas` | #311 | ✅ Done |
+| Data model (`GridGraph`) | #312 | ✅ Done |
+| Auto-layout algorithm | #313 | ✅ Done |
+| LOD controller | #314 | ✅ Done |
+| Particle flow layer | #315 | ✅ Done |
+
+**Not yet decided**: PixiJS is implemented and functional behind the
+`VITE_USE_PIXI` flag, but Babylon.js remains the *default* production
+renderer — the migration/cutover has not happened. Treat Stage 4 as complete
+for Babylon.js and complete-but-flagged for PixiJS; the follow-up decision
+(migrate, keep both, or drop one) is tracked in #432.
+
+Exit criteria: IEEE 14-bus renders on screen; lines animate power flow; clicking any element opens its inspector; HUD updates every tick; dispatch panel opens and submits a command. **Met** — all Stage 4 UX-doc-scoped submodules above are shipped; the PixiJS-vs-Babylon.js renderer decision (4e) is the one open loose end.
 
 ---
 
-## Stage 5 — Tutorial Mode 🔲
+## Stage 5 — Tutorial Mode ✅
 
-8-mission guided campaign on a 14–20 bus fictional teaching network.
+**Shipped scope differs from the original plan below.** Tutorial mode landed
+(#193) as a **5-step guided flow** on the existing `tutorial` preset network,
+not the originally-planned 8-mission YAML framework on a dedicated 14–20 bus
+teaching network. This was a deliberate scope reduction, not an oversight —
+the 5 steps below cover the same core loop (observe → dispatch → react to an
+event → pause/resume → complete) with a fraction of the authoring cost of 8
+discrete missions. The original 8-mission table is kept below for reference
+in case the fuller curriculum is revisited later.
+
+**Shipped (5-step flow, `TutorialStep` enum, backend/src/main/kotlin/com/gridmaster/game/tutorial/):**
+
+| Step | What it teaches |
+|------|------------------|
+| 1. Observe | Read health score and load balance in the top bar |
+| 2. Dispatch | Open the Dispatch panel and change a generator's output |
+| 3. Demand spike | React to a scheduled event via alerts + dispatch |
+| 4. Pause/resume | Clock control: pause, inspect, resume |
+| 5. Complete | Wrap-up, hand-off to Free Play |
+
+Tutorial overlay (spotlight, instruction card) shipped per
+`docs/ux/05-tutorial-overlay.md` as part of the same effort.
+
+Exit criteria (revised): all 5 steps completable; each teaches its stated
+concept; progress persists. **Met.**
+
+<details>
+<summary>Original 8-mission plan (superseded, kept for reference)</summary>
 
 | Submodule | Notes |
 |-----------|-------|
 | Mission framework | YAML-defined missions; objective tracker; pass/fail conditions |
 | Tutorial network | Custom 14–20 bus network designed for pedagogy |
-| Tutorial overlay | Per `docs/ux/05-tutorial-overlay.md` (spotlight, instruction card, hint system) |
 | Mission 1 — Grid anatomy | Click every element type |
 | Mission 2 — Power flow | Trace generation to load |
 | Mission 3 — Operating limits | Trigger overload, restore |
@@ -242,49 +291,64 @@ Exit criteria: IEEE 14-bus renders on screen; lines animate power flow; clicking
 | Mission 7 — Unit commitment | Fill 24 h day-ahead schedule |
 | Mission 8 — Dynamics & stability | Respond to sudden generator trip |
 
-Exit criteria: All 8 missions completable; each teaches its stated concept; progress persists.
+</details>
 
 ---
 
-## Stage 6 — Free Play Mode 🔲
+## Stage 6 — Free Play Mode 🔄
 
 Long-running campaign with organic grid growth (~50 → ~500 buses).
 
-| Submodule | Notes |
-|-----------|-------|
-| Region unlock system | Demand pressure accumulates → unlock prompt → player invests |
-| Environment event engine | Randomized weather/economic/policy events |
-| Planning panel | Per `docs/ux/07-planning-panel.md` — invest, N-1, forecast |
-| Dispatch panel | Per `docs/ux/06-dispatch-panel.md` — day-ahead UC workflow |
-| Policy event cards | "Accept renewable subsidy?" — card-based decisions |
-| Free play seed network | Multi-regional ~50 bus network with expansion zones (#47) |
+| Submodule | Notes | Status |
+|-----------|-------|--------|
+| Environment event engine | Randomized weather/economic/policy events; expanded catalogue (fuel shortage, equipment failure) | ✅ Done (#195) |
+| Planning panel | Per `docs/ux/07-planning-panel.md` — invest, N-1, forecast | ✅ Done (#89) |
+| Dispatch panel | Per `docs/ux/06-dispatch-panel.md` — day-ahead UC workflow | ✅ Done (#88) |
+| Free play seed network | Multi-regional ~50 bus network with expansion zones | ✅ Done (#47) |
+| Game over / scoring | Health-score-based end condition | ✅ Done (#194) |
+| Grid expansion (Module 17) | `ExpansionSite`/`BuildProject` domain model + dormant-site seeding | ✅ Done (#414); design doc merged (PR #408) |
+| Grid expansion — budget model (Module 17 addendum) | Design doc | 🔍 In review (#413) |
+| Region unlock system (Module 13) | Design doc — resolved as a Module 17 rule-table extension, not a separate system | 🔍 In review (#412) |
+| Grid expansion — stress detection → EventCard, tick-engine integration, REST/WS surface, frontend visuals | Player-facing build flow | 🔲 Planned (#418, #419, #420, #421, #422) |
+| Policy event cards | "Accept renewable subsidy?" — card-based decisions | ✅ Done (part of #195's event catalogue) |
 
-Exit criteria: Session runs 1 simulated year without crash; ≥3 environment event types fire; regions unlock organically.
+Exit criteria: Session runs 1 simulated year without crash; ≥3 environment
+event types fire; regions unlock organically. **Partially met** — the
+long-running loop, events, and panels work today; region-unlock and the
+player-facing side of grid expansion (build → invest → unlock) are designed
+but not yet implemented, so "regions unlock organically" is not yet
+achievable in a live session.
 
 ---
 
-## Stage 7 — Challenge Mode 🔲
+## Stage 7 — Challenge Mode 🔄
 
 Pre-loaded crisis scenarios, scored resolution.
 
-| Submodule | Notes |
-|-----------|-------|
-| Scenario framework | YAML definitions; entry state loader; scoring engine |
-| Challenge scenarios v1 | Overload relief, blackout restoration, optimal dispatch race, N-1 resolution |
-| Score & results screen | Time-to-resolve, cost, reliability metrics |
+| Submodule | Notes | Status |
+|-----------|-------|--------|
+| Scripted scenario v1 | Storm trips a line, then a demand surge; health-threshold victory condition (`ChallengeEngineImpl`) | ✅ Done (#330) |
+| Scenario framework | YAML definitions; entry state loader — scripted in code today, not data-driven | 🔲 Planned |
+| Additional scenarios (2 more) | Broader scenario variety | 🔲 Planned (#425) |
+| Score & results screen | Time-to-resolve, cost, reliability metrics — today only a boolean victory flag exists | 🔲 Planned |
 
-Exit criteria: ≥3 scenarios completable with correct scoring.
+Exit criteria: ≥3 scenarios completable with correct scoring. **Not yet
+met** — 1 scripted scenario ships with a simple victory condition; the
+data-driven framework, additional scenarios, and a real scoring/results
+screen are still ahead.
 
 ---
 
-## Stage 8 — Hardening & CI/CD Maturity 🔲
+## Stage 8 — Hardening & CI/CD Maturity 🔄
 
-| Submodule | Notes |
-|-----------|-------|
-| Integration tests | Full game loop: clock → event → physics → WebSocket state |
-| Frontend E2E | Playwright E2E suite promoted to required PR gate (currently runs on main push only) |
-| Performance profiling | <1000-bus power flow within tick budget |
-| Cloud deploy guide | Docker Compose → cloud-ready config |
+| Submodule | Notes | Status |
+|-----------|-------|--------|
+| Integration tests | Full game loop: clock → event → physics → WebSocket state | ✅ Done (extensive `-Pintegration` suite + e2e coverage tooling, #170/#184) |
+| Coverage gates | JaCoCo overall threshold raised 60% → 80% | ✅ Done (#338) |
+| Frontend E2E | Playwright E2E suite promoted to required PR gate (currently runs on main push only) | 🔲 Planned (#424) |
+| Performance profiling | <1000-bus power flow within tick budget | 🔲 Planned (#423) |
+| Cloud deploy guide | Docker Compose → cloud-ready config | 🔲 Planned (not yet started) |
+| Codecov integration | Historical coverage trending | 🔲 Planned (#417) |
 
 ---
 
