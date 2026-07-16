@@ -170,7 +170,7 @@ fields. Field-level delta rules:
 | `alerts` | New alerts only (append-only on client) |
 | `clockState` | Sent on every change |
 | `pendingEventCards` | Sent when a new card arrives or is resolved |
-| `healthScore`, `tutorialStep`, `challengeTimeRemainingMinutes` | Sent on every tick (cheap scalars; not worth field-level delta tracking) |
+| `healthScore`, `tutorialStep`, `challengeTimeRemainingMinutes` | Sent on every tick — cheap scalars, so building field-level change-detection for them isn't worth the added complexity vs. the bandwidth saved |
 | `dailyLoadMultiplier`/`weeklyLoadMultiplier`/`seasonalLoadMultiplier`/`annualGrowthMultiplier`/`calendarSummary` | Always populated on every tick (#383/#388) — pure functions of `gameTimeMinutes`, cheap to recompute and resend |
 | `weatherState`/`weatherCloudCoverPct`/`weatherWindSpeedMps`/`weatherRegionId` | Sent on every tick when `gridmaster.weather.enabled` (#391) — stateful (Markov chain), so unlike the load multipliers above it can't be recomputed independently on the client |
 
