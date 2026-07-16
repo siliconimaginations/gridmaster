@@ -111,6 +111,13 @@ tasks.jacocoTestReport {
         csv.required = true // needed by cicirello/jacoco-badge-generator
     }
     // Exclude generated/config classes from coverage metrics.
+    //
+    // NOTE (#338): the actual coverage *gate* is not enforced here — Gradle has no
+    // jacocoTestCoverageVerification task configured. The enforced minimum lives in
+    // .github/workflows/ci.yml (Madrapps/jacoco-report's min-coverage-overall, currently
+    // 80% as of #338). This report/exclusion config only controls what counts toward
+    // that percentage, not the threshold itself. If you're looking to change the gate,
+    // edit ci.yml, not this block.
     classDirectories.setFrom(
         files(
             classDirectories.files.map {
@@ -118,6 +125,11 @@ tasks.jacocoTestReport {
                     exclude(
                         "**/Application*",
                         "**/config/**",
+                        // Spring @Configuration classes named "*Config" live in their
+                        // feature packages (e.g. api/security/SecurityConfig.kt), not a
+                        // literal "config/" directory, so "**/config/**" above misses
+                        // them. Catch by name instead (#338).
+                        "**/*Config*",
                         "**/persistence/*Entity*",
                         "**/persistence/*JpaRepository*",
                     )

@@ -116,7 +116,10 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           title: Backend Coverage (JaCoCo)
           update-comment: true
-          min-coverage-overall: 60
+          # Raised 60 -> 80 in #338 once TutorialEngineImpl unit tests (#329/PR #340)
+          # recovered overall coverage to ~82.5%. This is the real coverage gate for the
+          # backend — see the comment near jacocoTestReport in backend/build.gradle.kts.
+          min-coverage-overall: 80
           min-coverage-changed-files: 70
 
       - name: Upload JaCoCo CSV (consumed by backend-badge)
