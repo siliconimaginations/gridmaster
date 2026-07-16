@@ -134,6 +134,7 @@
 }
 
 .n1ChipNeutral,
+.n1ChipLoading,
 .n1ChipSecure,
 .n1ChipViolation {
   margin-left: auto;
@@ -147,6 +148,22 @@
 .n1ChipNeutral {
   background: rgba(255, 255, 255, 0.08);
   color: rgba(255, 255, 255, 0.55);
+}
+
+/* Skeleton chip shown while GET /contingency/{branchId} is in flight (#345) —
+   replaces a bare "…" placeholder with a pulsing shimmer so a slow endpoint
+   reads as "loading" rather than looking broken/frozen. */
+.n1ChipLoading {
+  background: rgba(255, 255, 255, 0.08);
+  color: transparent;
+  width: 52px;
+  display: inline-block;
+  animation: n1ChipPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes n1ChipPulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.9; }
 }
 
 .n1ChipSecure {

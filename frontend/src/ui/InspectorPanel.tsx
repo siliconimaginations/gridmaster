@@ -73,8 +73,26 @@ function GeneratorCard({ id, network }: { id: string; network: GridNetworkDto })
  * count / non-convergence) plus a per-violation breakdown when expanded.
  * Renders a neutral "No analysis" chip until an N-1 run has completed.
  */
+/**
+ * Resolves an equipment ID from a contingency violation to a human-readable
+ * name, falling back to the raw ID -- same `name || id` fallback pattern
+ * already used elsewhere (e.g. LineTooltip.tsx). Checked in order: branch
+ * (line/transformer), bus, generator; `network` doesn't expose a single
+ * unified lookup by ID across element kinds (#345).
+ */
+function resolveElementName(network: GridNetworkDto, equipmentId: string): string {
+  const branch = network.branches.find((b) => b.id === equipmentId)
+  if (branch) return branch.name || branch.id
+  const bus = network.buses.find((b) => b.id === equipmentId)
+  if (bus) return bus.name || bus.id
+  const gen = network.generators.find((g) => g.id === equipmentId)
+  if (gen) return gen.name || gen.id
+  return equipmentId
+}
+
 function N1SecuritySection({ branchId }: { branchId: string }) {
   const sessionId = useGameStore((s) => s.sessionId)
+  const network = useGameStore((s) => s.network)
   const [data, setData] = useState<ContingencyBranchResult | null>(null)
   const [loaded, setLoaded] = useState(false)
   const [expanded, setExpanded] = useState(false)
@@ -99,7 +117,7 @@ function N1SecuritySection({ branchId }: { branchId: string }) {
     }
   }, [sessionId, branchId])
 
-  let chip = <span className={styles.n1ChipNeutral}>…</span>
+  let chip = <span className={styles.n1ChipLoading} data-testid="n1-chip-loading" aria-label="Loading N-1 analysis" />
   if (loaded) {
     if (!data) {
       chip = <span className={styles.n1ChipNeutral}>No analysis</span>
@@ -132,7 +150,7 @@ function N1SecuritySection({ branchId }: { branchId: string }) {
           {data.violations.map((v) => (
             <div key={`${v.equipmentId}-${v.violationType}`}>
               <Row
-                label={v.equipmentId}
+                label={network ? resolveElementName(network, v.equipmentId) : v.equipmentId}
                 value={`${v.violationType} ${fmt(v.loadingPercent)}%`}
                 cls={styles.valueCritical}
               />

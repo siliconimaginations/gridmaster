@@ -339,7 +339,7 @@ class TickEngineImpl(
         // triggerAsync() and the background run it schedules both synchronize on
         // physicsSession internally (#360) — no extra wrapping needed here.
         if (ctx.tickNumber % CONTINGENCY_TRIGGER_INTERVAL == 0L) {
-            contingencyAnalysisService.triggerAsync(physicsSession.iidmNetwork, physicsSession)
+            contingencyAnalysisService.triggerAsync(physicsSession.iidmNetwork, runtime.sessionId, physicsSession)
         }
 
         // Step 7: EventEngine.onTick()

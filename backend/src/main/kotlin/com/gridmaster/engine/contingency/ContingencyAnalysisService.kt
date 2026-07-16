@@ -32,6 +32,8 @@ interface ContingencyAnalysisService {
      * If [ContingencyAnalysisParameters.contingencies] is empty, the service
      * auto-builds the N-1 list from the network via [buildN1Contingencies].
      *
+     * @param sessionId Owning session's ID -- results are cached per-session
+     *   (#347), so concurrent sessions never see each other's N-1 results.
      * @param lock Object to synchronize on for every touch of [network] this
      *   service makes — both the immediate trigger-time clone and the full
      *   background run. Pass the same lock guarding all other access to this
@@ -40,12 +42,20 @@ interface ContingencyAnalysisService {
      */
     fun triggerAsync(
         network: Network,
+        sessionId: String,
         lock: Any,
         parameters: ContingencyAnalysisParameters = ContingencyAnalysisParameters(),
     )
 
-    /** Latest cached result, or null if no run has completed yet. */
-    fun latestResult(): ContingencyAnalysisResult?
+    /**
+     * Latest cached result for [sessionId], or null if no run has completed yet for
+     * that session. Cached per-session (#347) -- concurrent sessions no longer see
+     * each other's N-1 results.
+     */
+    fun latestResult(sessionId: String): ContingencyAnalysisResult?
+
+    /** Discard [sessionId]'s cached result. Call when a session ends (#347). */
+    fun clearSession(sessionId: String)
 
     /**
      * Build the default N-1 contingency list from the current [GridNetwork] snapshot.

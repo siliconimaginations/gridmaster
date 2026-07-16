@@ -34,7 +34,7 @@ import kotlin.system.measureTimeMillis
  * - [triggerAsync] sends a run request into a [Channel.CONFLATED] channel.
  *   Conflated means only the latest pending request is kept — natural debouncing.
  * - A background coroutine consumes requests and executes analysis runs serially.
- * - Results are stored in [cache] and readable via [latestResult] immediately.
+ * - Results are stored per-session in [caches] and readable via [latestResult] immediately.
  *
  * DC pre-screening:
  * - When [ContingencyAnalysisParameters.dcPreScreening] is true, each contingency
@@ -63,7 +63,6 @@ class PowSyBlContingencyAnalysisService(
     private val mapper: IidmNetworkMapper,
     private val powerFlowService: PowerFlowService,
     private val violationScanner: ViolationScanner = ViolationScanner(),
-    private val cache: ContingencyAnalysisCache = ContingencyAnalysisCache(),
     private val thresholds: ViolationThresholds = ViolationThresholds(),
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob()),
 ) : ContingencyAnalysisService {
@@ -75,6 +74,14 @@ class PowSyBlContingencyAnalysisService(
     // Tracks the variant ID cloned for the currently-pending (not-yet-consumed) request.
     // When a new trigger replaces a pending one, the old variant is cleaned up immediately.
     private val pendingVariantId = AtomicReference<String?>(null)
+
+    // Per-session result caches (#347) -- this service is a singleton Spring bean shared
+    // by every concurrent game session, but a single ContingencyAnalysisCache would let
+    // one session's N-1 results leak into another's GET /contingencies response. Keyed by
+    // sessionId, created lazily on first trigger/read for that session.
+    private val caches = java.util.concurrent.ConcurrentHashMap<String, ContingencyAnalysisCache>()
+
+    private fun cacheFor(sessionId: String): ContingencyAnalysisCache = caches.computeIfAbsent(sessionId) { ContingencyAnalysisCache() }
 
     init {
         // Background consumer — runs analyses serially as requests arrive.
@@ -96,6 +103,7 @@ class PowSyBlContingencyAnalysisService(
 
     override fun triggerAsync(
         network: Network,
+        sessionId: String,
         lock: Any,
         parameters: ContingencyAnalysisParameters,
     ) {
@@ -117,10 +125,14 @@ class PowSyBlContingencyAnalysisService(
 
         // trySend() doesn't touch the network, so it doesn't need the lock — keep the
         // critical section limited to the actual variant-manager calls (Gemini review, PR #362).
-        triggerChannel.trySend(RunRequest(network, parameters, variantId, lock))
+        triggerChannel.trySend(RunRequest(network, sessionId, parameters, variantId, lock))
     }
 
-    override fun latestResult(): ContingencyAnalysisResult? = cache.latest()
+    override fun latestResult(sessionId: String): ContingencyAnalysisResult? = caches[sessionId]?.latest()
+
+    override fun clearSession(sessionId: String) {
+        caches.remove(sessionId)
+    }
 
     override fun buildN1Contingencies(network: GridNetwork): List<Contingency> = ContingencyBuilder.buildN1(network)
 
@@ -135,7 +147,7 @@ class PowSyBlContingencyAnalysisService(
     // -------------------------------------------------------------------------
 
     private fun runAnalysis(request: RunRequest) {
-        val (network, parameters, analysisVariantId) = request
+        val (network, sessionId, parameters, analysisVariantId) = request
         log.info("Starting contingency analysis run")
 
         // Set the working variant to the snapshot that was cloned in triggerAsync.
@@ -195,7 +207,7 @@ class PowSyBlContingencyAnalysisService(
                     fullAcContingenciesCount = fullAcCount,
                 )
 
-            cache.update(result)
+            cacheFor(sessionId).update(result)
 
             log.info(
                 "Contingency analysis complete: {} contingencies, {} critical, {}ms " +
@@ -446,6 +458,7 @@ class PowSyBlContingencyAnalysisService(
 
     private data class RunRequest(
         val network: Network,
+        val sessionId: String,
         val parameters: ContingencyAnalysisParameters,
         val analysisVariantId: String,
         val lock: Any,
