@@ -1,6 +1,10 @@
 # 15 — PixiJS Isometric Renderer
 
-**Status:** Planned (replaces Babylon.js)  
+**Status:** Implemented, behind the `VITE_USE_PIXI` feature flag (`.env.local` /
+CI env) — Babylon.js 7 remains the **default** renderer as of this review;
+PixiJS has not yet replaced it in production, contrary to this doc's original
+framing.  
+**Last reviewed:** 2026-07-16  
 **Issues:** #311 (main), #312 (data model), #313 (layout), #314 (LOD), #315 (particles)
 
 ---
@@ -167,16 +171,41 @@ viewport.clampZoom({ minScale: 0.15, maxScale: 4 })
 
 ## LOD Tiers (`LodController.ts`)
 
+**Corrected 2026-07-16** — tier 0 does not render "aggregate zone chips" (that
+design was superseded before implementation). The actual behavior, per
+`NodeLayer.ts`'s own header doc comment:
+
 | Tier | Zoom | Buses | Labels | Voltage dots | State bars | Wires |
 |------|------|-------|--------|-------------|------------|-------|
-| 0 | < 0.35× | Aggregate zone chips | Zone names only | — | — | Thick solid |
-| 1 | 0.35–0.70× | Small sprites | Bus ID | ✓ | — | Normal catenary |
-| 2 | > 0.70× | Full sprites | ID + name | ✓ | ✓ (gen only) | Full catenary |
+| 0 | < 0.35× | Role icons only (no sprites) — see [Node Layer Icons](#node-layer-icons-drawbusicon) | — | — | — | Thick solid |
+| 1 | 0.35–0.70× | Scaled sprites (0.75×) | Bus ID | ✓ | — | Normal catenary |
+| 2 | > 0.70× | Full sprites | ID + name | ✓ | ✓ (generators only) | Full catenary |
 
-LOD changes are applied without re-creating sprites:
-- Sprite `scale` interpolated via GSAP tween
+LOD changes are applied without re-creating sprites/icons — both are built
+once per bus and toggled/rescaled:
+- Sprite `visible = lod > 0`, scaled 0.75× at tier 1, full size at tier 2
+- Icon (`PIXI.Graphics`) `visible = lod === 0`; redrawn only when switching
+  into tier 0 or when violation state changes while already at tier 0
 - Label HTML elements toggled with `visibility: hidden` (keeps layout stable)
 - State bar `Container.visible = tier >= 2`
+
+### Node Layer Icons (`drawBusIcon`)
+
+At LOD 0 (far zoom), `NodeLayer` draws a per-role icon with `PIXI.Graphics`
+instead of a sprite — no external texture assets, so it stays cheap at any
+zoom-out level:
+
+| Role | Icon |
+|------|------|
+| `gen` (generator) | Yellow circle with a dark lightning bolt |
+| `sub` (substation) | Indigo rounded square with a white cross (transformer symbol) |
+| `load` | City-skyline silhouette, complexity scaled by `loadMw`: **town** (<120 MW, 3 buildings), **city** (120–450 MW, 5 buildings), **metro** (>450 MW, 7 buildings + skyscraper peak) |
+
+Any bus with `hasVoltageViolation` gets a red alert ring drawn behind its
+icon, regardless of role. Generators also get a fuel-type-specific sprite at
+LOD 1/2 (Coal/Gas/Hydro/Wind/Solar textures where mapped, falling back to
+the generic generator sprite for NUCLEAR/OIL/OTHER or unmapped fuel types —
+`resolveBusTexture`, #375) and a fuel badge visible at LOD 1.
 
 ---
 
@@ -272,18 +301,28 @@ Label elements are pooled (one `<div>` per bus, created once, repositioned each 
 
 ## Migration Plan
 
-| Step | PR | Scope |
-|------|-----|-------|
-| 1 | — | Add `pixi.js` + `pixi-viewport` to package.json; remove `@babylonjs/*` |
-| 2 | — | `GridGraph.ts` + `networkDtoToGridGraph` + unit tests |
-| 3 | — | `autoLayout.ts` + unit tests |
-| 4 | — | `PixiGridRenderer.ts` skeleton (terrain + static sprites, no anim) |
-| 5 | — | `WireLayer` + `ParticleLayer` |
-| 6 | — | `LodController` + label overlay |
-| 7 | — | Remove Babylon.js; update `App.tsx` |
-| 8 | — | E2E smoke tests |
+**Updated 2026-07-16**: steps 1–6 are implemented; step 7 (remove Babylon.js)
+has **not** happened — Babylon.js remains the default renderer, and PixiJS
+only runs when `VITE_USE_PIXI=true` is set (the doc originally proposed the
+flag name `VITE_RENDERER=pixi`; the actual flag shipped as `VITE_USE_PIXI`,
+a plain boolean rather than a renderer-selector string). Step 8 (E2E smoke
+tests) status not verified as part of this review — check `frontend/e2e/`
+for PixiJS-specific coverage before assuming it's done.
 
-Steps 1–4 can land behind a feature flag (`VITE_RENDERER=pixi`) so Babylon.js and PixiJS coexist during migration.
+| Step | Scope | Status |
+|------|-------|--------|
+| 1 | Add `pixi.js` + `pixi-viewport` to package.json | Done — `@babylonjs/*` was **not** removed; both renderers coexist behind the flag |
+| 2 | `GridGraph.ts` + `networkDtoToGridGraph` + unit tests | Done |
+| 3 | `autoLayout.ts` + unit tests | Done |
+| 4 | `PixiGridRenderer.ts` skeleton (terrain + static sprites, no anim) | Done |
+| 5 | `WireLayer` + `ParticleLayer` | Done |
+| 6 | `LodController` + label overlay | Done, plus the icon system (see [Node Layer Icons](#node-layer-icons-drawbusicon)) which wasn't in the original plan |
+| 7 | Remove Babylon.js; update `App.tsx` | **Not done** — Babylon.js is still the default; `App.tsx` branches on `VITE_USE_PIXI` |
+| 8 | E2E smoke tests | Not verified in this review |
+
+All of steps 1–6 landed behind the `VITE_USE_PIXI` feature flag, so Babylon.js
+and PixiJS currently coexist rather than PixiJS having replaced Babylon.js as
+step 7 anticipated.
 
 ---
 

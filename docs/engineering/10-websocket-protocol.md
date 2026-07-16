@@ -1,7 +1,8 @@
 # WebSocket Protocol
 
 **Stage**: 1
-**Status**: Draft — awaiting review
+**Status**: Implemented
+**Last reviewed**: 2026-07-16
 **Branch**: `stage/1/10-websocket-protocol`
 **Depends on**: [06-session-model.md](06-session-model.md), [07-game-clock.md](07-game-clock.md), [01-network-model.md](01-network-model.md)
 
@@ -58,7 +59,9 @@ Published to `/topic/session/{sessionId}/state` after every tick and after
 every command that changes network state.
 
 ```typescript
-// TypeScript interface (mirrors Kotlin data class)
+// TypeScript interface (mirrors Kotlin data class as of #391 — see
+// backend/src/main/kotlin/com/gridmaster/api/websocket/WebSocketModels.kt
+// for the authoritative field list and per-field KDoc)
 interface GameStateUpdate {
   type: "FULL" | "DELTA";
   sessionId: string;
@@ -73,6 +76,29 @@ interface GameStateUpdate {
   violations?: ViolationDto[];
   alerts?: AlertDto[];
   pendingEventCards?: EventCardDto[];
+
+  // Server-computed 0-100 grid health score for this tick.
+  healthScore?: number;
+  // Current tutorial step (1-5). Non-null only for TUTORIAL-mode sessions.
+  tutorialStep?: number;
+  // Game-minutes remaining until the challenge deadline. Non-null only for
+  // CHALLENGE-mode sessions; clamped to 0 once the deadline passes.
+  challengeTimeRemainingMinutes?: number;
+
+  // Load-growth multipliers (#383/#388) — always populated, independent of
+  // whether the tick engine is actively scaling loads with them.
+  dailyLoadMultiplier?: number;     // time-of-day shape, averages 1.0
+  weeklyLoadMultiplier?: number;    // day-of-week shape, averages 1.0
+  seasonalLoadMultiplier?: number;  // month-of-year shape, averages 1.0
+  annualGrowthMultiplier?: number;  // compounding year-over-year growth, NOT normalized to 1.0
+  calendarSummary?: string;         // e.g. "Year 2 · Day 41 · Wed · Mar"
+
+  // Weather (#391) — null only when gridmaster.weather.enabled is false.
+  // Stateful (Markov chain), unlike the load multipliers above.
+  weatherState?: "CLEAR" | "CLOUDY" | "STORM" | string; // see WeatherState enum
+  weatherCloudCoverPct?: number;    // 0-100
+  weatherWindSpeedMps?: number;
+  weatherRegionId?: string;         // defaults to the global region while weather is network-uniform
 }
 ```
 
@@ -144,6 +170,9 @@ fields. Field-level delta rules:
 | `alerts` | New alerts only (append-only on client) |
 | `clockState` | Sent on every change |
 | `pendingEventCards` | Sent when a new card arrives or is resolved |
+| `healthScore`, `tutorialStep`, `challengeTimeRemainingMinutes` | Sent on every tick — cheap scalars, so building field-level change-detection for them isn't worth the added complexity vs. the bandwidth saved |
+| `dailyLoadMultiplier`/`weeklyLoadMultiplier`/`seasonalLoadMultiplier`/`annualGrowthMultiplier`/`calendarSummary` | Always populated on every tick (#383/#388) — pure functions of `gameTimeMinutes`, cheap to recompute and resend |
+| `weatherState`/`weatherCloudCoverPct`/`weatherWindSpeedMps`/`weatherRegionId` | Sent on every tick when `gridmaster.weather.enabled` (#391) — stateful (Markov chain), so unlike the load multipliers above it can't be recomputed independently on the client |
 
 A `FULL` message is always sent after reconnection to resync client state.
 

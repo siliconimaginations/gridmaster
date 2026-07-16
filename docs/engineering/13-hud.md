@@ -1,8 +1,9 @@
-# HUD — Top Pill Badges + Bottom Clock Controls
+# HUD — Top Pill Badges + Bottom Clock Controls + Overlays
 
 **Stage**: 4  
-**Status**: Draft  
-**Implements**: GitHub issues #83 (Top HUD + Bottom HUD)  
+**Status**: Implemented  
+**Last reviewed**: 2026-07-16  
+**Implements**: GitHub issues #83 (Top HUD + Bottom HUD), plus later additions: #274 (health sparkline/trend arrows), #334/tutorial mode (`TutorialOverlay`), game-over/scoring (`GameOverPanel`)  
 **Depends on**:
 - [11-frontend-scene.md](11-frontend-scene.md) — canvas container must be a sibling, not the root element
 - [12-frontend-state-api.md](12-frontend-state-api.md) — Zustand store provides all game data; `sendCommandOptimistic` dispatches clock commands
@@ -18,10 +19,18 @@ Provides always-visible game feedback and clock control as floating React overla
 ## Scope
 
 **In scope (issue #83)**
-- `TopHud` component: four pill badges — clock, total load, system price, grid health
+- `TopHud` component: four pill badges — clock, total load (+ trend arrow), total
+  production cost (+ trend arrow, £/h), grid health (+ trend arrow and
+  sparkline, #274)
 - `BottomHud` component: clock controls (play/pause, speed selector) + contextual action buttons
 - CSS overlay architecture wiring: App.tsx `<GameRoot>` wrapper that stacks canvas and HUD layers
 - Unit tests for all new components
+
+**Added since v1 (not originally scoped under #83, documented here as implemented)**
+- `TutorialOverlay`: step-aware tutorial tooltip panel, rendered only for
+  TUTORIAL-mode sessions (driven by `GameStateUpdate.tutorialStep`)
+- `GameOverPanel`: full-screen modal shown on `GAME_OVER`, displays final/average
+  health score and grid-time managed; "Play again" resets the session
 
 **Out of scope**
 - Alert toast stack — issue #85
@@ -69,12 +78,38 @@ Zustand store
   └── pendingEventCards           → BottomHud contextual buttons
 ```
 
-### System marginal price
+### System marginal price → production cost pill (superseded, #377)
 
-`GameStateUpdate` does not currently carry a price field — the store has no
-`systemMarginalPrice` slice. For the MVP, the price pill displays `—` until the
-field is added to the backend protocol. A `// TODO: #<issue>` stub is added
-in the component.
+The original plan below (price pill shows `—` pending a backend field) was
+superseded, not literally implemented: rather than surfacing
+`systemMarginalCostPerMwh` directly as a "Price" ticker, #377 replaced that
+concept with a **"Cost" pill** showing total production cost (£/h) — the sum
+of (output MW × each generator's own marginal cost) across all committed
+generators. This reflects what the player is actually paying to run the grid,
+which turned out to be more useful than the single-most-expensive-unit price
+signal originally scoped. See `totalProductionCostGbpPerHour` in `hud.ts`.
+
+### TutorialOverlay
+
+Step-aware tutorial tooltip panel (`src/ui/TutorialOverlay.tsx`), anchored to
+the bottom-left of the HUD so it doesn't obscure the canvas or bottom
+toolbar. Rendered only when `GameStateUpdate.tutorialStep` is non-null (i.e.
+only for TUTORIAL-mode sessions) — reads `tutorialStep` from the Zustand
+store and renders step-specific title/instruction/hint text (5 steps,
+content mirrors the backend `TutorialStep` enum descriptions). Step 5 shows
+a "tutorial complete" variant.
+
+### GameOverPanel
+
+Full-screen modal (`src/ui/GameOverPanel.tsx`) shown when the store's
+`gameOver` slice is non-null (set on a `GAME_OVER` `ConnectionStatus` or
+locally-triggered game-over state). Shows final health score, average health
+score, and total simulated grid-time managed (`data-testid="game-over-panel"`,
+overlay `data-testid="game-over-overlay"` — referenced by e2e HUD-02, see
+issue #400). Renders a distinct "Challenge Complete!" banner when
+`gameOver.won === true` vs. a "Grid Failure" banner otherwise. "Play again"
+clears the stored session id and reloads the page so `useSessionBootstrap`
+creates a fresh session.
 
 ---
 
@@ -158,18 +193,25 @@ function gridHealthStatus(violations: ViolationDto[]): {
 
 ```
 src/ui/
-  TopHud.tsx           — four pill badges
-  TopHud.module.css    — pill styles
-  BottomHud.tsx        — clock controls + action buttons
-  BottomHud.module.css — control bar styles
-  hud.ts               — shared derive helpers (formatGameTime, totalLoadMw, gridHealthStatus)
+  TopHud.tsx                — four pill badges (clock, load, cost, health) + trend arrows + sparkline
+  TopHud.module.css         — pill styles
+  BottomHud.tsx              — clock controls + action buttons
+  BottomHud.module.css      — control bar styles
+  HealthSparkline.tsx       — mini sparkline used inside the health pill (#274)
+  TutorialOverlay.tsx        — step-aware tutorial tooltip (TUTORIAL-mode only)
+  TutorialOverlay.module.css
+  GameOverPanel.tsx          — full-screen GAME_OVER / Challenge-victory modal
+  GameOverPanel.module.css
+  hud.ts                    — shared derive helpers (formatGameTime, totalLoadMw,
+                                gridHealthStatus, totalProductionCostGbpPerHour, computeTrend)
   __tests__/
     TopHud.test.tsx
     BottomHud.test.tsx
     hud.test.ts
 ```
 
-`App.tsx` is updated to introduce the `<GameRoot>` container and render `<TopHud>` and `<BottomHud>`.
+`App.tsx` renders the `<GameRoot>` container plus `<TopHud>`, `<BottomHud>`,
+`<TutorialOverlay>`, and `<GameOverPanel>` as siblings inside the HUD layer.
 
 ---
 
@@ -257,7 +299,7 @@ per the e2e workflow doc.
 
 ## Open Questions
 
-| # | Question | Owner | Target |
-|---|----------|-------|--------|
-| 1 | Add `systemMarginalPrice` to `GameStateUpdate`? Requires backend protocol change and new store slice. | Rick | After Stage 4 |
-| 2 | Should the health pill click open a panel now (#86 is a separate issue), or just be a non-interactive badge in #83? | Rick | Before implementing #83 |
+| # | Question | Owner | Target | Status |
+|---|----------|-------|--------|--------|
+| 1 | Add `systemMarginalPrice` to `GameStateUpdate`? Requires backend protocol change and new store slice. | Rick | After Stage 4 | **Resolved (#377)** — superseded by the total-production-cost "Cost" pill instead of a literal price field; see [System marginal price → production cost pill](#system-marginal-price--production-cost-pill-superseded-377) |
+| 2 | Should the health pill click open a panel now (#86 is a separate issue), or just be a non-interactive badge in #83? | Rick | Before implementing #83 | Open — health pill is still non-interactive as of this review; #86 (component inspector) remains a separate, unimplemented issue |
