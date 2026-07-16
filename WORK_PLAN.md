@@ -241,9 +241,8 @@ alternative rather than folded into 4a. See
 **Not yet decided**: PixiJS is implemented and functional behind the
 `VITE_USE_PIXI` flag, but Babylon.js remains the *default* production
 renderer — the migration/cutover has not happened. Treat Stage 4 as complete
-for Babylon.js and complete-but-flagged for PixiJS; a follow-up decision
-(migrate, keep both, or drop one) is needed but isn't tracked as an open
-issue as of this review.
+for Babylon.js and complete-but-flagged for PixiJS; the follow-up decision
+(migrate, keep both, or drop one) is tracked in #432.
 
 Exit criteria: IEEE 14-bus renders on screen; lines animate power flow; clicking any element opens its inspector; HUD updates every tick; dispatch panel opens and submits a command. **Met** — all Stage 4 UX-doc-scoped submodules above are shipped; the PixiJS-vs-Babylon.js renderer decision (4e) is the one open loose end.
 

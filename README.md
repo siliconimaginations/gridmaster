@@ -11,7 +11,7 @@ An educational power grid simulation game. Players learn how real power grids ar
 |-------|-----------|
 | Backend | Kotlin + Spring Boot 3 |
 | Physics engine | PowSyBl (AC power flow, contingency, OPF) |
-| Frontend | Vite + React + TypeScript + Babylon.js |
+| Frontend | Vite + React + TypeScript + Babylon.js (default 3D renderer); a PixiJS isometric 2D renderer is also implemented behind a feature flag ([#432](https://github.com/siliconimaginations/gridmaster/issues/432)) |
 | Communication | WebSocket (game state) + REST (commands) |
 | Persistence | SQLite (local dev) |
 | CI/CD | GitHub Actions |
