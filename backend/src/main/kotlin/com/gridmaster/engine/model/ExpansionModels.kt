@@ -62,6 +62,11 @@ data class ExpansionSite(
  * [NEW_LINE] sites exist to connect a [GENERATOR] or [SUBSTATION] site's new
  * bus back into the energized network when that site isn't directly
  * adjacent to an existing bus -- see [ExpansionSite.connectingLineSiteId].
+ * Note the reference direction: it is the [GENERATOR]/[SUBSTATION] site that
+ * carries a non-null `connectingLineSiteId` pointing *at* its [NEW_LINE]
+ * companion, not the other way around -- a [NEW_LINE] site's own
+ * `connectingLineSiteId` is expected to be null, since it doesn't need a
+ * further line to connect *it*; it already IS the connection.
  *
  * [SHUNT_COMPENSATOR] sites address sustained voltage violations directly --
  * a dormant shunt/capacitor bank at a bus, connected the same

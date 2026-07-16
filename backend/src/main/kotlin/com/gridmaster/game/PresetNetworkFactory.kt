@@ -868,6 +868,10 @@ object PresetNetworkFactory {
                 remediesElementId = "N-B10",
                 locationHint = LocationHint(x = 0.55, y = 0.15),
             ),
+            // anchorBusId is this site's OWN dormant bus (where the generator itself
+            // sits, connected via EXP-NEWLINE-N1); remediesElementId is the EXISTING
+            // bus this generator is meant to relieve once built -- two distinct
+            // buses by design (site location vs. remedy target), not a typo.
             ExpansionSite(
                 id = "EXP-GEN-N1",
                 kind = ExpansionSiteKind.GENERATOR,
