@@ -1,5 +1,8 @@
 package com.gridmaster.game
 
+import com.gridmaster.engine.model.ExpansionSite
+import com.gridmaster.engine.model.ExpansionSiteKind
+import com.gridmaster.engine.model.LocationHint
 import com.powsybl.ieeecdf.converter.IeeeCdfNetworkFactory
 import com.powsybl.iidm.network.Network
 import com.powsybl.iidm.network.NetworkFactory
@@ -63,6 +66,21 @@ object PresetNetworkFactory {
                 "Unknown network preset: '$networkPreset'. " +
                     "Valid presets: ${knownPresets.joinToString()}",
             )
+        }
+
+    /**
+     * Dormant [ExpansionSite]s pre-built into [networkPreset]'s IIDM topology
+     * by [create] (#414). Empty for presets that don't support expansion
+     * (only `freeplay50` does in v1) -- metadata only, not embedded in the
+     * IIDM network itself, mirroring how [Region] membership is supplied
+     * externally rather than read off the network. See
+     * `docs/engineering/17-grid-expansion.md`'s "Expansion sites: pre-built,
+     * dormant topology" section.
+     */
+    fun expansionSitesFor(networkPreset: String): List<ExpansionSite> =
+        when (networkPreset) {
+            "freeplay50" -> freePlay50ExpansionSites()
+            else -> emptyList()
         }
 
     // -------------------------------------------------------------------------
@@ -731,6 +749,147 @@ object PresetNetworkFactory {
         line("LIE-2", "N Hub–S Hub", "N-VL10", "N-B10", "S-VL10", "S-B10", r = 2.0, x = 20.0, ratingA = 400.0)
         line("LIE-3", "E Hub–S Hub", "E-VL9", "E-B9", "S-VL10", "S-B10", r = 2.0, x = 20.0, ratingA = 400.0)
 
+        // =====================================================================
+        // EXPANSION SITES (dormant, disconnected until built — #414)
+        // =====================================================================
+        //
+        // Real IIDM topology, seeded from session start, matching
+        // docs/engineering/17-grid-expansion.md's "pre-built, dormant
+        // topology" design: every element below is built the same way as its
+        // energized counterparts above and then explicitly disconnected —
+        // the same Terminal.disconnect() call TripLine/TripGenerator already
+        // use at runtime (Module 17 Design Decision #1), just applied once at
+        // network construction instead of mid-session. freePlay50ExpansionSites()
+        // (below) supplies the matching ExpansionSite metadata for these IDs;
+        // the two are kept in sync by hand, same as every other hardcoded ID
+        // in this preset.
+        //
+        // Site count/placement is a first pass (Module 17 Open Question #5) —
+        // one of each ExpansionSiteKind, near buses/corridors already prone to
+        // stress, refined later via playtesting.
+
+        // DOUBLE_LINE: second circuit on the North "Ind B–Hub" corridor (LN-7).
+        line("LN-7-DUP", "Ind B–Hub (2nd circuit, dormant)", "N-VL6H", "N-B6H", "N-VL10", "N-B10", r = 0.5, x = 5.0)
+        network.getLine("LN-7-DUP")!!.also {
+            it.terminal1.disconnect()
+            it.terminal2.disconnect()
+        }
+
+        // SHUNT_COMPENSATOR: dormant capacitor bank at the East Hub.
+        vlE9.newShuntCompensator().setId("SC-EXP-EHUB").setName("East Hub Capacitor Bank (dormant)")
+            .setBus("E-B9").setConnectableBus("E-B9")
+            .setSectionCount(0)
+            .newLinearModel().setBPerSection(0.02).setGPerSection(0.0).setMaximumSectionCount(3).add()
+            .add()
+        network.getShuntCompensator("SC-EXP-EHUB")!!.terminal.disconnect()
+
+        // GENERATOR + NEW_LINE bundle: a second North gas peaker on its own new
+        // bus, reached via a dormant connecting line back to the North Hub.
+        val sNExp1 = network.newSubstation().setId("NS-EXP1").setName("Expansion Site: Gas Peaker North-2 (dormant)").add()
+        val vlNExp1 = sNExp1.vl("N-VLEXP1H", "Expansion Gas Peaker 220kV", 220.0)
+        vlNExp1.bus("N-BEXP1H", "Expansion Gas Peaker HV")
+        vlNExp1.gen(
+            "G-GAS-N-EXP1",
+            "Gas Peaker North-2 (dormant)",
+            "N-BEXP1H",
+            minP = 20.0,
+            maxP = 120.0,
+            targetP = 100.0,
+            targetQ = 10.0,
+        )
+        network.getGenerator("G-GAS-N-EXP1")!!.terminal.disconnect()
+        line(
+            "LN-EXP1",
+            "Expansion Gas Peaker–North Hub (dormant)",
+            "N-VLEXP1H",
+            "N-BEXP1H",
+            "N-VL10",
+            "N-B10",
+            r = 0.6,
+            x = 6.0,
+        )
+        network.getLine("LN-EXP1")!!.also {
+            it.terminal1.disconnect()
+            it.terminal2.disconnect()
+        }
+
+        // SUBSTATION + NEW_LINE bundle: a new injection point south of the South
+        // Hub, reached via a dormant connecting line. No generator/load of its
+        // own — the design doc describes SUBSTATION sites as "a new injection
+        // point" for area-wide congestion relief without specifying further
+        // electrical content; kept minimal here (bus + connecting line only)
+        // as a first-pass authoring choice, same status as Open Question #5.
+        val sSExp1 = network.newSubstation().setId("SS-EXP1").setName("Expansion Site: South Injection Point (dormant)").add()
+        val vlSExp1 = sSExp1.vl("S-VLEXP1H", "Expansion South Sub 220kV", 220.0)
+        vlSExp1.bus("S-BEXP1H", "Expansion South Sub HV")
+        line(
+            "LS-EXP1",
+            "Expansion South Sub–South Hub (dormant)",
+            "S-VLEXP1H",
+            "S-BEXP1H",
+            "S-VL10",
+            "S-B10",
+            r = 0.6,
+            x = 6.0,
+        )
+        network.getLine("LS-EXP1")!!.also {
+            it.terminal1.disconnect()
+            it.terminal2.disconnect()
+        }
+
         return network
     }
+
+    /**
+     * [ExpansionSite] metadata for `freeplay50`'s dormant topology (above).
+     * One of each [ExpansionSiteKind] — see the "EXPANSION SITES" section of
+     * [buildFreePlay50Network] for the matching IIDM elements and rationale.
+     */
+    private fun freePlay50ExpansionSites(): List<ExpansionSite> =
+        listOf(
+            ExpansionSite(
+                id = "EXP-DOUBLE-LN7",
+                kind = ExpansionSiteKind.DOUBLE_LINE,
+                anchorBusId = "N-B6H",
+                remediesElementId = "LN-7",
+                locationHint = LocationHint(x = 0.62, y = 0.30),
+            ),
+            ExpansionSite(
+                id = "EXP-SHUNT-EHUB",
+                kind = ExpansionSiteKind.SHUNT_COMPENSATOR,
+                anchorBusId = "E-B9",
+                remediesElementId = "E-B9",
+                locationHint = LocationHint(x = 0.85, y = 0.55),
+            ),
+            ExpansionSite(
+                id = "EXP-NEWLINE-N1",
+                kind = ExpansionSiteKind.NEW_LINE,
+                anchorBusId = "N-B10",
+                remediesElementId = "N-B10",
+                locationHint = LocationHint(x = 0.55, y = 0.15),
+            ),
+            ExpansionSite(
+                id = "EXP-GEN-N1",
+                kind = ExpansionSiteKind.GENERATOR,
+                anchorBusId = "N-BEXP1H",
+                remediesElementId = "N-B10",
+                connectingLineSiteId = "EXP-NEWLINE-N1",
+                locationHint = LocationHint(x = 0.50, y = 0.10),
+            ),
+            ExpansionSite(
+                id = "EXP-NEWLINE-S1",
+                kind = ExpansionSiteKind.NEW_LINE,
+                anchorBusId = "S-B10",
+                remediesElementId = "S-B10",
+                locationHint = LocationHint(x = 0.45, y = 0.85),
+            ),
+            ExpansionSite(
+                id = "EXP-SUB-S1",
+                kind = ExpansionSiteKind.SUBSTATION,
+                anchorBusId = "S-BEXP1H",
+                remediesElementId = "S-B10",
+                connectingLineSiteId = "EXP-NEWLINE-S1",
+                locationHint = LocationHint(x = 0.40, y = 0.90),
+            ),
+        )
 }
