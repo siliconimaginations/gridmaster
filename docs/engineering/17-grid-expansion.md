@@ -391,6 +391,14 @@ considers it, N-1 contingency list includes it).
    energized grid) and `SHUNT_COMPENSATOR` (dedicated reactive/voltage
    support), in addition to `GENERATOR`, `SUBSTATION`, and `DOUBLE_LINE`.
 
+9. **Region-unlock coupling (Module 13). RESOLVED (2026-07-16) — see
+   [13-region-unlock.md](13-region-unlock.md).** Not a separate module: a
+   locked `Region` is dormant topology at region scale, using this module's
+   existing `ExpansionSite`/`BuildProject` machinery via one new rule-table
+   row (`ExpansionSite.unlocksRegionId`) that only fires once no local
+   remedy is available. Open Question #4 (this doc) is resolved by that
+   doc's Domain Model section.
+
 ---
 
 ## Open Questions
@@ -433,14 +441,15 @@ considers it, N-1 contingency list includes it).
    one. Flagging so the UX pass doesn't default to the simplest option
    without discussion.
 
-4. **Region-unlock coupling (Module 13).** `ExpansionSite`s could double as
-   the mechanism for revealing previously-locked map regions (build a site
-   in a dormant region → region "unlocks" visually/interactively), which
-   would mean this module and Module 13 are more tightly coupled than
-   "depends on" suggests — possibly the same module. Recommend writing
-   Module 13 next, explicitly checking it against this doc rather than
-   independently, since `WORK_PLAN.md` and issue #47 both reference Module
-   13 as an unwritten blocker already.
+4. **Region-unlock coupling (Module 13). RESOLVED — see
+   [13-region-unlock.md](13-region-unlock.md).** Confirmed: region-unlock is
+   not a separate module, it's this module's rule-driven proposal mechanism
+   applied at region scale — a locked `Region` is pre-built dormant topology
+   exactly like an `ExpansionSite`, just bigger, and unlocking it is a
+   `BuildProject` completion like any other. `13-region-unlock.md` adds one
+   row to the rule table (fires only when no local remedy — rows 1–3 above —
+   is available) rather than inventing independent trigger logic. See that
+   doc's Domain Model and Design Decisions #1 for the full reasoning.
 
 5. **How many `ExpansionSite`s does `freeplay50` need, and where, per kind?**
    Not determined here — with rule-driven derivation, this becomes a
