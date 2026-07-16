@@ -391,6 +391,15 @@ considers it, N-1 contingency list includes it).
    energized grid) and `SHUNT_COMPENSATOR` (dedicated reactive/voltage
    support), in addition to `GENERATOR`, `SUBSTATION`, and `DOUBLE_LINE`.
 
+
+10. **Budget/economy model. RESOLVED (2026-07-16) — see
+   [18-budget-model.md](18-budget-model.md).** Fixed periodic capital
+   allowance per session, separate from `systemMarginalCostPerMwh`/
+   `congestionCostGbp` (operating economics, unchanged). Unifies this
+   module's `costGbp` fields with the event engine's `CardOption.costGbp`
+   under one per-session `BudgetState`, using the same
+   `ConcurrentHashMap<sessionId, T>` per-session-state shape as #347's
+   contingency cache and `13-region-unlock.md`'s `RegionLockState`.
 ---
 
 ## Open Questions
@@ -416,15 +425,15 @@ considers it, N-1 contingency list includes it).
    correctness) but worth a short follow-up spike before or during
    implementation.
 
-2. **Budget/economy model.** The UX doc's £480M budget figure implies a
-   dedicated capital budget, separate from the operating economics
-   (`systemMarginalCostPerMwh`, dispatch cost). Is this a fixed/periodic
-   allowance, a fraction of simulated electricity revenue (closing a
-   congestion → cost → revenue → capital loop), or something else? This
-   doc assumes a `costGbp` exists to check against *some* budget number but
-   doesn't define where that number comes from — needs its own small design
-   note, likely as an addendum here or a short separate doc, before
-   implementation.
+2. **Budget/economy model. RESOLVED — see
+   [18-budget-model.md](18-budget-model.md).** Fixed periodic allowance
+   (regulatory-allowed-revenue style), not a fraction of dispatch revenue —
+   the player is a system operator, not a merchant generator, and the
+   codebase has no retail/billing revenue model to derive a revenue-share
+   from. `congestionCostGbp` stays a feedback signal, not a funding source.
+   `BuildProject.costGbp`/`ExpansionOption.costGbp` here and
+   `CardOption.costGbp` (event engine) draw from one shared per-session
+   `BudgetState`. See that doc's Design Decisions for the full reasoning.
 
 3. **Preview mechanism.** Static thumbnail image vs. an interactive
    highlight-on-map (fly-to-location + outline) — leaning toward the latter
