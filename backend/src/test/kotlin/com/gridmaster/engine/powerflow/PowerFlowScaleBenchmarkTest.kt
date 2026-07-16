@@ -41,16 +41,20 @@ class PowerFlowScaleBenchmarkTest {
             val network = buildSyntheticRadialNetwork(feeders, busesPerFeeder)
             val busCount = 1 + feeders * busesPerFeeder
 
-            // Warm-up-free single measurement -- the tick engine calls solve() cold
-            // every tick too (no persistent solver state carried between calls), so
-            // a single measured call is representative of production behaviour.
-            var result: PowerFlowResult? = null
+            // One discarded warm-up solve per network size (JIT/JVM warm-up, per
+            // Gemini review on PR #433) before the measured call. The tick engine
+            // itself calls solve() cold every tick with no persistent solver state,
+            // so this slightly over-states production hot-path performance -- a
+            // deliberate choice: it isolates solver algorithmic cost from one-off
+            // JIT noise, which matters more when comparing across network sizes.
+            service.solve(network)
+            lateinit var result: PowerFlowResult
             val elapsedNanos = measureNanoTime { result = service.solve(network) }
             val elapsedMs = elapsedNanos / 1_000_000.0
 
             println(
                 "$busCount,$feeders,$busesPerFeeder,${"%.1f".format(elapsedMs)}," +
-                    "${result!!.status},${result!!.violations.size}",
+                    "${result.status},${result.violations.size}",
             )
         }
     }
